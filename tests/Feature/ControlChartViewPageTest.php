@@ -37,7 +37,8 @@ class ControlChartViewPageTest extends TestCase
             ->get(ControlChartResource::getUrl('view', ['record' => $chart]))
             ->assertOk()
             ->assertSee('SVU Portal')
-            ->assertSee(now()->startOfDay()->format('d/m/Y H:i').' – '.now()->endOfDay()->format('d/m/Y H:i'))
+            ->assertSee('Control Chart — SVU Portal')
+            ->assertSee(now()->startOfDay()->format('d/m/Y H:i').' — '.now()->endOfDay()->format('d/m/Y H:i'))
             ->assertSee('1,000.00');
     }
 }

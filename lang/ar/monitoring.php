@@ -1021,6 +1021,9 @@ return [
     ],
 
     'control_charts' => [
+        'page' => [
+            'title' => 'خريطة الضبط',
+        ],
         'resource' => [
             'model_label' => 'خريطة مراقبة',
             'plural_model_label' => 'خرائط المراقبة',

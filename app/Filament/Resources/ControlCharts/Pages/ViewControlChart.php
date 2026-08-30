@@ -17,13 +17,19 @@ class ViewControlChart extends ViewRecord
     {
         /** @var ControlChart $record */
         $record = $this->getRecord();
-        $chartType = ControlChartResource::chartTypeOptions()[$record->chart_type] ?? $record->chart_type;
-        $metricName = ControlChartResource::metricNameOptions()[$record->metric_name] ?? $record->metric_name;
         $serviceName = $record->monitoredService?->name;
 
-        return collect([$chartType, $metricName, $serviceName])
-            ->filter()
-            ->join(' - ');
+        return __('monitoring.control_charts.page.title').' — '.($serviceName ?? __('monitoring.dashboard.empty.value'));
+    }
+
+    public function getSubheading(): string|Htmlable|null
+    {
+        /** @var ControlChart $record */
+        $record = $this->getRecord();
+        $chartType = ControlChartResource::chartTypeOptions()[$record->chart_type] ?? $record->chart_type;
+        $metricName = ControlChartResource::metricNameOptions()[$record->metric_name] ?? $record->metric_name;
+
+        return $metricName.' · '.$chartType;
     }
 
     protected function getHeaderActions(): array

@@ -24,19 +24,24 @@ class PointsRelationManager extends RelationManager
             ->columns([
                 TextColumn::make('point_time')
                     ->label(__('monitoring.control_charts.points.table.point_time'))
-                    ->dateTime()
-                    ->extraAttributes(['dir' => 'ltr'])
+                    ->dateTime('d/m/Y H:i')
+                    ->alignStart()
+                    ->extraAttributes(['dir' => 'ltr', 'class' => '[unicode-bidi:isolate]'])
                     ->sortable(),
                 TextColumn::make('value')
                     ->label(__('monitoring.control_charts.points.table.value'))
                     ->numeric(decimalPlaces: 2)
-                    ->extraAttributes(['dir' => 'ltr'])
+                    ->alignStart()
+                    ->extraAttributes(['dir' => 'ltr', 'class' => '[unicode-bidi:isolate]'])
                     ->sortable(),
                 TextColumn::make('difference_from_center_line')
                     ->label(__('monitoring.control_charts.points.table.difference_from_center_line'))
                     ->state(fn ($record): ?float => $record->center_line === null ? null : (float) $record->value - (float) $record->center_line)
-                    ->numeric(decimalPlaces: 2)
-                    ->extraAttributes(['dir' => 'ltr']),
+                    ->formatStateUsing(fn (mixed $state): string => $state === null
+                        ? __('monitoring.dashboard.empty.value')
+                        : ((float) $state === 0.0 ? '0.00' : sprintf('%+.2f', (float) $state)))
+                    ->alignStart()
+                    ->extraAttributes(['dir' => 'ltr', 'class' => '[unicode-bidi:isolate]']),
                 TextColumn::make('status')
                     ->label(__('monitoring.control_charts.points.table.status'))
                     ->state(fn ($record): string => $record->is_out_of_control ? 'out_of_control' : ($record->signal_type ? 'warning' : 'normal'))

@@ -1021,6 +1021,9 @@ return [
     ],
 
     'control_charts' => [
+        'page' => [
+            'title' => 'Control Chart',
+        ],
         'resource' => [
             'model_label' => 'Control Chart',
             'plural_model_label' => 'Control Charts',

@@ -13,41 +13,48 @@
     };
     $processStatus = (int) $record->out_of_control_count > 0 ? 'out_of_control' : 'normal';
     $processColor = $processStatus === 'normal' ? 'success' : 'danger';
-    $rows = [
-        [__('monitoring.control_charts.summary.service'), $record->monitoredService?->name ?? $empty, false],
-        [__('monitoring.control_charts.summary.chart_type'), ControlChartResource::chartTypeOptions()[$record->chart_type] ?? $record->chart_type, false],
-        [__('monitoring.control_charts.summary.metric_name'), ControlChartResource::metricNameOptions()[$record->metric_name] ?? $record->metric_name, false],
-        [__('monitoring.control_charts.summary.period'), $formatDateTime($record->period_start).' – '.$formatDateTime($record->period_end), true],
-        [__('monitoring.control_charts.summary.points_count'), number_format((int) $record->points_count), true],
-        [__('monitoring.control_charts.summary.center_line').' CL', $formatNumber($record->center_line), true],
-        [__('monitoring.control_charts.summary.ucl').' UCL', $formatNumber($record->ucl), true],
-        [__('monitoring.control_charts.summary.lcl').' LCL', $formatNumber($record->lcl), true],
-        [__('monitoring.control_charts.summary.out_of_control_points'), number_format((int) $record->out_of_control_count), true],
-        [__('monitoring.control_charts.summary.calculated_at'), $formatDateTime($record->calculated_at), true],
+    $statistics = [
+        [__('monitoring.control_charts.summary.points_count'), number_format((int) $record->points_count), 'gray'],
+        ['CL — '.__('monitoring.control_charts.summary.center_line'), $formatNumber($record->center_line), 'info'],
+        ['UCL — '.__('monitoring.control_charts.summary.ucl'), $formatNumber($record->ucl), 'danger'],
+        ['LCL — '.__('monitoring.control_charts.summary.lcl'), $formatNumber($record->lcl), 'warning'],
+        [__('monitoring.control_charts.summary.out_of_control_points'), number_format((int) $record->out_of_control_count), (int) $record->out_of_control_count > 0 ? 'danger' : 'success'],
     ];
 @endphp
 
-<div class="overflow-x-auto rounded-xl border border-gray-200 dark:border-gray-700" dir="rtl">
-    <table class="min-w-full divide-y divide-gray-200 text-sm dark:divide-gray-700">
-        <thead class="bg-gray-50 text-xs font-semibold text-gray-600 dark:bg-gray-800 dark:text-gray-300">
-            <tr>
-                <th scope="col" class="w-1/3 px-4 py-3 text-start">{{ __('monitoring.control_charts.summary.label') }}</th>
-                <th scope="col" class="px-4 py-3 text-start">{{ __('monitoring.control_charts.summary.value') }}</th>
-            </tr>
-        </thead>
-        <tbody class="divide-y divide-gray-100 bg-white dark:divide-gray-800 dark:bg-gray-900">
-            @foreach ($rows as [$label, $value, $isLtr])
-                <tr class="transition-colors hover:bg-gray-50 dark:hover:bg-white/5">
-                    <th scope="row" class="whitespace-nowrap bg-gray-50/70 px-4 py-3 text-start font-medium text-gray-700 dark:bg-gray-800/40 dark:text-gray-300">{{ $label }}</th>
-                    <td class="px-4 py-3 font-semibold text-gray-950 dark:text-white">
-                        <span @if ($isLtr) dir="ltr" class="inline-block text-start" @endif>{{ $value }}</span>
-                    </td>
-                </tr>
-            @endforeach
-            <tr class="transition-colors hover:bg-gray-50 dark:hover:bg-white/5">
-                <th scope="row" class="whitespace-nowrap bg-gray-50/70 px-4 py-3 text-start font-medium text-gray-700 dark:bg-gray-800/40 dark:text-gray-300">{{ __('monitoring.control_charts.summary.process_status') }}</th>
-                <td class="px-4 py-3"><x-filament::badge :color="$processColor">{{ __("monitoring.control_charts.statuses.{$processStatus}") }}</x-filament::badge></td>
-            </tr>
-        </tbody>
-    </table>
+<div class="space-y-4" dir="rtl">
+    <div class="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-700 shadow-sm dark:border-gray-700 dark:bg-gray-800/60 dark:text-gray-200">
+        <span class="font-medium">{{ __('monitoring.control_charts.summary.period') }}</span>
+        <span class="mx-2 text-gray-400">—</span>
+        <span dir="ltr" class="inline-block font-semibold [unicode-bidi:isolate]">{{ $formatDateTime($record->period_start).' — '.$formatDateTime($record->period_end) }}</span>
+    </div>
+
+    <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
+        @foreach ($statistics as [$label, $value, $tone])
+            <div @class([
+                'rounded-xl border bg-white p-4 text-center shadow-sm transition-colors hover:bg-gray-50 dark:bg-gray-900 dark:hover:bg-gray-800',
+                'border-gray-200 dark:border-gray-700' => $tone === 'gray',
+                'border-info-200 dark:border-info-800' => $tone === 'info',
+                'border-danger-200 dark:border-danger-800' => $tone === 'danger',
+                'border-warning-200 dark:border-warning-800' => $tone === 'warning',
+                'border-success-200 dark:border-success-800' => $tone === 'success',
+            ])>
+                <p class="text-xs font-semibold text-gray-500 dark:text-gray-400">{{ $label }}</p>
+                <p class="mt-3 text-2xl font-bold tracking-tight text-gray-950 dark:text-white">
+                    <span dir="ltr" class="inline-block [unicode-bidi:isolate]">{{ $value }}</span>
+                </p>
+            </div>
+        @endforeach
+    </div>
+
+    <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <div class="rounded-xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-900">
+            <p class="text-xs font-semibold text-gray-500 dark:text-gray-400">{{ __('monitoring.control_charts.summary.process_status') }}</p>
+            <div class="mt-3"><x-filament::badge :color="$processColor">{{ __("monitoring.control_charts.statuses.{$processStatus}") }}</x-filament::badge></div>
+        </div>
+        <div class="rounded-xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-900">
+            <p class="text-xs font-semibold text-gray-500 dark:text-gray-400">{{ __('monitoring.control_charts.summary.calculated_at') }}</p>
+            <p class="mt-3 text-lg font-bold text-gray-950 dark:text-white"><span dir="ltr" class="inline-block [unicode-bidi:isolate]">{{ $formatDateTime($record->calculated_at) }}</span></p>
+        </div>
+    </div>
 </div>
