@@ -560,6 +560,7 @@ return [
         'title' => 'لوحة المتابعة',
         'stats' => [
             'total_services' => 'إجمالي الخدمات',
+            'available_now' => 'الخدمات المتاحة الآن',
             'active_services' => 'الخدمات المفعلة',
             'today_checks' => 'فحوصات اليوم',
             'today_failed_checks' => 'الفحوصات الفاشلة اليوم',
