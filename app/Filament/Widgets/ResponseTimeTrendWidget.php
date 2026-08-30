@@ -3,6 +3,7 @@
 namespace App\Filament\Widgets;
 
 use App\Models\ServiceCheck;
+use App\Models\MonitoredService;
 use Filament\Widgets\ChartWidget;
 
 class ResponseTimeTrendWidget extends ChartWidget
@@ -14,6 +15,8 @@ class ResponseTimeTrendWidget extends ChartWidget
         'xl' => 1,
     ];
 
+    public ?string $filter = 'all';
+
     protected function getType(): string
     {
         return 'line';
@@ -24,14 +27,27 @@ class ResponseTimeTrendWidget extends ChartWidget
         return __('monitoring.dashboard.widgets.response_time_trend');
     }
 
+    /** @return array<string, string> */
+    protected function getFilters(): array
+    {
+        return ['all' => __('monitoring.dashboard.filters.all_services')]
+            + MonitoredService::query()
+                ->where('is_active', true)
+                ->orderBy('name')
+                ->pluck('name', 'id')
+                ->mapWithKeys(fn (string $name, int $id): array => [(string) $id => $name])
+                ->all();
+    }
+
     /**
      * @return array<string, mixed>
      */
     protected function getData(): array
     {
         $checks = ServiceCheck::query()
-            ->whereBetween('checked_at', [now()->startOfDay(), now()->endOfDay()])
+            ->whereBetween('checked_at', [now()->subHours(24), now()])
             ->whereNotNull('response_time_ms')
+            ->when($this->filter && $this->filter !== 'all', fn ($query) => $query->where('monitored_service_id', $this->filter))
             ->orderBy('checked_at')
             ->get(['checked_at', 'response_time_ms'])
             ->groupBy(fn (ServiceCheck $check): int => (int) $check->checked_at->format('G'));

@@ -384,6 +384,7 @@ return [
             'service_name' => 'اسم الخدمة',
             'total_services' => 'إجمالي الخدمات',
             'active_services' => 'الخدمات المفعلة',
+            'available_now' => 'الخدمات المتاحة الآن',
             'total_checks' => 'عدد الفحوصات',
             'successful_checks' => 'الفحوصات الناجحة',
             'failed_checks' => 'الفحوصات الفاشلة',
@@ -577,6 +578,7 @@ return [
             'response_time_trend' => 'اتجاه زمن الاستجابة اليوم',
             'checks_status_distribution' => 'توزيع نتائج الفحوصات اليوم',
             'latest_reliability_metrics' => 'آخر مؤشرات الموثوقية',
+            'latest_alerts_and_signals' => 'آخر التنبيهات والإشارات',
         ],
         'columns' => [
             'service_name' => 'اسم الخدمة',
@@ -606,12 +608,17 @@ return [
             'mttr_minutes' => 'متوسط زمن الإصلاح MTTR',
             'incidents_count' => 'عدد الحوادث',
             'calculated_at' => 'وقت الحساب',
+            'today_availability' => 'إتاحة اليوم',
+            'alert_type' => 'النوع',
+            'alert_details' => 'التفاصيل',
+            'alert_time' => 'الوقت',
         ],
         'empty_states' => [
             'no_open_incidents' => 'لا توجد حوادث مفتوحة حالياً',
             'no_checks_today' => 'لا توجد بيانات فحوصات لهذا اليوم',
             'no_out_of_control_points' => 'لا توجد نقاط خارج الضبط حالياً',
             'no_services' => 'لا توجد خدمات مراقبة حالياً',
+            'no_alerts_or_signals' => 'لا توجد تنبيهات أو إشارات حديثة',
         ],
         'chart_labels' => [
             'healthy' => 'سليمة',
@@ -628,6 +635,19 @@ return [
         'signal_types' => [
             'above_ucl' => 'أعلى من حد الضبط الأعلى',
             'below_lcl' => 'أقل من حد الضبط الأدنى',
+        ],
+        'filters' => [
+            'all_services' => 'كل الخدمات',
+        ],
+        'research_cards' => [
+            'performance' => 'Performance',
+            'reliability' => 'Reliability',
+            'spc' => 'Statistical Process Control',
+        ],
+        'alert_types' => [
+            'incident' => 'تنبيه',
+            'signal' => 'إشارة إحصائية',
+            'open_incident' => 'حادثة مفتوحة',
         ],
         'empty' => [
             'value' => 'غير متوفر',
@@ -979,6 +999,7 @@ return [
             'mttr_minutes' => 'متوسط زمن الإصلاح MTTR',
             'failure_rate' => 'معدل الأعطال',
             'calculated_at' => 'وقت الحساب',
+            'process_status' => 'حالة العملية',
         ],
         'filters' => [
             'service' => 'حسب الخدمة',
@@ -1128,6 +1149,11 @@ return [
             'points_count' => 'عدد النقاط',
             'out_of_control_points' => 'نقاط خارج الضبط',
             'calculated_at' => 'وقت الحساب',
+            'process_status' => 'حالة العملية',
+        ],
+        'statuses' => [
+            'normal' => 'طبيعية',
+            'out_of_control' => 'خارج الضبط',
         ],
         'graph' => [
             'title' => 'الرسم البياني لخريطة المراقبة',
@@ -1162,6 +1188,13 @@ return [
                 'is_out_of_control' => 'خارج الضبط',
                 'signal_type' => 'نوع الإشارة',
                 'note' => 'ملاحظات',
+                'difference_from_center_line' => 'الفرق عن CL',
+                'status' => 'الحالة',
+            ],
+            'statuses' => [
+                'normal' => 'طبيعي',
+                'warning' => 'تحذير',
+                'out_of_control' => 'خارج الضبط',
             ],
         ],
     ],

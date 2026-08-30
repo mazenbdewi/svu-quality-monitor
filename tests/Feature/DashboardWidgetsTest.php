@@ -28,7 +28,7 @@ class DashboardWidgetsTest extends TestCase
         parent::tearDown();
     }
 
-    public function test_stats_widget_counts_active_services_failed_checks_and_open_incidents(): void
+    public function test_stats_widget_shows_the_dashboard_summary_cards(): void
     {
         Carbon::setTestNow('2026-07-08 12:00:00');
 
@@ -71,11 +71,8 @@ class DashboardWidgetsTest extends TestCase
         $stats = $this->statsByLabel(app(OverviewStatsWidget::class));
 
         $this->assertSame('2', $stats[__('monitoring.dashboard.stats.total_services')]);
-        $this->assertSame('1', $stats[__('monitoring.dashboard.stats.active_services')]);
+        $this->assertSame('0', $stats[__('monitoring.dashboard.stats.available_now')]);
         $this->assertSame('1', $stats[__('monitoring.dashboard.stats.today_checks')]);
-        $this->assertSame('1', $stats[__('monitoring.dashboard.stats.today_failed_checks')]);
-        $this->assertSame('1', $stats[__('monitoring.dashboard.stats.today_slow_checks')]);
-        $this->assertSame('1', $stats[__('monitoring.dashboard.stats.open_incidents')]);
         $this->assertSame('1', $stats[__('monitoring.dashboard.stats.today_out_of_control_points')]);
     }
 

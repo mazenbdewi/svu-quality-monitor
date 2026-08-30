@@ -18,8 +18,14 @@ class ResearchFindingsWidget extends Widget
      */
     protected function getViewData(): array
     {
+        $findings = app(ResearchInterpretationService::class)->dashboardFindings();
+
         return [
-            'findings' => app(ResearchInterpretationService::class)->dashboardFindings(),
+            'findings' => [
+                'performance' => $findings[0] ?? null,
+                'reliability' => $findings[1] ?? null,
+                'spc' => $findings[2] ?? null,
+            ],
         ];
     }
 }

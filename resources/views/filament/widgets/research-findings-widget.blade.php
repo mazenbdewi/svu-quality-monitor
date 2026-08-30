@@ -4,8 +4,8 @@
             {{ __('monitoring.interpretation.sections.key_findings') }}
         </x-slot>
 
-        <div class="space-y-3">
-            @foreach ($findings as $finding)
+        <div class="grid gap-4 md:grid-cols-3">
+            @foreach ($findings as $area => $finding)
                 @php
                     $type = $finding['type'] ?? 'gray';
                     $badgeClasses = match ($type) {
@@ -24,17 +24,20 @@
                     };
                 @endphp
 
-                <div class="flex flex-col gap-1 rounded-lg border border-gray-200 p-3 dark:border-gray-700 sm:flex-row sm:items-start sm:justify-between">
+                <div class="flex min-w-0 flex-col gap-3 rounded-xl border border-gray-200 p-4 dark:border-gray-700">
                     <div class="min-w-0">
-                        <p class="text-sm font-semibold text-gray-950 dark:text-white">
-                            {{ $finding['title'] }}
+                        <p class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                            {{ __("monitoring.dashboard.research_cards.{$area}") }}
+                        </p>
+                        <p class="mt-1 text-sm font-semibold text-gray-950 dark:text-white">
+                            {{ $finding['title'] ?? __('monitoring.dashboard.empty.value') }}
                         </p>
                         <p class="text-sm leading-6 text-gray-600 dark:text-gray-300">
-                            {{ $finding['message'] }}
+                            {{ $finding['message'] ?? __('monitoring.interpretation.recommendations.continue_monitoring') }}
                         </p>
                     </div>
 
-                    <span class="{{ $badgeClasses }} inline-flex w-fit shrink-0 items-center rounded-md px-2 py-1 text-xs font-medium ring-1 ring-inset">
+                    <span class="{{ $badgeClasses }} inline-flex w-fit items-center rounded-md px-2 py-1 text-xs font-medium ring-1 ring-inset">
                         {{ $levelLabel }}
                     </span>
                 </div>

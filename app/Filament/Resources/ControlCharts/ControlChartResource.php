@@ -5,6 +5,7 @@ namespace App\Filament\Resources\ControlCharts;
 use App\Filament\Resources\ControlCharts\Pages\EditControlChart;
 use App\Filament\Resources\ControlCharts\Pages\ListControlCharts;
 use App\Filament\Resources\ControlCharts\Pages\ViewControlChart;
+use App\Filament\Resources\ControlCharts\RelationManagers\PointsRelationManager;
 use App\Models\ControlChart;
 use App\Models\MonitoredService;
 use App\Services\ControlChartCalculator;
@@ -20,7 +21,6 @@ use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Infolists\Components\TextEntry;
-use Filament\Infolists\Components\ViewEntry;
 use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Schemas\Components\Grid;
@@ -144,7 +144,7 @@ class ControlChartResource extends Resource
     {
         $cardClasses = 'rounded-xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-900';
         $valueClasses = 'text-base font-semibold leading-6 text-gray-950 dark:text-white';
-        $formatNumber = fn (mixed $value): string => $value === null ? __('monitoring.dashboard.empty.value') : number_format((float) $value, 4);
+        $formatNumber = fn (mixed $value): string => $value === null ? __('monitoring.dashboard.empty.value') : number_format((float) $value, 2);
         $formatDateTime = function (mixed $value): string {
             if (! $value) {
                 return __('monitoring.dashboard.empty.value');
@@ -194,25 +194,25 @@ class ControlChartResource extends Resource
                                     ->label(__('monitoring.control_charts.summary.center_line'))
                                     ->formatStateUsing(fn (mixed $state): string => $formatNumber($state))
                                     ->weight(FontWeight::SemiBold)
-                                    ->extraAttributes(['class' => $valueClasses])
+                                    ->extraAttributes(['class' => $valueClasses, 'dir' => 'ltr'])
                                     ->extraEntryWrapperAttributes(['class' => $cardClasses.' border-blue-200 dark:border-blue-800']),
                                 TextEntry::make('ucl')
                                     ->label(__('monitoring.control_charts.summary.ucl'))
                                     ->formatStateUsing(fn (mixed $state): string => $formatNumber($state))
                                     ->weight(FontWeight::SemiBold)
-                                    ->extraAttributes(['class' => $valueClasses])
+                                    ->extraAttributes(['class' => $valueClasses, 'dir' => 'ltr'])
                                     ->extraEntryWrapperAttributes(['class' => $cardClasses.' border-orange-200 dark:border-orange-800']),
                                 TextEntry::make('lcl')
                                     ->label(__('monitoring.control_charts.summary.lcl'))
                                     ->formatStateUsing(fn (mixed $state): string => $formatNumber($state))
                                     ->weight(FontWeight::SemiBold)
-                                    ->extraAttributes(['class' => $valueClasses])
+                                    ->extraAttributes(['class' => $valueClasses, 'dir' => 'ltr'])
                                     ->extraEntryWrapperAttributes(['class' => $cardClasses.' border-sky-200 dark:border-sky-800']),
                                 TextEntry::make('points_count')
                                     ->label(__('monitoring.control_charts.summary.points_count'))
                                     ->formatStateUsing(fn (mixed $state): string => number_format((int) $state))
                                     ->weight(FontWeight::SemiBold)
-                                    ->extraAttributes(['class' => $valueClasses])
+                                    ->extraAttributes(['class' => $valueClasses, 'dir' => 'ltr'])
                                     ->extraEntryWrapperAttributes(['class' => $cardClasses]),
                                 TextEntry::make('out_of_control_count')
                                     ->label(__('monitoring.control_charts.summary.out_of_control_points'))
@@ -220,13 +220,21 @@ class ControlChartResource extends Resource
                                     ->color(fn (mixed $state): string => (int) $state > 0 ? 'danger' : 'success')
                                     ->formatStateUsing(fn (mixed $state): string => number_format((int) $state))
                                     ->weight(FontWeight::SemiBold)
-                                    ->extraAttributes(['class' => $valueClasses])
+                                    ->extraAttributes(['class' => $valueClasses, 'dir' => 'ltr'])
                                     ->extraEntryWrapperAttributes(['class' => $cardClasses]),
                                 TextEntry::make('calculated_at')
                                     ->label(__('monitoring.control_charts.summary.calculated_at'))
                                     ->formatStateUsing(fn (mixed $state): string => $formatDateTime($state))
                                     ->weight(FontWeight::SemiBold)
                                     ->extraAttributes(['class' => $valueClasses])
+                                    ->extraEntryWrapperAttributes(['class' => $cardClasses]),
+                                TextEntry::make('process_status')
+                                    ->label(__('monitoring.control_charts.summary.process_status'))
+                                    ->state(fn (ControlChart $record): string => (int) $record->out_of_control_count > 0 ? 'out_of_control' : 'normal')
+                                    ->formatStateUsing(fn (string $state): string => __("monitoring.control_charts.statuses.{$state}"))
+                                    ->badge()
+                                    ->color(fn (string $state): string => $state === 'normal' ? 'success' : 'danger')
+                                    ->weight(FontWeight::SemiBold)
                                     ->extraEntryWrapperAttributes(['class' => $cardClasses]),
                             ]),
                     ])
@@ -263,15 +271,14 @@ class ControlChartResource extends Resource
                     ])
                     ->columns(1)
                     ->columnSpanFull(),
-                Section::make(__('monitoring.control_charts.points.resource.navigation_label'))
-                    ->schema([
-                        ViewEntry::make('control_chart_points')
-                            ->hiddenLabel()
-                            ->view('filament.infolists.control-chart-points-table')
-                            ->columnSpanFull(),
-                    ])
-                    ->columnSpanFull(),
             ]);
+    }
+
+    public static function getRelations(): array
+    {
+        return [
+            PointsRelationManager::class,
+        ];
     }
 
     public static function table(Table $table): Table

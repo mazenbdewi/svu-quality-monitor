@@ -384,6 +384,7 @@ return [
             'service_name' => 'Service Name',
             'total_services' => 'Total Services',
             'active_services' => 'Active Services',
+            'available_now' => 'Available Now',
             'total_checks' => 'Total Checks',
             'successful_checks' => 'Successful Checks',
             'failed_checks' => 'Failed Checks',
@@ -577,6 +578,7 @@ return [
             'response_time_trend' => 'Response Time Trend Today',
             'checks_status_distribution' => 'Checks Status Distribution Today',
             'latest_reliability_metrics' => 'Latest Reliability Metrics',
+            'latest_alerts_and_signals' => 'Latest Alerts & Signals',
         ],
         'columns' => [
             'service_name' => 'Service Name',
@@ -606,12 +608,17 @@ return [
             'mttr_minutes' => 'MTTR Minutes',
             'incidents_count' => 'Incidents Count',
             'calculated_at' => 'Calculated At',
+            'today_availability' => 'Today Availability',
+            'alert_type' => 'Type',
+            'alert_details' => 'Details',
+            'alert_time' => 'Time',
         ],
         'empty_states' => [
             'no_open_incidents' => 'There are no open incidents currently',
             'no_checks_today' => 'There are no check records for today',
             'no_out_of_control_points' => 'There are no out-of-control points currently',
             'no_services' => 'There are no monitored services currently',
+            'no_alerts_or_signals' => 'There are no recent alerts or signals',
         ],
         'chart_labels' => [
             'healthy' => 'Healthy',
@@ -628,6 +635,19 @@ return [
         'signal_types' => [
             'above_ucl' => 'Above UCL',
             'below_lcl' => 'Below LCL',
+        ],
+        'filters' => [
+            'all_services' => 'All services',
+        ],
+        'research_cards' => [
+            'performance' => 'Performance',
+            'reliability' => 'Reliability',
+            'spc' => 'Statistical Process Control',
+        ],
+        'alert_types' => [
+            'incident' => 'Alert',
+            'signal' => 'Statistical signal',
+            'open_incident' => 'Open incident',
         ],
         'empty' => [
             'value' => 'N/A',
@@ -979,6 +999,7 @@ return [
             'mttr_minutes' => 'MTTR Minutes',
             'failure_rate' => 'Failure Rate',
             'calculated_at' => 'Calculated At',
+            'process_status' => 'Process Status',
         ],
         'filters' => [
             'service' => 'By service',
@@ -1128,6 +1149,11 @@ return [
             'points_count' => 'Points Count',
             'out_of_control_points' => 'Out-of-Control Points',
             'calculated_at' => 'Calculated At',
+            'process_status' => 'Process Status',
+        ],
+        'statuses' => [
+            'normal' => 'Normal',
+            'out_of_control' => 'Out of control',
         ],
         'graph' => [
             'title' => 'Control Chart Graph',
@@ -1162,6 +1188,13 @@ return [
                 'is_out_of_control' => 'Out of Control',
                 'signal_type' => 'Signal Type',
                 'note' => 'Notes',
+                'difference_from_center_line' => 'Difference from CL',
+                'status' => 'Status',
+            ],
+            'statuses' => [
+                'normal' => 'Normal',
+                'warning' => 'Warning',
+                'out_of_control' => 'Out of control',
             ],
         ],
     ],

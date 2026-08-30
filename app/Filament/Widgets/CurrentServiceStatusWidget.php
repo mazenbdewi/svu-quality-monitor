@@ -3,6 +3,7 @@
 namespace App\Filament\Widgets;
 
 use App\Models\MonitoredService;
+use App\Models\ReliabilityMetric;
 use App\Models\ServiceCheck;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
@@ -25,7 +26,7 @@ class CurrentServiceStatusWidget extends TableWidget
     {
         return $table
             ->query(fn (): Builder => static::getCurrentServiceStatusQuery())
-            ->paginated(false)
+            ->paginated([10, 25, 50])
             ->emptyStateIcon(Heroicon::OutlinedRectangleStack)
             ->emptyStateHeading(__('monitoring.dashboard.empty_states.no_services'))
             ->columns([
@@ -46,19 +47,13 @@ class CurrentServiceStatusWidget extends TableWidget
                     ->label(__('monitoring.dashboard.columns.last_response_time'))
                     ->getStateUsing(fn (MonitoredService $record): string => $record->latestServiceCheck?->response_time_ms === null
                         ? '-'
-                        : number_format((int) $record->latestServiceCheck->response_time_ms).' ms'),
-                TextColumn::make('last_status_code')
-                    ->label(__('monitoring.dashboard.columns.last_status_code'))
-                    ->getStateUsing(fn (MonitoredService $record): string => $record->latestServiceCheck?->status_code === null
-                        ? '-'
-                        : (string) $record->latestServiceCheck->status_code),
-                TextColumn::make('has_open_incident')
-                    ->label(__('monitoring.dashboard.columns.open_incident'))
-                    ->badge()
-                    ->getStateUsing(fn (MonitoredService $record): string => $record->has_open_incident
-                        ? __('monitoring.booleans.yes')
-                        : __('monitoring.booleans.no'))
-                    ->color(fn (MonitoredService $record): string => $record->has_open_incident ? 'danger' : 'gray'),
+                        : number_format((float) $record->latestServiceCheck->response_time_ms, 2).' ms'),
+                TextColumn::make('today_availability')
+                    ->label(__('monitoring.dashboard.columns.today_availability'))
+                    ->getStateUsing(fn (MonitoredService $record): string => $record->today_availability === null
+                        ? __('monitoring.dashboard.empty.value')
+                        : number_format((float) $record->today_availability, 2).'%')
+                    ->extraAttributes(['dir' => 'ltr']),
             ]);
     }
 
@@ -71,6 +66,15 @@ class CurrentServiceStatusWidget extends TableWidget
         return MonitoredService::query()
             ->where('is_active', true)
             ->with(['latestServiceCheck', 'openIncident'])
+            ->addSelect([
+                'today_availability' => ReliabilityMetric::query()
+                    ->select('availability_percent')
+                    ->whereColumn('reliability_metrics.monitored_service_id', 'monitored_services.id')
+                    ->where('period_type', 'daily')
+                    ->whereDate('period_start', today())
+                    ->latest('calculated_at')
+                    ->limit(1),
+            ])
             ->orderByRaw("
                 case
                     when ({$latestSuccess}) is false then 1
@@ -91,6 +95,6 @@ class CurrentServiceStatusWidget extends TableWidget
                     ->latest('checked_at')
                     ->limit(1)
             )
-            ->limit(10);
+            ;
     }
 }

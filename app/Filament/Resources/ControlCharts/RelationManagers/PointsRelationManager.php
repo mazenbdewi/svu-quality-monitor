@@ -4,7 +4,6 @@ namespace App\Filament\Resources\ControlCharts\RelationManagers;
 
 use App\Filament\Resources\ControlCharts\ControlChartResource;
 use Filament\Resources\RelationManagers\RelationManager;
-use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 
@@ -20,48 +19,39 @@ class PointsRelationManager extends RelationManager
     public function table(Table $table): Table
     {
         return $table
-            ->defaultSort('point_time')
+            ->defaultSort('point_time', 'desc')
+            ->paginated([10, 25, 50])
             ->columns([
                 TextColumn::make('point_time')
                     ->label(__('monitoring.control_charts.points.table.point_time'))
                     ->dateTime()
+                    ->extraAttributes(['dir' => 'ltr'])
                     ->sortable(),
                 TextColumn::make('value')
                     ->label(__('monitoring.control_charts.points.table.value'))
-                    ->numeric(decimalPlaces: 4)
+                    ->numeric(decimalPlaces: 2)
+                    ->extraAttributes(['dir' => 'ltr'])
                     ->sortable(),
-                TextColumn::make('center_line')
-                    ->label(__('monitoring.control_charts.points.table.center_line'))
-                    ->numeric(decimalPlaces: 4),
-                TextColumn::make('ucl')
-                    ->label(__('monitoring.control_charts.points.table.ucl'))
-                    ->numeric(decimalPlaces: 4),
-                TextColumn::make('lcl')
-                    ->label(__('monitoring.control_charts.points.table.lcl'))
-                    ->numeric(decimalPlaces: 4),
-                TextColumn::make('sample_size')
-                    ->label(__('monitoring.control_charts.points.table.sample_size'))
-                    ->toggleable(isToggledHiddenByDefault: true)
-                    ->sortable(),
-                TextColumn::make('failed_count')
-                    ->label(__('monitoring.control_charts.points.table.failed_count'))
-                    ->toggleable(isToggledHiddenByDefault: true)
-                    ->sortable(),
-                IconColumn::make('is_out_of_control')
-                    ->label(__('monitoring.control_charts.points.table.is_out_of_control'))
-                    ->boolean()
-                    ->trueColor('danger')
-                    ->falseColor('success')
-                    ->sortable(),
+                TextColumn::make('difference_from_center_line')
+                    ->label(__('monitoring.control_charts.points.table.difference_from_center_line'))
+                    ->state(fn ($record): ?float => $record->center_line === null ? null : (float) $record->value - (float) $record->center_line)
+                    ->numeric(decimalPlaces: 2)
+                    ->extraAttributes(['dir' => 'ltr']),
+                TextColumn::make('status')
+                    ->label(__('monitoring.control_charts.points.table.status'))
+                    ->state(fn ($record): string => $record->is_out_of_control ? 'out_of_control' : ($record->signal_type ? 'warning' : 'normal'))
+                    ->formatStateUsing(fn (string $state): string => __("monitoring.control_charts.points.statuses.{$state}"))
+                    ->badge()
+                    ->color(fn (string $state): string => match ($state) {
+                        'out_of_control' => 'danger',
+                        'warning' => 'warning',
+                        default => 'success',
+                    }),
                 TextColumn::make('signal_type')
                     ->label(__('monitoring.control_charts.points.table.signal_type'))
                     ->badge()
                     ->formatStateUsing(fn (?string $state): string => $state ? (ControlChartResource::signalTypeOptions()[$state] ?? $state) : '')
                     ->color(fn (?string $state): string => $state ? 'danger' : 'gray'),
-                TextColumn::make('note')
-                    ->label(__('monitoring.control_charts.points.table.note'))
-                    ->toggleable(isToggledHiddenByDefault: true)
-                    ->limit(50),
             ]);
     }
 }

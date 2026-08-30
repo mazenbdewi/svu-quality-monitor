@@ -3,14 +3,11 @@
 namespace App\Providers\Filament;
 
 use App\Filament\Pages\Dashboard;
-use App\Filament\Widgets\ChecksStatusDistributionWidget;
 use App\Filament\Widgets\CurrentServiceStatusWidget;
-use App\Filament\Widgets\LatestOpenIncidentsWidget;
-use App\Filament\Widgets\LatestOutOfControlPointsWidget;
+use App\Filament\Widgets\LatestAlertsAndSignalsWidget;
 use App\Filament\Widgets\OverviewStatsWidget;
 use App\Filament\Widgets\ResearchFindingsWidget;
 use App\Filament\Widgets\ResponseTimeTrendWidget;
-use App\Filament\Widgets\WorstServicesTodayWidget;
 use App\Http\Middleware\SetLocale;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
@@ -61,11 +58,8 @@ class AdminPanelProvider extends PanelProvider
                 OverviewStatsWidget::class,
                 ResearchFindingsWidget::class,
                 CurrentServiceStatusWidget::class,
-                LatestOpenIncidentsWidget::class,
-                WorstServicesTodayWidget::class,
-                LatestOutOfControlPointsWidget::class,
                 ResponseTimeTrendWidget::class,
-                ChecksStatusDistributionWidget::class,
+                LatestAlertsAndSignalsWidget::class,
             ])
             ->middleware([
                 EncryptCookies::class,
