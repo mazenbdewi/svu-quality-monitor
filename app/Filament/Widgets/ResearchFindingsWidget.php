@@ -7,25 +7,18 @@ use App\Models\ControlChartPoint;
 use App\Models\ReliabilityMetric;
 use App\Models\ServiceCheck;
 use App\Services\ResearchInterpretationService;
-use Filament\Support\Icons\Heroicon;
-use Filament\Widgets\StatsOverviewWidget;
-use Filament\Widgets\StatsOverviewWidget\Stat;
-use Illuminate\Support\HtmlString;
+use Filament\Widgets\Widget;
 
-class ResearchFindingsWidget extends StatsOverviewWidget
+class ResearchFindingsWidget extends Widget
 {
     protected static ?int $sort = 2;
 
-    /** @var int | array<string, ?int> | null */
-    protected int|array|null $columns = ['@xl' => 3, '@lg' => 2, '!@lg' => 1];
+    protected int|string|array $columnSpan = 'full';
 
-    protected function getHeading(): ?string
-    {
-        return __('monitoring.interpretation.sections.key_findings');
-    }
+    protected string $view = 'filament.widgets.research-findings-widget';
 
-    /** @return array<Stat> */
-    protected function getStats(): array
+    /** @return array{cards: array<int, array{title: string, value: string, indicator: string, status: string, color: string, message: string}>} */
+    protected function getViewData(): array
     {
         $start = now()->startOfDay();
         $end = now()->endOfDay();
@@ -38,20 +31,32 @@ class ResearchFindingsWidget extends StatsOverviewWidget
         $reliability = $this->reliabilityState($availability);
         $spc = $this->spcState($hasSpcData, $outOfControlPoints);
 
-        return [
-            Stat::make(__('monitoring.dashboard.research_cards.performance'), number_format($slowChecks))
-                ->description($this->description(__('monitoring.dashboard.research_cards.slow_checks_today'), $performance['label'], $performance['color'], $todayChecks > 0 ? __('monitoring.dashboard.research_cards.slow_checks_ratio', ['slow' => number_format($slowChecks), 'total' => number_format($todayChecks)]) : __('monitoring.dashboard.research_cards.no_checks_today')))
-                ->icon(Heroicon::OutlinedChartBar)
-                ->color($performance['color']),
-            Stat::make(__('monitoring.dashboard.research_cards.reliability'), $availability === null ? '—' : number_format((float) $availability, 2).'%')
-                ->description($this->description(__('monitoring.dashboard.research_cards.average_availability'), $reliability['label'], $reliability['color'], $reliability['message']))
-                ->icon(Heroicon::OutlinedChartBarSquare)
-                ->color($reliability['color']),
-            Stat::make(__('monitoring.dashboard.research_cards.spc'), $hasSpcData ? number_format($outOfControlPoints) : '—')
-                ->description($this->description(__('monitoring.dashboard.research_cards.out_of_control_points'), $spc['label'], $spc['color'], $spc['message']))
-                ->icon(Heroicon::OutlinedPresentationChartLine)
-                ->color($spc['color']),
-        ];
+        return ['cards' => [
+            [
+                'title' => __('monitoring.dashboard.research_cards.performance'),
+                'value' => number_format($slowChecks),
+                'indicator' => __('monitoring.dashboard.research_cards.slow_checks_today'),
+                'status' => $performance['label'],
+                'color' => $performance['color'],
+                'message' => $todayChecks > 0 ? __('monitoring.dashboard.research_cards.slow_checks_ratio', ['slow' => number_format($slowChecks), 'total' => number_format($todayChecks)]) : __('monitoring.dashboard.research_cards.no_checks_today'),
+            ],
+            [
+                'title' => __('monitoring.dashboard.research_cards.reliability'),
+                'value' => $availability === null ? '—' : number_format((float) $availability, 2).'%',
+                'indicator' => __('monitoring.dashboard.research_cards.average_availability'),
+                'status' => $reliability['label'],
+                'color' => $reliability['color'],
+                'message' => $reliability['message'],
+            ],
+            [
+                'title' => __('monitoring.dashboard.research_cards.spc'),
+                'value' => $hasSpcData ? number_format($outOfControlPoints) : '—',
+                'indicator' => __('monitoring.dashboard.research_cards.out_of_control_points'),
+                'status' => $spc['label'],
+                'color' => $spc['color'],
+                'message' => $spc['message'],
+            ],
+        ]];
     }
 
     /** @return array{label: string, color: string} */
@@ -95,8 +100,4 @@ class ResearchFindingsWidget extends StatsOverviewWidget
         return ['label' => __('monitoring.interpretation.levels.warning'), 'color' => 'warning', 'message' => __('monitoring.dashboard.research_cards.spc_attention_message')];
     }
 
-    private function description(string $indicator, string $status, string $color, string $message): HtmlString
-    {
-        return new HtmlString(view('filament.widgets.research-indicator-stat-description', compact('indicator', 'status', 'color', 'message'))->render());
-    }
 }
