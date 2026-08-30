@@ -1,10 +1,26 @@
 <style>
-    @media (max-width: 1023px) {
-        .research-findings-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+    .research-metrics-grid {
+        display: grid !important;
+        grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+        gap: 1rem !important;
+        width: 100% !important;
     }
 
-    @media (max-width: 639px) {
-        .research-findings-grid { grid-template-columns: minmax(0, 1fr) !important; }
+    .research-metrics-card {
+        min-width: 0 !important;
+        width: 100% !important;
+    }
+
+    @media (max-width: 1024px) {
+        .research-metrics-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+        }
+    }
+
+    @media (max-width: 640px) {
+        .research-metrics-grid {
+            grid-template-columns: minmax(0, 1fr) !important;
+        }
     }
 </style>
 
@@ -14,9 +30,9 @@
             {{ __('monitoring.interpretation.sections.key_findings') }}
         </h2>
 
-        <div class="research-findings-grid" style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1.25rem;">
+        <div class="research-metrics-grid">
             @foreach ($cards as $card)
-                <article class="fi-wi-stats-overview-stat" style="padding: 1.25rem; text-align: center;">
+                <article class="fi-wi-stats-overview-stat research-metrics-card" style="padding: 1.25rem; text-align: center;">
                     <div style="display: flex; flex-direction: column; align-items: center; gap: 0; text-align: center;">
                         <div style="width: 100%; font-size: 0.9375rem; font-weight: 500; line-height: 1.5; color: var(--gray-500);">
                             {{ $card['title'] }}
