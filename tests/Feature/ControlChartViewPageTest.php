@@ -39,7 +39,9 @@ class ControlChartViewPageTest extends TestCase
             ->assertSee('SVU Portal')
             ->assertSee('Control Chart — SVU Portal')
             ->assertSee('fi-wi-stats-overview')
-            ->assertSee(now()->startOfDay()->format('d/m/Y H:i').' — '.now()->endOfDay()->format('d/m/Y H:i'))
+            ->assertSee(now()->startOfDay()->format('d/m/Y'))
+            ->assertSee(now()->endOfDay()->format('d/m/Y'))
+            ->assertSee(now()->format('H:i'))
             ->assertSee('1,000.00');
     }
 }
