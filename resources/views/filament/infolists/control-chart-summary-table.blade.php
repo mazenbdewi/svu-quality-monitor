@@ -23,10 +23,19 @@
 @endphp
 
 <div class="space-y-4" dir="rtl">
-    <div class="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-700 shadow-sm dark:border-gray-700 dark:bg-gray-800/60 dark:text-gray-200">
-        <span class="font-medium">{{ __('monitoring.control_charts.summary.period') }}</span>
-        <span class="mx-2 text-gray-400">—</span>
-        <span dir="ltr" class="inline-block font-semibold [unicode-bidi:isolate]">{{ $formatDateTime($record->period_start).' — '.$formatDateTime($record->period_end) }}</span>
+    <div class="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <div class="rounded-xl border border-gray-200 bg-white p-4 shadow-sm transition-colors hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-900 dark:hover:bg-gray-800">
+            <p class="text-xs font-semibold text-gray-500 dark:text-gray-400">{{ __('monitoring.control_charts.summary.service') }}</p>
+            <p class="mt-3 text-lg font-bold text-gray-950 dark:text-white">{{ $record->monitoredService?->name ?? $empty }}</p>
+        </div>
+        <div class="rounded-xl border border-gray-200 bg-white p-4 shadow-sm transition-colors hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-900 dark:hover:bg-gray-800">
+            <p class="text-xs font-semibold text-gray-500 dark:text-gray-400">{{ __('monitoring.control_charts.summary.chart_type') }}</p>
+            <p class="mt-3 text-lg font-bold text-gray-950 dark:text-white">{{ ControlChartResource::chartTypeOptions()[$record->chart_type] ?? $record->chart_type }}</p>
+        </div>
+        <div class="rounded-xl border border-gray-200 bg-gray-50 p-4 shadow-sm transition-colors hover:bg-gray-100 md:col-span-2 dark:border-gray-700 dark:bg-gray-800/60 dark:hover:bg-gray-800">
+            <p class="text-xs font-semibold text-gray-500 dark:text-gray-400">{{ __('monitoring.control_charts.summary.period') }}</p>
+            <p class="mt-3 text-lg font-bold text-gray-950 dark:text-white"><span dir="ltr" class="inline-block [unicode-bidi:isolate]">{{ $formatDateTime($record->period_start).' — '.$formatDateTime($record->period_end) }}</span></p>
+        </div>
     </div>
 
     <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
