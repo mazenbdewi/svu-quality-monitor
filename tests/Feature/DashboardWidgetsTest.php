@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Filament\Widgets\CurrentServiceStatusWidget;
 use App\Filament\Widgets\LatestOutOfControlPointsWidget;
 use App\Filament\Widgets\OverviewStatsWidget;
+use App\Filament\Widgets\ResearchFindingsWidget;
 use App\Filament\Widgets\WorstServicesTodayWidget;
 use App\Models\ControlChart;
 use App\Models\ControlChartPoint;
@@ -14,6 +15,7 @@ use App\Models\ServiceIncident;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Carbon;
+use Livewire\Livewire;
 use ReflectionMethod;
 use Tests\TestCase;
 
@@ -74,6 +76,15 @@ class DashboardWidgetsTest extends TestCase
         $this->assertSame('0', $stats[__('monitoring.dashboard.stats.available_now')]);
         $this->assertSame('1', $stats[__('monitoring.dashboard.stats.today_checks')]);
         $this->assertSame('1', $stats[__('monitoring.dashboard.stats.today_out_of_control_points')]);
+    }
+
+    public function test_research_findings_widget_renders_on_the_dashboard(): void
+    {
+        Livewire::test(ResearchFindingsWidget::class)
+            ->assertSee(__('monitoring.interpretation.sections.key_findings'))
+            ->assertSee(__('monitoring.dashboard.research_cards.performance'))
+            ->assertSee(__('monitoring.dashboard.research_cards.reliability'))
+            ->assertSee(__('monitoring.dashboard.research_cards.spc'));
     }
 
     public function test_worst_services_query_counts_failed_or_slow_checks_as_problematic(): void

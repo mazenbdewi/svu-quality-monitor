@@ -13,6 +13,8 @@ class ResearchFindingsWidget extends Widget
 {
     protected static ?int $sort = 2;
 
+    protected static bool $isLazy = false;
+
     protected int|string|array $columnSpan = 'full';
 
     protected string $view = 'filament.widgets.research-findings-widget';
