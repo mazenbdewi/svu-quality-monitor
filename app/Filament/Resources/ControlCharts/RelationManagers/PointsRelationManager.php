@@ -25,14 +25,14 @@ class PointsRelationManager extends RelationManager
                 TextColumn::make('point_time')
                     ->label(__('monitoring.control_charts.points.table.point_time'))
                     ->dateTime('d/m/Y H:i')
-                    ->alignStart()
-                    ->extraAttributes(['dir' => 'ltr', 'class' => '[unicode-bidi:isolate]'])
+                    ->alignCenter()
+                    ->extraAttributes(['dir' => 'ltr', 'class' => '[unicode-bidi:isolate] text-center', 'style' => 'text-align: center; unicode-bidi: isolate;'])
                     ->sortable(),
                 TextColumn::make('value')
                     ->label(__('monitoring.control_charts.points.table.value'))
                     ->numeric(decimalPlaces: 2)
-                    ->alignStart()
-                    ->extraAttributes(['dir' => 'ltr', 'class' => '[unicode-bidi:isolate]'])
+                    ->alignCenter()
+                    ->extraAttributes(['dir' => 'ltr', 'class' => '[unicode-bidi:isolate] text-center', 'style' => 'text-align: center; unicode-bidi: isolate;'])
                     ->sortable(),
                 TextColumn::make('difference_from_center_line')
                     ->label(__('monitoring.control_charts.points.table.difference_from_center_line'))
@@ -40,13 +40,14 @@ class PointsRelationManager extends RelationManager
                     ->formatStateUsing(fn (mixed $state): string => $state === null
                         ? __('monitoring.dashboard.empty.value')
                         : ((float) $state === 0.0 ? '0.00' : sprintf('%+.2f', (float) $state)))
-                    ->alignStart()
-                    ->extraAttributes(['dir' => 'ltr', 'class' => '[unicode-bidi:isolate]']),
+                    ->alignCenter()
+                    ->extraAttributes(['dir' => 'ltr', 'class' => '[unicode-bidi:isolate] text-center', 'style' => 'text-align: center; unicode-bidi: isolate;']),
                 TextColumn::make('status')
                     ->label(__('monitoring.control_charts.points.table.status'))
                     ->state(fn ($record): string => $record->is_out_of_control ? 'out_of_control' : ($record->signal_type ? 'warning' : 'normal'))
                     ->formatStateUsing(fn (string $state): string => __("monitoring.control_charts.points.statuses.{$state}"))
                     ->badge()
+                    ->alignCenter()
                     ->color(fn (string $state): string => match ($state) {
                         'out_of_control' => 'danger',
                         'warning' => 'warning',
@@ -55,6 +56,7 @@ class PointsRelationManager extends RelationManager
                 TextColumn::make('signal_type')
                     ->label(__('monitoring.control_charts.points.table.signal_type'))
                     ->badge()
+                    ->alignCenter()
                     ->formatStateUsing(fn (?string $state): string => $state ? (ControlChartResource::signalTypeOptions()[$state] ?? $state) : '')
                     ->color(fn (?string $state): string => $state ? 'danger' : 'gray'),
             ]);

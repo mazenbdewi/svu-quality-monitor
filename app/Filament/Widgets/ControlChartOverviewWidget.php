@@ -16,6 +16,8 @@ class ControlChartOverviewWidget extends StatsOverviewWidget
 
     protected static bool $isLazy = false;
 
+    protected string $view = 'filament.widgets.control-chart-overview-widget';
+
     public ControlChart $record;
 
     /** @var int | array<string, ?int> | null */
@@ -40,24 +42,24 @@ class ControlChartOverviewWidget extends StatsOverviewWidget
             Stat::make(__('monitoring.control_charts.summary.metric_name'), $this->text(ControlChartResource::metricNameOptions()[$this->record->metric_name] ?? $this->record->metric_name))
                 ->icon(Heroicon::OutlinedChartBar)
                 ->color('info'),
-            Stat::make(__('monitoring.control_charts.summary.period_from'), $this->ltr($this->formatDate($this->record->period_start), 'text-base font-medium leading-6'))
+            Stat::make(__('monitoring.control_charts.summary.period_from'), $this->ltr($this->formatDate($this->record->period_start), 'cc-card-value'))
                 ->icon(Heroicon::OutlinedCalendarDays)
                 ->color('gray'),
-            Stat::make(__('monitoring.control_charts.summary.period_until'), $this->ltr($this->formatDate($this->record->period_end), 'text-base font-medium leading-6'))
+            Stat::make(__('monitoring.control_charts.summary.period_until'), $this->ltr($this->formatDate($this->record->period_end), 'cc-card-value'))
                 ->icon(Heroicon::OutlinedCalendarDays)
                 ->color('gray'),
             Stat::make(__('monitoring.control_charts.summary.points_count'), $this->ltr(number_format((int) $this->record->points_count)))
                 ->icon(Heroicon::OutlinedNumberedList)
                 ->color('gray'),
-            Stat::make($this->ltr('CL', 'text-sm font-medium'), $this->ltr($this->formatNumber($this->record->center_line)))
+            Stat::make($this->ltr('CL', 'cc-card-title'), $this->ltr($this->formatNumber($this->record->center_line)))
                 ->description($this->secondary(__('monitoring.control_charts.summary.center_line')))
                 ->icon(Heroicon::OutlinedMinus)
                 ->color('info'),
-            Stat::make($this->ltr('UCL', 'text-sm font-medium'), $this->ltr($this->formatNumber($this->record->ucl)))
+            Stat::make($this->ltr('UCL', 'cc-card-title'), $this->ltr($this->formatNumber($this->record->ucl)))
                 ->description($this->secondary(__('monitoring.control_charts.summary.ucl')))
                 ->icon(Heroicon::OutlinedArrowTrendingUp)
                 ->color('danger'),
-            Stat::make($this->ltr('LCL', 'text-sm font-medium'), $this->ltr($this->formatNumber($this->record->lcl)))
+            Stat::make($this->ltr('LCL', 'cc-card-title'), $this->ltr($this->formatNumber($this->record->lcl)))
                 ->description($this->secondary(__('monitoring.control_charts.summary.lcl')))
                 ->icon(Heroicon::OutlinedArrowTrendingDown)
                 ->color('warning'),
@@ -67,10 +69,10 @@ class ControlChartOverviewWidget extends StatsOverviewWidget
             Stat::make(__('monitoring.control_charts.summary.process_status'), $this->text(__("monitoring.control_charts.statuses.{$status}")))
                 ->icon($status === 'normal' ? Heroicon::OutlinedCheckCircle : Heroicon::OutlinedExclamationTriangle)
                 ->color($status === 'normal' ? 'success' : 'danger'),
-            Stat::make(__('monitoring.control_charts.summary.calculated_date'), $this->ltr($this->formatDate($this->record->calculated_at), 'text-base font-medium leading-6'))
+            Stat::make(__('monitoring.control_charts.summary.calculated_date'), $this->ltr($this->formatDate($this->record->calculated_at), 'cc-card-value'))
                 ->icon(Heroicon::OutlinedClock)
                 ->color('gray'),
-            Stat::make(__('monitoring.control_charts.summary.calculated_at'), $this->ltr($this->formatTime($this->record->calculated_at), 'text-base font-medium leading-6'))
+            Stat::make(__('monitoring.control_charts.summary.calculated_at'), $this->ltr($this->formatTime($this->record->calculated_at), 'cc-card-value'))
                 ->icon(Heroicon::OutlinedClock)
                 ->color('gray'),
         ];
@@ -99,18 +101,18 @@ class ControlChartOverviewWidget extends StatsOverviewWidget
         return ($value instanceof Carbon ? $value : Carbon::parse($value))->format('H:i');
     }
 
-    private function ltr(string $value, string $classes = 'text-lg font-semibold leading-6'): HtmlString
+    private function ltr(string $value, string $classes = 'cc-card-value-number'): HtmlString
     {
         return new HtmlString('<span dir="ltr" class="[unicode-bidi:isolate] '.$classes.'">'.e($value).'</span>');
     }
 
     private function text(string $value): HtmlString
     {
-        return new HtmlString('<span class="text-base font-medium leading-6">'.e($value).'</span>');
+        return new HtmlString('<span class="cc-card-value">'.e($value).'</span>');
     }
 
     private function secondary(string $value): HtmlString
     {
-        return new HtmlString('<span class="text-[13px] font-normal leading-5">'.e($value).'</span>');
+        return new HtmlString('<span class="cc-card-description">'.e($value).'</span>');
     }
 }
