@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\ControlCharts\Pages;
 
 use App\Filament\Resources\ControlCharts\ControlChartResource;
+use App\Filament\Widgets\ControlChartOverviewWidget;
 use App\Models\ControlChart;
 use Filament\Actions\Action;
 use Filament\Resources\Pages\ViewRecord;
@@ -30,6 +31,18 @@ class ViewControlChart extends ViewRecord
         $metricName = ControlChartResource::metricNameOptions()[$record->metric_name] ?? $record->metric_name;
 
         return $metricName.' · '.$chartType;
+    }
+
+    protected function getHeaderWidgets(): array
+    {
+        return [
+            ControlChartOverviewWidget::class,
+        ];
+    }
+
+    public function getHeaderWidgetsColumns(): int|array
+    {
+        return 1;
     }
 
     protected function getHeaderActions(): array

@@ -144,14 +144,6 @@ class ControlChartResource extends Resource
     {
         return $schema
             ->components([
-                Section::make(__('monitoring.control_charts.sections.summary'))
-                    ->schema([
-                        ViewEntry::make('control_chart_summary')
-                            ->hiddenLabel()
-                            ->view('filament.infolists.control-chart-summary-table')
-                            ->columnSpanFull(),
-                    ])
-                    ->columnSpanFull(),
                 Section::make(__('monitoring.control_charts.graph.title'))
                     ->schema([
                         ViewEntry::make('control_chart_graph')
