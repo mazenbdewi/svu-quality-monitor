@@ -1139,6 +1139,8 @@ return [
             'summary' => 'ملخص الخريطة',
         ],
         'summary' => [
+            'label' => 'البيان',
+            'value' => 'القيمة',
             'service' => 'الخدمة',
             'chart_type' => 'نوع الخريطة',
             'metric_name' => 'اسم المؤشر',

@@ -1139,6 +1139,8 @@ return [
             'summary' => 'Chart Summary',
         ],
         'summary' => [
+            'label' => 'Label',
+            'value' => 'Value',
             'service' => 'Service',
             'chart_type' => 'Chart Type',
             'metric_name' => 'Metric Name',

@@ -24,7 +24,6 @@ use Filament\Infolists\Components\TextEntry;
 use Filament\Infolists\Components\ViewEntry;
 use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
-use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Filament\Support\Enums\FontWeight;
@@ -143,101 +142,14 @@ class ControlChartResource extends Resource
 
     public static function infolist(Schema $schema): Schema
     {
-        $cardClasses = 'rounded-xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-900';
-        $valueClasses = 'text-base font-semibold leading-6 text-gray-950 dark:text-white';
-        $formatNumber = fn (mixed $value): string => $value === null ? __('monitoring.dashboard.empty.value') : number_format((float) $value, 2);
-        $formatDateTime = function (mixed $value): string {
-            if (! $value) {
-                return __('monitoring.dashboard.empty.value');
-            }
-
-            $date = $value instanceof Carbon ? $value : Carbon::parse($value);
-            $format = app()->getLocale() === 'ar' ? 'd-m-Y H:i' : 'Y-m-d H:i';
-
-            return $date->format($format);
-        };
-
         return $schema
             ->components([
                 Section::make(__('monitoring.control_charts.sections.summary'))
                     ->schema([
-                        Grid::make([
-                            'default' => 1,
-                            'sm' => 2,
-                            'lg' => 4,
-                        ])
-                            ->schema([
-                                TextEntry::make('monitoredService.name')
-                                    ->label(__('monitoring.control_charts.summary.service'))
-                                    ->placeholder(__('monitoring.dashboard.empty.value'))
-                                    ->weight(FontWeight::SemiBold)
-                                    ->extraAttributes(['class' => $valueClasses])
-                                    ->extraEntryWrapperAttributes(['class' => $cardClasses]),
-                                TextEntry::make('chart_type')
-                                    ->label(__('monitoring.control_charts.summary.chart_type'))
-                                    ->formatStateUsing(fn (?string $state): string => static::chartTypeOptions()[$state] ?? (string) $state)
-                                    ->weight(FontWeight::SemiBold)
-                                    ->extraAttributes(['class' => $valueClasses])
-                                    ->extraEntryWrapperAttributes(['class' => $cardClasses.' border-blue-200 dark:border-blue-800']),
-                                TextEntry::make('metric_name')
-                                    ->label(__('monitoring.control_charts.summary.metric_name'))
-                                    ->formatStateUsing(fn (?string $state): string => static::metricNameOptions()[$state] ?? (string) $state)
-                                    ->weight(FontWeight::SemiBold)
-                                    ->extraAttributes(['class' => $valueClasses])
-                                    ->extraEntryWrapperAttributes(['class' => $cardClasses.' border-indigo-200 dark:border-indigo-800']),
-                                TextEntry::make('period')
-                                    ->label(__('monitoring.control_charts.summary.period'))
-                                    ->state(fn (ControlChart $record): string => $formatDateTime($record->period_start).' - '.$formatDateTime($record->period_end))
-                                    ->weight(FontWeight::SemiBold)
-                                    ->extraAttributes(['class' => $valueClasses])
-                                    ->extraEntryWrapperAttributes(['class' => $cardClasses]),
-                                TextEntry::make('center_line')
-                                    ->label(__('monitoring.control_charts.summary.center_line'))
-                                    ->formatStateUsing(fn (mixed $state): string => $formatNumber($state))
-                                    ->weight(FontWeight::SemiBold)
-                                    ->extraAttributes(['class' => $valueClasses, 'dir' => 'ltr'])
-                                    ->extraEntryWrapperAttributes(['class' => $cardClasses.' border-blue-200 dark:border-blue-800']),
-                                TextEntry::make('ucl')
-                                    ->label(__('monitoring.control_charts.summary.ucl'))
-                                    ->formatStateUsing(fn (mixed $state): string => $formatNumber($state))
-                                    ->weight(FontWeight::SemiBold)
-                                    ->extraAttributes(['class' => $valueClasses, 'dir' => 'ltr'])
-                                    ->extraEntryWrapperAttributes(['class' => $cardClasses.' border-orange-200 dark:border-orange-800']),
-                                TextEntry::make('lcl')
-                                    ->label(__('monitoring.control_charts.summary.lcl'))
-                                    ->formatStateUsing(fn (mixed $state): string => $formatNumber($state))
-                                    ->weight(FontWeight::SemiBold)
-                                    ->extraAttributes(['class' => $valueClasses, 'dir' => 'ltr'])
-                                    ->extraEntryWrapperAttributes(['class' => $cardClasses.' border-sky-200 dark:border-sky-800']),
-                                TextEntry::make('points_count')
-                                    ->label(__('monitoring.control_charts.summary.points_count'))
-                                    ->formatStateUsing(fn (mixed $state): string => number_format((int) $state))
-                                    ->weight(FontWeight::SemiBold)
-                                    ->extraAttributes(['class' => $valueClasses, 'dir' => 'ltr'])
-                                    ->extraEntryWrapperAttributes(['class' => $cardClasses]),
-                                TextEntry::make('out_of_control_count')
-                                    ->label(__('monitoring.control_charts.summary.out_of_control_points'))
-                                    ->badge()
-                                    ->color(fn (mixed $state): string => (int) $state > 0 ? 'danger' : 'success')
-                                    ->formatStateUsing(fn (mixed $state): string => number_format((int) $state))
-                                    ->weight(FontWeight::SemiBold)
-                                    ->extraAttributes(['class' => $valueClasses, 'dir' => 'ltr'])
-                                    ->extraEntryWrapperAttributes(['class' => $cardClasses]),
-                                TextEntry::make('calculated_at')
-                                    ->label(__('monitoring.control_charts.summary.calculated_at'))
-                                    ->formatStateUsing(fn (mixed $state): string => $formatDateTime($state))
-                                    ->weight(FontWeight::SemiBold)
-                                    ->extraAttributes(['class' => $valueClasses])
-                                    ->extraEntryWrapperAttributes(['class' => $cardClasses]),
-                                TextEntry::make('process_status')
-                                    ->label(__('monitoring.control_charts.summary.process_status'))
-                                    ->state(fn (ControlChart $record): string => (int) $record->out_of_control_count > 0 ? 'out_of_control' : 'normal')
-                                    ->formatStateUsing(fn (string $state): string => __("monitoring.control_charts.statuses.{$state}"))
-                                    ->badge()
-                                    ->color(fn (string $state): string => $state === 'normal' ? 'success' : 'danger')
-                                    ->weight(FontWeight::SemiBold)
-                                    ->extraEntryWrapperAttributes(['class' => $cardClasses]),
-                            ]),
+                        ViewEntry::make('control_chart_summary')
+                            ->hiddenLabel()
+                            ->view('filament.infolists.control-chart-summary-table')
+                            ->columnSpanFull(),
                     ])
                     ->columnSpanFull(),
                 Section::make(__('monitoring.control_charts.graph.title'))
