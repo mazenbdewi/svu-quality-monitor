@@ -261,6 +261,7 @@ class ControlChartCalculator
     {
         return $service->serviceChecks()
             ->whereBetween('checked_at', [$start, $end])
+            ->whereIn('check_type', ['http', 'api'])
             ->whereNotNull('response_time_ms')
             ->orderBy('checked_at')
             ->get();
@@ -288,6 +289,7 @@ class ControlChartCalculator
     {
         return $service->serviceChecks()
             ->whereBetween('checked_at', [$start, $end])
+            ->whereIn('check_type', ['http', 'api'])
             ->orderBy('checked_at')
             ->get()
             ->groupBy(fn (ServiceCheck $check): string => $this->bucketStart($check->checked_at, $bucket)->toDateTimeString())

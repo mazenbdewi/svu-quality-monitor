@@ -3,6 +3,7 @@
 namespace App\Exports\Reports;
 
 use App\Exports\Reports\Sheets\ControlChartsSheet;
+use App\Exports\Reports\Sheets\MaintenanceWindowsSheet;
 use App\Exports\Reports\Sheets\ReliabilityMetricsSheet;
 use App\Exports\Reports\Sheets\ServiceChecksSheet;
 use App\Exports\Reports\Sheets\ServiceIncidentsSheet;
@@ -30,6 +31,7 @@ class ReportExport implements WithMultipleSheets
                 'incidents' => new ServiceIncidentsSheet($this->filters),
                 'reliability_metrics' => new ReliabilityMetricsSheet($this->filters),
                 'control_charts' => new ControlChartsSheet($this->filters),
+                'maintenance_windows' => new MaintenanceWindowsSheet($this->filters),
                 default => throw new InvalidArgumentException("Unsupported report type [{$this->reportType}]."),
             },
         ];

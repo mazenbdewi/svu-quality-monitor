@@ -39,6 +39,11 @@ class CurrentServiceStatusWidget extends TableWidget
                     ->icon(fn (MonitoredService $record): string => $record->current_status_icon)
                     ->getStateUsing(fn (MonitoredService $record): string => $record->current_status_label)
                     ->color(fn (MonitoredService $record): string => $record->current_status_color),
+                TextColumn::make('under_maintenance')
+                    ->label(__('monitoring.service_status.statuses.maintenance'))
+                    ->badge()
+                    ->getStateUsing(fn (MonitoredService $record): string => $record->is_under_maintenance ? __('monitoring.booleans.yes') : __('monitoring.booleans.no'))
+                    ->color(fn (MonitoredService $record): string => $record->is_under_maintenance ? 'warning' : 'gray'),
                 TextColumn::make('latestServiceCheck.checked_at')
                     ->label(__('monitoring.dashboard.columns.last_check'))
                     ->dateTime()
@@ -94,7 +99,6 @@ class CurrentServiceStatusWidget extends TableWidget
                     ->whereColumn('service_checks.monitored_service_id', 'monitored_services.id')
                     ->latest('checked_at')
                     ->limit(1)
-            )
-            ;
+            );
     }
 }

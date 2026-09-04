@@ -26,6 +26,10 @@ The system performs lightweight checks only. It does not perform stress testing,
 
 - [Installation Guide](docs/installation.md)
 - [Operation Guide](docs/operation.md)
+- [Monitoring Engine](docs/monitoring-engine.md)
+- [Incident State Machine](docs/incident-state-machine.md)
+- [Planned Maintenance Windows](docs/planned-maintenance.md)
+- [Notification Engine](docs/notifications.md)
 - [Research Workflow](docs/research-workflow.md)
 - [Backup and Maintenance](docs/backup-and-maintenance.md)
 - [Production Checklist](docs/production-checklist.md)
@@ -63,3 +67,13 @@ For server operation, configure cron:
 ```cron
 * * * * * cd /path/to/svu-quality-monitor && php artisan schedule:run >> /dev/null 2>&1
 ```
+
+## Docker Background Processing
+
+For a production-style Docker run, use:
+
+```bash
+docker compose up -d
+```
+
+The command starts the scheduler and queue worker alongside the web application and database. Runtime heartbeat and queue status are visible on **System Operations** in the admin panel.

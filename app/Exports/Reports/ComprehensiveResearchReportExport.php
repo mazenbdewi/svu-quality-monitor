@@ -3,6 +3,7 @@
 namespace App\Exports\Reports;
 
 use App\Exports\Reports\Sheets\ControlChartsSheet;
+use App\Exports\Reports\Sheets\MaintenanceWindowsSheet;
 use App\Exports\Reports\Sheets\OutOfControlPointsSheet;
 use App\Exports\Reports\Sheets\ReliabilityMetricsSheet;
 use App\Exports\Reports\Sheets\ServiceChecksSheet;
@@ -27,6 +28,7 @@ class ComprehensiveResearchReportExport implements WithMultipleSheets
             new ServiceChecksSheet($this->filters, __('monitoring.reports.sheets.service_checks')),
             new ServiceIncidentsSheet($this->filters, __('monitoring.reports.sheets.incidents')),
             new ReliabilityMetricsSheet($this->filters, __('monitoring.reports.sheets.reliability_metrics')),
+            new MaintenanceWindowsSheet($this->filters, __('monitoring.report_types.maintenance_windows')),
             new ControlChartsSheet($this->filters, __('monitoring.reports.sheets.control_charts')),
             new OutOfControlPointsSheet($this->filters),
         ];

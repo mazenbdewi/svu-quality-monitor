@@ -21,6 +21,8 @@ class ReliabilityMetric extends Model
         'incidents_count',
         'uptime_minutes',
         'downtime_minutes',
+        'planned_maintenance_minutes',
+        'observation_minutes',
         'availability_percent',
         'mtbf_minutes',
         'mttr_minutes',

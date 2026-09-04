@@ -6,14 +6,15 @@ use App\Exports\Reports\ComprehensiveResearchReportExport;
 use App\Exports\Reports\MinitabReadyExport;
 use App\Exports\Reports\ReportExport;
 use App\Exports\Reports\Sheets\ControlChartsSheet;
+use App\Exports\Reports\Sheets\MaintenanceWindowsSheet;
 use App\Exports\Reports\Sheets\OutOfControlPointsSheet;
 use App\Exports\Reports\Sheets\ReliabilityMetricsSheet;
 use App\Exports\Reports\Sheets\ServiceChecksSheet;
 use App\Exports\Reports\Sheets\ServiceIncidentsSheet;
 use App\Models\MonitoredService;
 use App\Reports\ComprehensivePdfReport;
-use Barryvdh\DomPDF\Facade\Pdf;
 use BackedEnum;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Filament\Actions\Action;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Select;
@@ -325,6 +326,7 @@ class ReportsPage extends Page
             'incidents' => 'incidents-report',
             'reliability_metrics' => 'reliability-metrics-report',
             'control_charts' => 'control-charts-report',
+            'maintenance_windows' => 'maintenance-windows-report',
             'comprehensive' => 'comprehensive-research-report',
             'minitab_ready' => 'minitab-ready-export',
             default => 'report',
@@ -348,6 +350,7 @@ class ReportsPage extends Page
             'incidents' => (new ServiceIncidentsSheet($filters))->query()->exists(),
             'reliability_metrics' => (new ReliabilityMetricsSheet($filters))->query()->exists(),
             'control_charts' => (new ControlChartsSheet($filters))->query()->exists(),
+            'maintenance_windows' => (new MaintenanceWindowsSheet($filters))->query()->exists(),
             'comprehensive' => (new ServiceChecksSheet($filters))->query()->exists()
                 || (new ServiceIncidentsSheet($filters))->query()->exists()
                 || (new ReliabilityMetricsSheet($filters))->query()->exists()
@@ -371,6 +374,7 @@ class ReportsPage extends Page
             'incidents' => __('monitoring.report_types.incidents'),
             'reliability_metrics' => __('monitoring.report_types.reliability_metrics'),
             'control_charts' => __('monitoring.report_types.control_charts'),
+            'maintenance_windows' => __('monitoring.report_types.maintenance_windows'),
             'comprehensive' => __('monitoring.report_types.comprehensive'),
             'minitab_ready' => __('monitoring.report_types.minitab_ready'),
         ];

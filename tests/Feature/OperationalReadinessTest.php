@@ -45,7 +45,8 @@ class OperationalReadinessTest extends TestCase
         $this->assertStringContainsString('->everyMinute()', $console);
         $this->assertStringContainsString("->dailyAt('00:10')", $console);
         $this->assertStringContainsString("->dailyAt('00:25')", $console);
-        $this->assertSame(3, substr_count($console, '->withoutOverlapping()'));
+        $this->assertSame(5, substr_count($console, '->withoutOverlapping()'));
+        $this->assertStringContainsString('system-health:scheduler-heartbeat', $console);
     }
 
     public function test_system_operations_page_renders_for_authenticated_user(): void

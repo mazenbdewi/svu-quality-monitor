@@ -3,6 +3,7 @@
 namespace App\Filament\Widgets;
 
 use App\Models\ControlChartPoint;
+use App\Models\MaintenanceWindow;
 use App\Models\MonitoredService;
 use App\Models\ReliabilityMetric;
 use App\Models\ServiceCheck;
@@ -19,7 +20,7 @@ class OverviewStatsWidget extends StatsOverviewWidget
      * @var int | array<string, ?int> | null
      */
     protected int|array|null $columns = [
-        '@xl' => 5,
+        '@xl' => 7,
         '!@lg' => 2,
     ];
 
@@ -48,6 +49,11 @@ class OverviewStatsWidget extends StatsOverviewWidget
             ->whereBetween('point_time', [$start, $end])
             ->count();
         $averageAvailability = $this->averageLatestDailyAvailability();
+        $activeMaintenance = MaintenanceWindow::query()->activeAt(now())->with('monitoredServices:id')->get();
+        $servicesUnderMaintenance = $activeMaintenance->contains('applies_to_all_services', true)
+            ? $totalServices
+            : $activeMaintenance->flatMap(fn (MaintenanceWindow $window) => $window->monitoredServices->pluck('id'))->unique()->count();
+
         return [
             Stat::make(__('monitoring.dashboard.stats.total_services'), number_format($totalServices))
                 ->icon(Heroicon::OutlinedRectangleStack)
@@ -69,6 +75,12 @@ class OverviewStatsWidget extends StatsOverviewWidget
                     $averageAvailability >= 95 => 'warning',
                     default => 'danger',
                 }),
+            Stat::make(__('monitoring.dashboard.stats.active_maintenance_windows'), number_format($activeMaintenance->count()))
+                ->icon(Heroicon::OutlinedWrenchScrewdriver)
+                ->color($activeMaintenance->isEmpty() ? 'gray' : 'warning'),
+            Stat::make(__('monitoring.dashboard.stats.services_under_maintenance'), number_format($servicesUnderMaintenance))
+                ->icon(Heroicon::OutlinedWrenchScrewdriver)
+                ->color($servicesUnderMaintenance === 0 ? 'gray' : 'warning'),
         ];
     }
 

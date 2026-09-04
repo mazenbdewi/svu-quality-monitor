@@ -2,9 +2,12 @@
 
 namespace App\Models;
 
+use App\Enums\MonitoringCheckType;
+use App\Services\MaintenanceWindowService;
 use Database\Factories\MonitoredServiceFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 
@@ -13,12 +16,19 @@ class MonitoredService extends Model
     /** @use HasFactory<MonitoredServiceFactory> */
     use HasFactory;
 
+    /** @var array<string, string> */
+    protected $attributes = [
+        'check_type' => 'http',
+    ];
+
     /**
      * @var list<string>
      */
     protected $fillable = [
         'name',
         'url',
+        'check_type',
+        'check_config',
         'category',
         'expected_status_code',
         'expected_keyword',
@@ -26,6 +36,10 @@ class MonitoredService extends Model
         'warning_response_ms',
         'critical_response_ms',
         'is_active',
+        'notifications_enabled',
+        'operational_state',
+        'failure_confirmation_count',
+        'recovery_confirmation_count',
         'notes',
     ];
 
@@ -36,6 +50,13 @@ class MonitoredService extends Model
     {
         return [
             'is_active' => 'boolean',
+            'notifications_enabled' => 'boolean',
+            'is_flapping' => 'boolean',
+            'first_failure_at' => 'datetime',
+            'recovery_started_at' => 'datetime',
+            'state_transition_window_started_at' => 'datetime',
+            'check_type' => MonitoringCheckType::class,
+            'check_config' => 'encrypted:array',
         ];
     }
 
@@ -59,6 +80,11 @@ class MonitoredService extends Model
         return $this->hasMany(ReliabilityMetric::class);
     }
 
+    public function maintenanceWindows(): BelongsToMany
+    {
+        return $this->belongsToMany(MaintenanceWindow::class, 'maintenance_window_monitored_service');
+    }
+
     public function controlCharts(): HasMany
     {
         return $this->hasMany(ControlChart::class);
@@ -79,11 +105,29 @@ class MonitoredService extends Model
             return 'unknown';
         }
 
+        if ($this->hasOpenIncident()) {
+            return in_array($this->operational_state, ['pending_failure', 'down', 'recovering'], true)
+                ? $this->operational_state
+                : ($latestCheck->is_success ? 'recovering' : 'down');
+        }
+
+        if ($this->is_under_maintenance) {
+            return 'maintenance';
+        }
+
+        if (in_array($this->operational_state, ['pending_failure', 'down', 'recovering'], true)) {
+            return $this->operational_state;
+        }
+
         if ($latestCheck->is_success === false) {
             return 'down';
         }
 
-        if ($latestCheck->is_success === true && $latestCheck->is_slow === true) {
+        if ($latestCheck->performance_status === 'critical') {
+            return 'critical';
+        }
+
+        if ($latestCheck->performance_status === 'warning' || ($latestCheck->is_success === true && $latestCheck->is_slow === true)) {
             return 'slow';
         }
 
@@ -123,6 +167,8 @@ class MonitoredService extends Model
         return match ($this->current_status) {
             'healthy' => 'success',
             'slow' => 'warning',
+            'critical' => 'danger',
+            'pending_failure', 'recovering', 'maintenance' => 'warning',
             'down' => 'danger',
             default => 'gray',
         };
@@ -133,6 +179,8 @@ class MonitoredService extends Model
         return match ($this->current_status) {
             'healthy' => 'heroicon-o-check-circle',
             'slow' => 'heroicon-o-exclamation-triangle',
+            'critical' => 'heroicon-o-exclamation-circle',
+            'pending_failure', 'recovering', 'maintenance' => 'heroicon-o-wrench-screwdriver',
             'down' => 'heroicon-o-x-circle',
             default => 'heroicon-o-question-mark-circle',
         };
@@ -150,7 +198,11 @@ class MonitoredService extends Model
             return $latestCheck->error_type ?: 'unknown';
         }
 
-        if ($latestCheck->is_slow === true) {
+        if ($latestCheck->performance_status === 'critical') {
+            return 'critical';
+        }
+
+        if ($latestCheck->performance_status === 'warning' || $latestCheck->is_slow === true) {
             return 'slow';
         }
 
@@ -169,5 +221,27 @@ class MonitoredService extends Model
         $translation = __($translationKey);
 
         return $translation === $translationKey ? $problemType : $translation;
+    }
+
+    public function getIsUnderMaintenanceAttribute(): bool
+    {
+        return app(MaintenanceWindowService::class)->isUnderMaintenance($this);
+    }
+
+    public function timeoutSeconds(): int
+    {
+        return max(1, min((int) (($this->check_config ?? [])['timeout_seconds'] ?? 10), 60));
+    }
+
+    public function targetHost(): string
+    {
+        $target = (string) (($this->check_config ?? [])['hostname'] ?? $this->url);
+
+        return parse_url($target, PHP_URL_HOST) ?: preg_replace('#^https?://#', '', $target);
+    }
+
+    public function port(int $default): int
+    {
+        return max(1, min((int) (($this->check_config ?? [])['port'] ?? $default), 65535));
     }
 }

@@ -2,137 +2,147 @@
 
 namespace App\Services;
 
+use App\Events\IncidentConfirmed;
+use App\Events\IncidentResolved;
 use App\Models\MonitoredService;
 use App\Models\ServiceCheck;
 use App\Models\ServiceIncident;
-use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Support\Facades\DB;
 
 class IncidentDetector
 {
-    public function evaluate(MonitoredService $service): ?ServiceIncident
+    public function evaluate(MonitoredService $service, ?ServiceCheck $check = null): ?ServiceIncident
     {
-        $latestChecks = $service->serviceChecks()
-            ->latest('checked_at')
-            ->limit(3)
-            ->get();
-
-        $openIncident = $service->openIncident()->first();
-
-        if ($openIncident === null) {
-            return $this->openIncidentIfNeeded($service, $latestChecks);
-        }
-
-        return $this->closeIncidentIfRecovered($openIncident, $latestChecks);
-    }
-
-    /**
-     * @param  Collection<int, ServiceCheck>  $latestChecks
-     */
-    private function openIncidentIfNeeded(MonitoredService $service, Collection $latestChecks): ?ServiceIncident
-    {
-        if ($latestChecks->count() < 3) {
+        $check ??= $service->serviceChecks()->latest('checked_at')->first();
+        if ($check === null) {
             return null;
         }
 
-        if ($latestChecks->contains(fn (ServiceCheck $check): bool => ! $this->isProblematic($check))) {
+        return DB::transaction(function () use ($service, $check): ?ServiceIncident {
+            $lockedService = MonitoredService::query()->lockForUpdate()->findOrFail($service->id);
+            $openIncident = $lockedService->openIncident()->lockForUpdate()->first();
+            if ((int) $lockedService->last_incident_processed_check_id === $check->id) {
+                return $openIncident;
+            }
+
+            if ($check->is_during_maintenance && $openIncident === null) {
+                $this->clearMaintenanceOnlyConfirmationState($lockedService);
+                $lockedService->last_incident_processed_check_id = $check->id;
+                $lockedService->save();
+
+                return null;
+            }
+
+            $incident = $check->is_success
+                ? $this->handleSuccess($lockedService, $openIncident, $check)
+                : $this->handleFailure($lockedService, $openIncident, $check);
+
+            $lockedService->last_incident_processed_check_id = $check->id;
+            $lockedService->save();
+
+            return $incident;
+        });
+    }
+
+    private function clearMaintenanceOnlyConfirmationState(MonitoredService $service): void
+    {
+        if ($service->operational_state === 'pending_failure') {
+            $this->transition($service, 'healthy');
+        }
+        $service->consecutive_failures = 0;
+        $service->consecutive_recovery_successes = 0;
+        $service->first_failure_at = null;
+        $service->recovery_started_at = null;
+    }
+
+    private function handleFailure(MonitoredService $service, ?ServiceIncident $incident, ServiceCheck $check): ?ServiceIncident
+    {
+        if ($incident !== null) {
+            if ($service->operational_state === 'recovering') {
+                $this->transition($service, 'down');
+            }
+            $service->consecutive_recovery_successes = 0;
+            $service->recovery_started_at = null;
+            $service->consecutive_failures++;
+            $incident->update(['failure_count' => $service->consecutive_failures, 'latest_failure_type' => $check->error_type, 'latest_failure_message' => $check->error_message]);
+
+            return $incident->refresh();
+        }
+
+        if ($service->operational_state !== 'pending_failure') {
+            $this->transition($service, 'pending_failure');
+            $service->consecutive_failures = 0;
+            $service->first_failure_at = $check->checked_at;
+        }
+        $service->consecutive_failures++;
+        if ($service->consecutive_failures < max(1, (int) $service->failure_confirmation_count)) {
             return null;
         }
 
-        $incidentType = $this->detectIncidentType($latestChecks);
+        $this->transition($service, 'down');
 
-        return $service->serviceIncidents()->create([
-            'started_at' => $latestChecks->last()->checked_at,
-            'incident_type' => $incidentType,
-            'severity' => $this->detectSeverity($incidentType),
-            'status' => 'open',
+        $created = $service->serviceIncidents()->create([
+            'started_at' => $service->first_failure_at ?? $check->checked_at,
+            'confirmed_at' => $check->checked_at,
+            'incident_type' => $check->error_type ?: 'down',
+            'severity' => in_array($check->error_type, ['timeout', 'connection_error', 'connection_refused', 'dns_failure', 'tls_failure'], true) ? 'critical' : 'high',
+            'status' => 'open', 'failure_count' => $service->consecutive_failures,
+            'initial_failure_type' => $check->error_type, 'initial_failure_message' => $check->error_message,
+            'latest_failure_type' => $check->error_type, 'latest_failure_message' => $check->error_message,
         ]);
+        event(new IncidentConfirmed($created->id));
+
+        return $created;
     }
 
-    /**
-     * @param  Collection<int, ServiceCheck>  $latestChecks
-     */
-    private function closeIncidentIfRecovered(ServiceIncident $incident, Collection $latestChecks): ?ServiceIncident
+    private function handleSuccess(MonitoredService $service, ?ServiceIncident $incident, ServiceCheck $check): ?ServiceIncident
     {
-        if ($latestChecks->count() < 2) {
+        if ($incident === null) {
+            if ($service->operational_state === 'pending_failure') {
+                $this->transition($service, 'healthy');
+            }
+            $service->consecutive_failures = 0;
+            $service->first_failure_at = null;
+
+            return null;
+        }
+
+        if ($service->operational_state !== 'recovering') {
+            $this->transition($service, 'recovering');
+            $service->consecutive_recovery_successes = 0;
+            $service->recovery_started_at = $check->checked_at;
+        }
+        $service->consecutive_recovery_successes++;
+        if ($service->consecutive_recovery_successes < max(1, (int) $service->recovery_confirmation_count)) {
             return $incident;
         }
 
-        $latestTwoChecks = $latestChecks->take(2);
-
-        if ($latestTwoChecks->contains(fn (ServiceCheck $check): bool => ! $this->isHealthy($check))) {
-            return $incident;
-        }
-
-        $endedAt = $latestTwoChecks->first()->checked_at ?? now();
-
-        $incident->update([
-            'status' => 'closed',
-            'ended_at' => $endedAt,
-            'duration_minutes' => (int) $incident->started_at->diffInMinutes($endedAt),
-        ]);
+        $resolvedAt = $service->recovery_started_at ?? $check->checked_at;
+        $incident->update(['status' => 'closed', 'ended_at' => $resolvedAt, 'resolved_at' => $resolvedAt, 'duration_minutes' => (int) $incident->started_at->diffInMinutes($resolvedAt)]);
+        event(new IncidentResolved($incident->id));
+        $this->transition($service, 'healthy');
+        $service->consecutive_failures = 0;
+        $service->consecutive_recovery_successes = 0;
+        $service->first_failure_at = null;
+        $service->recovery_started_at = null;
 
         return $incident->refresh();
     }
 
-    private function isProblematic(ServiceCheck $check): bool
+    private function transition(MonitoredService $service, string $state): void
     {
-        return (! $check->is_success) || $check->is_slow;
-    }
-
-    private function isHealthy(ServiceCheck $check): bool
-    {
-        return $check->is_success && (! $check->is_slow);
-    }
-
-    /**
-     * @param  Collection<int, ServiceCheck>  $checks
-     */
-    private function detectIncidentType(Collection $checks): string
-    {
-        $types = $checks
-            ->map(fn (ServiceCheck $check): string => $this->problemType($check))
-            ->unique()
-            ->values();
-
-        if ($types->count() > 1) {
-            return 'mixed';
+        if ($service->operational_state === $state) {
+            return;
         }
-
-        return $types->first() ?? 'unknown';
-    }
-
-    private function problemType(ServiceCheck $check): string
-    {
-        if ($check->is_slow && $check->is_success) {
-            return 'slow';
+        $now = now();
+        $window = (int) config('monitoring.incidents.flapping_window_seconds', 900);
+        if ($service->state_transition_window_started_at === null || $service->state_transition_window_started_at->diffInSeconds($now) > $window) {
+            $service->state_transition_window_started_at = $now;
+            $service->state_transition_count = 0;
+            $service->is_flapping = false;
         }
-
-        if (in_array($check->error_type, ['timeout', 'connection_error', 'keyword_missing'], true)) {
-            return $check->error_type;
-        }
-
-        if ($check->status_code !== null && $check->status_code >= 500) {
-            return 'server_error';
-        }
-
-        if (! $check->is_success) {
-            return 'down';
-        }
-
-        if ($check->is_slow) {
-            return 'slow';
-        }
-
-        return 'unknown';
-    }
-
-    private function detectSeverity(string $incidentType): string
-    {
-        return match ($incidentType) {
-            'down', 'timeout', 'connection_error' => 'critical',
-            'server_error' => 'high',
-            'slow', 'keyword_missing', 'mixed' => 'medium',
-            default => 'low',
-        };
+        $service->state_transition_count++;
+        $service->is_flapping = $service->state_transition_count >= (int) config('monitoring.incidents.flapping_transition_count', 4);
+        $service->operational_state = $state;
     }
 }

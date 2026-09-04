@@ -142,6 +142,11 @@ class ServiceCheckResource extends Resource
                     ->formatStateUsing(fn (?bool $state): string => $state ? __('monitoring.booleans.yes') : __('monitoring.booleans.no'))
                     ->color(fn (?bool $state): string => $state ? 'warning' : 'success')
                     ->sortable(),
+                TextColumn::make('is_during_maintenance')
+                    ->label(__('monitoring.report_columns.is_during_maintenance'))
+                    ->badge()
+                    ->formatStateUsing(fn (?bool $state): string => $state ? __('monitoring.booleans.yes') : __('monitoring.booleans.no'))
+                    ->color(fn (?bool $state): string => $state ? 'warning' : 'gray'),
                 TextColumn::make('error_type')
                     ->label(__('monitoring.service_checks.table.error_type'))
                     ->formatStateUsing(function (?string $state): string {

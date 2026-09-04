@@ -3,6 +3,8 @@
 namespace Tests\Feature;
 
 use App\Models\MonitoredService;
+use App\Models\ServiceCheck;
+use App\Models\ServiceIncident;
 use App\Services\IncidentDetector;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
@@ -23,43 +25,37 @@ class IncidentDetectorTest extends TestCase
     {
         $service = MonitoredService::factory()->create();
 
-        $this->createCheck($service, now(), isSuccess: false, isSlow: false, errorType: 'timeout');
-
-        $incident = app(IncidentDetector::class)->evaluate($service);
+        $incident = $this->createAndEvaluate($service, now(), isSuccess: false, isSlow: false, errorType: 'timeout');
 
         $this->assertNull($incident);
         $this->assertDatabaseCount('service_incidents', 0);
     }
 
-    public function test_it_opens_incident_after_three_consecutive_problematic_checks(): void
+    public function test_it_confirms_incident_after_two_consecutive_functional_failures(): void
     {
         Carbon::setTestNow('2026-07-08 10:30:00');
 
         $service = MonitoredService::factory()->create();
 
-        $this->createCheck($service, now()->subMinutes(30), isSuccess: false, isSlow: false, errorType: 'timeout');
-        $this->createCheck($service, now()->subMinutes(15), isSuccess: false, isSlow: false, errorType: 'timeout');
-        $this->createCheck($service, now(), isSuccess: false, isSlow: false, errorType: 'timeout');
-
-        $incident = app(IncidentDetector::class)->evaluate($service);
+        $this->createAndEvaluate($service, now()->subMinutes(30), isSuccess: false, isSlow: false, errorType: 'timeout');
+        $incident = $this->createAndEvaluate($service, now()->subMinutes(15), isSuccess: false, isSlow: false, errorType: 'timeout');
 
         $this->assertNotNull($incident);
         $this->assertSame('open', $incident->status);
         $this->assertSame('timeout', $incident->incident_type);
         $this->assertSame('critical', $incident->severity);
         $this->assertTrue($incident->started_at->equalTo(now()->subMinutes(30)));
+        $this->assertTrue($incident->confirmed_at->equalTo(now()->subMinutes(15)));
     }
 
     public function test_it_does_not_open_duplicate_incident_when_one_is_already_open(): void
     {
         $service = MonitoredService::factory()->create();
 
-        $this->createCheck($service, now()->subMinutes(30), isSuccess: false, isSlow: false, errorType: 'timeout');
-        $this->createCheck($service, now()->subMinutes(15), isSuccess: false, isSlow: false, errorType: 'timeout');
-        $this->createCheck($service, now(), isSuccess: false, isSlow: false, errorType: 'timeout');
-
-        app(IncidentDetector::class)->evaluate($service);
-        app(IncidentDetector::class)->evaluate($service);
+        $this->createAndEvaluate($service, now()->subMinutes(30), isSuccess: false, isSlow: false, errorType: 'timeout');
+        $check = $this->createCheck($service, now()->subMinutes(15), isSuccess: false, isSlow: false, errorType: 'timeout');
+        app(IncidentDetector::class)->evaluate($service, $check);
+        app(IncidentDetector::class)->evaluate($service, $check);
 
         $this->assertSame(1, $service->serviceIncidents()->count());
     }
@@ -76,16 +72,13 @@ class IncidentDetectorTest extends TestCase
             'status' => 'open',
         ]);
 
-        $this->createCheck($service, now()->subMinutes(30), isSuccess: false, isSlow: false);
-        $this->createCheck($service, now()->subMinutes(15), isSuccess: true, isSlow: false);
-        $this->createCheck($service, now(), isSuccess: true, isSlow: false);
-
-        $updatedIncident = app(IncidentDetector::class)->evaluate($service);
+        $this->createAndEvaluate($service, now()->subMinutes(15), isSuccess: true, isSlow: false);
+        $updatedIncident = $this->createAndEvaluate($service, now(), isSuccess: true, isSlow: false);
 
         $this->assertSame($incident->id, $updatedIncident?->id);
         $this->assertSame('closed', $updatedIncident?->status);
-        $this->assertTrue($updatedIncident?->ended_at->equalTo(now()));
-        $this->assertSame(75, $updatedIncident?->duration_minutes);
+        $this->assertTrue($updatedIncident?->ended_at->equalTo(now()->subMinutes(15)));
+        $this->assertSame(60, $updatedIncident?->duration_minutes);
     }
 
     public function test_it_does_not_close_incident_after_only_one_healthy_check(): void
@@ -98,10 +91,7 @@ class IncidentDetectorTest extends TestCase
             'status' => 'open',
         ]);
 
-        $this->createCheck($service, now()->subMinutes(15), isSuccess: false, isSlow: false);
-        $this->createCheck($service, now(), isSuccess: true, isSlow: false);
-
-        $updatedIncident = app(IncidentDetector::class)->evaluate($service);
+        $updatedIncident = $this->createAndEvaluate($service, now(), isSuccess: true, isSlow: false);
 
         $this->assertSame($incident->id, $updatedIncident?->id);
         $this->assertSame('open', $updatedIncident?->status);
@@ -114,8 +104,8 @@ class IncidentDetectorTest extends TestCase
         bool $isSuccess,
         bool $isSlow,
         ?string $errorType = null,
-    ): void {
-        $service->serviceChecks()->create([
+    ): ServiceCheck {
+        return $service->serviceChecks()->create([
             'checked_at' => $checkedAt,
             'status_code' => $isSuccess ? 200 : 500,
             'response_time_ms' => $isSlow ? 2000 : 100,
@@ -123,5 +113,12 @@ class IncidentDetectorTest extends TestCase
             'is_slow' => $isSlow,
             'error_type' => $errorType,
         ]);
+    }
+
+    private function createAndEvaluate(MonitoredService $service, Carbon $checkedAt, bool $isSuccess, bool $isSlow, ?string $errorType = null): ?ServiceIncident
+    {
+        $check = $this->createCheck($service, $checkedAt, $isSuccess, $isSlow, $errorType);
+
+        return app(IncidentDetector::class)->evaluate($service, $check);
     }
 }

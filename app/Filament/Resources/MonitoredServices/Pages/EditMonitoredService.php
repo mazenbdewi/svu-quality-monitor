@@ -8,6 +8,8 @@ use Filament\Resources\Pages\EditRecord;
 
 class EditMonitoredService extends EditRecord
 {
+    private const MASKED_SECRET = '••••••••';
+
     protected static string $resource = MonitoredServiceResource::class;
 
     protected function getHeaderActions(): array
@@ -17,5 +19,27 @@ class EditMonitoredService extends EditRecord
             DeleteAction::make()
                 ->label(__('monitoring.actions.delete')),
         ];
+    }
+
+    protected function mutateFormDataBeforeFill(array $data): array
+    {
+        foreach (($data['check_config']['headers'] ?? []) as $name => $value) {
+            $data['check_config']['headers'][$name] = self::MASKED_SECRET;
+        }
+
+        return $data;
+    }
+
+    protected function mutateFormDataBeforeSave(array $data): array
+    {
+        $existingHeaders = $this->record->check_config['headers'] ?? [];
+
+        foreach (($data['check_config']['headers'] ?? []) as $name => $value) {
+            if ($value === self::MASKED_SECRET && array_key_exists($name, $existingHeaders)) {
+                $data['check_config']['headers'][$name] = $existingHeaders[$name];
+            }
+        }
+
+        return $data;
     }
 }

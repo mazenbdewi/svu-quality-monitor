@@ -2,9 +2,10 @@
 
 namespace App\Console\Commands;
 
+use App\Jobs\CheckMonitoredServiceJob;
 use App\Models\MonitoredService;
-use App\Services\ServiceCheckRunner;
 use Illuminate\Console\Command;
+use Illuminate\Contracts\Bus\Dispatcher;
 use Illuminate\Support\Facades\Log;
 use Throwable;
 
@@ -14,7 +15,7 @@ class CheckDueMonitoredServices extends Command
 
     protected $description = 'Check all due monitored services and store their service check results.';
 
-    public function handle(ServiceCheckRunner $runner): int
+    public function handle(Dispatcher $dispatcher): int
     {
         $activeServices = MonitoredService::query()
             ->where('is_active', true)
@@ -24,9 +25,8 @@ class CheckDueMonitoredServices extends Command
         $counts = [
             'active' => $activeServices->count(),
             'due' => 0,
-            'checked' => 0,
-            'successful' => 0,
-            'failed' => 0,
+            'dispatched' => 0,
+            'dispatch_failed' => 0,
             'skipped' => 0,
         ];
 
@@ -40,34 +40,21 @@ class CheckDueMonitoredServices extends Command
             $counts['due']++;
 
             try {
-                $check = $runner->run($service);
+                $dispatcher->dispatch(new CheckMonitoredServiceJob($service->id));
+                $counts['dispatched']++;
 
-                $counts['checked']++;
-
-                if ($check->is_success) {
-                    $counts['successful']++;
-                } else {
-                    $counts['failed']++;
-                }
-
-                $this->line(sprintf(
-                    'Checked [%s]: %s (%d ms)',
-                    $service->name,
-                    $check->is_success ? 'success' : 'failed',
-                    $check->response_time_ms ?? 0,
-                ));
+                $this->line("Dispatched check for [{$service->name}].");
             } catch (Throwable $exception) {
-                $counts['checked']++;
-                $counts['failed']++;
+                $counts['dispatch_failed']++;
 
-                Log::error('Scheduled service check failed.', [
+                Log::error('Scheduled service-check dispatch failed.', [
                     'monitored_service_id' => $service->id,
                     'service_name' => $service->name,
                     'exception' => $exception,
                 ]);
 
                 $this->error(sprintf(
-                    'Error checking [%s]: %s',
+                    'Error dispatching [%s]: %s',
                     $service->name,
                     $exception->getMessage(),
                 ));
@@ -78,9 +65,8 @@ class CheckDueMonitoredServices extends Command
         $this->info('Service check summary');
         $this->line("Active services count: {$counts['active']}");
         $this->line("Due services count: {$counts['due']}");
-        $this->line("Checked services count: {$counts['checked']}");
-        $this->line("Successful checks count: {$counts['successful']}");
-        $this->line("Failed checks count: {$counts['failed']}");
+        $this->line("Dispatched services count: {$counts['dispatched']}");
+        $this->line("Failed dispatches count: {$counts['dispatch_failed']}");
         $this->line("Skipped services count: {$counts['skipped']}");
 
         return self::SUCCESS;

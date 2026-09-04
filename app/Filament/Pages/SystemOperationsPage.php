@@ -2,6 +2,7 @@
 
 namespace App\Filament\Pages;
 
+use App\Services\SystemHealthService;
 use BackedEnum;
 use Filament\Pages\Page;
 use Filament\Support\Enums\Width;
@@ -10,6 +11,9 @@ use UnitEnum;
 
 class SystemOperationsPage extends Page
 {
+    /** @var array<string, array<string, mixed>> */
+    public array $health = [];
+
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedCog6Tooth;
 
     protected static ?string $slug = 'system-operations';
@@ -33,5 +37,10 @@ class SystemOperationsPage extends Page
     public function getTitle(): string
     {
         return __('monitoring.operations.title');
+    }
+
+    public function mount(SystemHealthService $systemHealth): void
+    {
+        $this->health = $systemHealth->snapshot();
     }
 }

@@ -69,10 +69,8 @@ services:
       - queue:work
       - --sleep=3
       - --tries=3
-      - --timeout=120
+      - --timeout=60
       - --max-time=3600
-    profiles:
-      - background
 
   scheduler:
     build:
@@ -91,8 +89,6 @@ services:
       - php
       - artisan
       - schedule:work
-    profiles:
-      - background
 
 volumes:
   database_data:

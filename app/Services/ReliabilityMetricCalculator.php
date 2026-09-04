@@ -9,6 +9,8 @@ use Carbon\Carbon;
 
 class ReliabilityMetricCalculator
 {
+    public function __construct(private MaintenanceWindowService $maintenance) {}
+
     public function calculateForService(
         MonitoredService $service,
         Carbon $start,
@@ -42,14 +44,18 @@ class ReliabilityMetricCalculator
             ->get();
 
         $incidentsCount = $incidents->count();
-        $downtimeMinutes = $incidents->sum(
-            fn (ServiceIncident $incident): int => $this->overlapMinutes($incident, $periodStart, $periodEnd),
-        );
+        $plannedMaintenanceMinutes = $this->maintenance->overlapMinutes($service, $periodStart, $periodEnd);
+        $downtimeMinutes = $incidents->sum(function (ServiceIncident $incident) use ($service, $periodStart, $periodEnd): int {
+            [$incidentStart, $incidentEnd] = $this->overlapRange($incident, $periodStart, $periodEnd);
+
+            return max(0, $this->minutesBetween($incidentStart, $incidentEnd) - $this->maintenance->overlapMinutes($service, $incidentStart, $incidentEnd));
+        });
 
         $totalPeriodMinutes = $this->minutesBetween($periodStart, $periodEnd);
-        $uptimeMinutes = max($totalPeriodMinutes - $downtimeMinutes, 0);
-        $availabilityPercent = $totalPeriodMinutes > 0
-            ? ($uptimeMinutes / $totalPeriodMinutes) * 100
+        $observationMinutes = max($totalPeriodMinutes - $plannedMaintenanceMinutes, 0);
+        $uptimeMinutes = max($observationMinutes - $downtimeMinutes, 0);
+        $availabilityPercent = $observationMinutes > 0
+            ? ($uptimeMinutes / $observationMinutes) * 100
             : 0;
 
         return ReliabilityMetric::query()->updateOrCreate(
@@ -66,6 +72,8 @@ class ReliabilityMetricCalculator
                 'incidents_count' => $incidentsCount,
                 'uptime_minutes' => $uptimeMinutes,
                 'downtime_minutes' => $downtimeMinutes,
+                'planned_maintenance_minutes' => $plannedMaintenanceMinutes,
+                'observation_minutes' => $observationMinutes,
                 'availability_percent' => round($availabilityPercent, 4),
                 'mtbf_minutes' => $incidentsCount > 0 ? round($uptimeMinutes / $incidentsCount, 2) : null,
                 'mttr_minutes' => $incidentsCount > 0 ? round($downtimeMinutes / $incidentsCount, 2) : null,
@@ -77,7 +85,8 @@ class ReliabilityMetricCalculator
         );
     }
 
-    private function overlapMinutes(ServiceIncident $incident, Carbon $periodStart, Carbon $periodEnd): int
+    /** @return array{0: Carbon, 1: Carbon} */
+    private function overlapRange(ServiceIncident $incident, Carbon $periodStart, Carbon $periodEnd): array
     {
         $effectiveStart = $incident->started_at->greaterThan($periodStart)
             ? $incident->started_at->copy()
@@ -88,7 +97,7 @@ class ReliabilityMetricCalculator
             ? $incidentEnd
             : $periodEnd->copy();
 
-        return $this->minutesBetween($effectiveStart, $effectiveEnd);
+        return [$effectiveStart, $effectiveEnd];
     }
 
     private function minutesBetween(Carbon $start, Carbon $end): int

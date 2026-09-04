@@ -2,116 +2,83 @@
 
 namespace App\Services;
 
+use App\Enums\MonitoringCheckType;
+use App\Events\SslCertificateExpiring;
 use App\Models\MonitoredService;
 use App\Models\ServiceCheck;
-use Illuminate\Http\Client\ConnectionException;
-use Illuminate\Http\Client\RequestException;
-use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Str;
-use Throwable;
+use App\Monitoring\CheckResult;
+use App\Monitoring\ServiceCheckerRegistry;
+use Illuminate\Support\Facades\DB;
+use InvalidArgumentException;
 
 class ServiceCheckRunner
 {
-    public function run(MonitoredService $service): ServiceCheck
+    public function __construct(private ServiceCheckerRegistry $checkers) {}
+
+    public function run(MonitoredService $service, string $source = ServiceCheck::SOURCE_MANUAL): ServiceCheck
     {
-        $startedAt = now();
-        $timerStartedAt = hrtime(true);
-        $expectedKeyword = filled($service->expected_keyword) ? (string) $service->expected_keyword : null;
+        $type = $service->check_type instanceof MonitoringCheckType
+            ? $service->check_type
+            : MonitoringCheckType::tryFrom((string) $service->check_type);
 
-        try {
-            $response = Http::timeout(10)->get($service->url);
+        if ($type === null) {
+            throw new InvalidArgumentException('Unsupported monitoring check type.');
+        }
 
-            $responseTimeMs = $this->elapsedMilliseconds($timerStartedAt);
-            $statusCode = $response->status();
-            $expectedKeywordFound = $expectedKeyword === null
-                ? null
-                : Str::contains($response->body(), $expectedKeyword);
+        return $this->persist($service, $this->checkers->for($type)->check($service), $source, $type);
+    }
 
-            $isStatusExpected = $statusCode === (int) $service->expected_status_code;
-            $isSuccess = $isStatusExpected && ($expectedKeywordFound !== false);
-            $isSlow = $responseTimeMs > (int) $service->warning_response_ms;
-
+    public function persist(
+        MonitoredService $service,
+        CheckResult $result,
+        string $source = ServiceCheck::SOURCE_MANUAL,
+        ?MonitoringCheckType $type = null,
+    ): ServiceCheck {
+        return DB::transaction(function () use ($service, $result, $source, $type): ServiceCheck {
+            $performance = $result->performanceStatus ?? $this->performanceStatus($service, $result);
+            $maintenance = app(MaintenanceWindowService::class)->activeWindowFor($service, $result->checkedAt);
             $check = $service->serviceChecks()->create([
-                'checked_at' => $startedAt,
-                'status_code' => $statusCode,
-                'response_time_ms' => $responseTimeMs,
-                'is_success' => $isSuccess,
-                'is_slow' => $isSlow,
-                'error_type' => $isSuccess ? null : $this->failureType($isStatusExpected, $expectedKeywordFound),
-                'error_message' => $isSuccess ? null : $this->failureMessage($service, $statusCode, $expectedKeywordFound),
-                'expected_keyword_found' => $expectedKeywordFound,
+                'checked_at' => $result->checkedAt,
+                'source' => $source,
+                'is_during_maintenance' => $maintenance !== null,
+                'maintenance_window_id' => $maintenance?->id,
+                'check_type' => ($type ?? $service->check_type ?? MonitoringCheckType::Http)->value,
+                'status_code' => $result->statusCode,
+                'response_time_ms' => $result->responseTimeMs,
+                'is_success' => $result->isSuccess,
+                'is_slow' => $performance === 'warning' && $result->responseTimeMs !== null,
+                'performance_status' => $performance,
+                'error_type' => $result->errorType,
+                'error_message' => $result->errorMessage,
+                'expected_keyword_found' => $result->expectedKeywordFound,
+                'metadata' => $result->metadata,
             ]);
 
-            app(IncidentDetector::class)->evaluate($service);
+            app(IncidentDetector::class)->evaluate($service, $check);
+            if ($check->check_type === MonitoringCheckType::Ssl->value && $check->is_success && config('monitoring.notifications.ssl.enabled', true)) {
+                foreach (config('monitoring.notifications.ssl.thresholds', [30, 14, 7, 3, 1]) as $threshold) {
+                    if ((int) data_get($check->metadata, 'days_remaining', PHP_INT_MAX) <= (int) $threshold) {
+                        event(new SslCertificateExpiring($check->id, (int) $threshold));
+                    }
+                }
+            }
 
             return $check;
-        } catch (Throwable $exception) {
-            $responseTimeMs = $this->elapsedMilliseconds($timerStartedAt);
-
-            $check = $service->serviceChecks()->create([
-                'checked_at' => $startedAt,
-                'status_code' => null,
-                'response_time_ms' => $responseTimeMs,
-                'is_success' => false,
-                'is_slow' => false,
-                'error_type' => $this->exceptionType($exception),
-                'error_message' => Str::limit($exception->getMessage(), 1000, ''),
-                'expected_keyword_found' => $expectedKeyword === null ? null : false,
-            ]);
-
-            app(IncidentDetector::class)->evaluate($service);
-
-            return $check;
-        }
+        });
     }
 
-    private function elapsedMilliseconds(int $timerStartedAt): int
+    private function performanceStatus(MonitoredService $service, CheckResult $result): ?string
     {
-        return (int) round((hrtime(true) - $timerStartedAt) / 1_000_000);
-    }
-
-    private function exceptionType(Throwable $exception): string
-    {
-        $message = Str::lower($exception->getMessage());
-
-        if (Str::contains($message, ['timed out', 'timeout', 'curl error 28'])) {
-            return 'timeout';
+        if (! $result->isSuccess || $result->responseTimeMs === null) {
+            return null;
+        }
+        if ($result->responseTimeMs >= (int) $service->critical_response_ms) {
+            return 'critical';
+        }
+        if ($result->responseTimeMs >= (int) $service->warning_response_ms) {
+            return 'warning';
         }
 
-        if ($exception instanceof ConnectionException) {
-            return 'connection_error';
-        }
-
-        if ($exception instanceof RequestException) {
-            return 'request_error';
-        }
-
-        return 'unknown';
-    }
-
-    private function failureType(bool $isStatusExpected, ?bool $expectedKeywordFound): ?string
-    {
-        if (! $isStatusExpected) {
-            return 'unexpected_status_code';
-        }
-
-        if ($expectedKeywordFound === false) {
-            return 'keyword_missing';
-        }
-
-        return null;
-    }
-
-    private function failureMessage(MonitoredService $service, int $statusCode, ?bool $expectedKeywordFound): ?string
-    {
-        if ($statusCode !== (int) $service->expected_status_code) {
-            return "Expected status code {$service->expected_status_code}, got {$statusCode}.";
-        }
-
-        if ($expectedKeywordFound === false) {
-            return 'Expected keyword was not found in the response body.';
-        }
-
-        return null;
+        return 'healthy';
     }
 }

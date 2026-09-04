@@ -37,6 +37,7 @@ class ServiceCheckRunnerTest extends TestCase
             'id' => $check->id,
             'monitored_service_id' => $service->id,
             'is_success' => true,
+            'source' => 'manual',
         ]);
     }
 
@@ -77,7 +78,7 @@ class ServiceCheckRunnerTest extends TestCase
         $this->assertNull($check->status_code);
         $this->assertSame('timeout', $check->error_type);
         $this->assertFalse($check->expected_keyword_found);
-        $this->assertStringContainsString('Connection timed out', $check->error_message);
+        $this->assertSame('The request timed out.', $check->error_message);
     }
 
     public function test_it_evaluates_incidents_after_checks_are_stored(): void
@@ -93,8 +94,6 @@ class ServiceCheckRunnerTest extends TestCase
         ]);
 
         app(ServiceCheckRunner::class)->run($service);
-        app(ServiceCheckRunner::class)->run($service);
-
         $this->assertDatabaseCount('service_incidents', 0);
 
         app(ServiceCheckRunner::class)->run($service);
@@ -102,7 +101,7 @@ class ServiceCheckRunnerTest extends TestCase
         $this->assertDatabaseHas('service_incidents', [
             'monitored_service_id' => $service->id,
             'status' => 'open',
-            'incident_type' => 'server_error',
+            'incident_type' => 'http_status_mismatch',
             'severity' => 'high',
         ]);
     }

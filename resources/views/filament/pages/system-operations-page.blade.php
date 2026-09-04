@@ -8,6 +8,13 @@
         'reliability' => 'php artisan reliability:calculate --period=daily',
         'control_charts' => 'php artisan control-charts:calculate --period=daily',
     ];
+    $statusColor = fn (string $status): string => match ($status) {
+        'healthy' => 'success',
+        'warning' => 'warning',
+        default => 'danger',
+    };
+    $formatTime = fn ($time): string => $time?->format('Y-m-d H:i:s') ?? __('monitoring.operations.health.never');
+    $formatCount = fn ($count): string => $count === null ? __('monitoring.operations.health.unavailable') : number_format($count);
 @endphp
 
 <x-filament-panels::page>
@@ -22,6 +29,74 @@
             <p class="mt-4 text-base leading-8 text-gray-700 dark:text-gray-300">
                 {{ __('monitoring.operations.body') }}
             </p>
+        </section>
+
+        <section class="rounded-xl bg-white p-6 shadow-sm ring-1 ring-gray-950/5 dark:bg-gray-900 dark:ring-white/10">
+            <div>
+                <p class="text-sm font-semibold text-primary-600 dark:text-primary-400">
+                    {{ __('monitoring.operations.health.subtitle') }}
+                </p>
+                <h2 class="mt-1 text-xl font-bold text-gray-950 dark:text-white">
+                    {{ __('monitoring.operations.health.title') }}
+                </h2>
+                <p class="mt-2 text-sm leading-6 text-gray-700 dark:text-gray-300">
+                    {{ __('monitoring.operations.health.rules') }}
+                </p>
+            </div>
+
+            <div class="mt-5 grid gap-4 xl:grid-cols-2">
+                @foreach (['scheduler', 'queue'] as $component)
+                    @php($componentHealth = $health[$component])
+                    <article class="rounded-lg bg-gray-50 p-4 ring-1 ring-gray-950/5 dark:bg-white/5 dark:ring-white/10">
+                        <div class="flex items-center justify-between gap-3">
+                            <h3 class="font-semibold text-gray-950 dark:text-white">
+                                {{ __('monitoring.operations.health.'.$component.'.title') }}
+                            </h3>
+                            <span @class([
+                                'rounded-full px-2.5 py-1 text-xs font-semibold',
+                                'bg-success-100 text-success-700 dark:bg-success-500/20 dark:text-success-300' => $statusColor($componentHealth['status']) === 'success',
+                                'bg-warning-100 text-warning-700 dark:bg-warning-500/20 dark:text-warning-300' => $statusColor($componentHealth['status']) === 'warning',
+                                'bg-danger-100 text-danger-700 dark:bg-danger-500/20 dark:text-danger-300' => $statusColor($componentHealth['status']) === 'danger',
+                            ])>
+                                {{ __('monitoring.operations.health.statuses.'.$componentHealth['status']) }}
+                            </span>
+                        </div>
+                        <dl class="mt-4 space-y-2 text-sm text-gray-700 dark:text-gray-300">
+                            <div class="flex justify-between gap-4"><dt>{{ __('monitoring.operations.health.last_heartbeat') }}</dt><dd dir="ltr">{{ $formatTime($componentHealth['last_heartbeat']) }}</dd></div>
+                            @if ($component === 'scheduler')
+                                <div class="flex justify-between gap-4"><dt>{{ __('monitoring.operations.health.expected_interval') }}</dt><dd>{{ number_format($componentHealth['expected_interval_seconds']) }} {{ __('monitoring.operations.health.seconds') }}</dd></div>
+                            @else
+                                <div class="flex justify-between gap-4"><dt>{{ __('monitoring.operations.health.queue.last_success') }}</dt><dd dir="ltr">{{ $formatTime($componentHealth['last_success']) }}</dd></div>
+                                <div class="flex justify-between gap-4"><dt>{{ __('monitoring.operations.health.queue.last_failure') }}</dt><dd dir="ltr">{{ $formatTime($componentHealth['last_failure']) }}</dd></div>
+                                <div class="flex justify-between gap-4"><dt>{{ __('monitoring.operations.health.queue.pending_jobs') }}</dt><dd>{{ $formatCount($componentHealth['pending_jobs']) }}</dd></div>
+                                <div class="flex justify-between gap-4"><dt>{{ __('monitoring.operations.health.queue.failed_jobs') }}</dt><dd>{{ $formatCount($componentHealth['failed_jobs']) }}</dd></div>
+                            @endif
+                        </dl>
+                    </article>
+                @endforeach
+            </div>
+        </section>
+
+        <section class="grid gap-4 xl:grid-cols-2">
+            <article class="rounded-xl bg-white p-6 shadow-sm ring-1 ring-gray-950/5 dark:bg-gray-900 dark:ring-white/10">
+                <h2 class="text-xl font-bold text-gray-950 dark:text-white">{{ __('monitoring.operations.health.monitoring.title') }}</h2>
+                <dl class="mt-4 space-y-2 text-sm text-gray-700 dark:text-gray-300">
+                    <div class="flex justify-between gap-4"><dt>{{ __('monitoring.operations.health.monitoring.last_success') }}</dt><dd dir="ltr">{{ $formatTime($health['monitoring']['last_automatic_success']) }}</dd></div>
+                    <div class="flex justify-between gap-4"><dt>{{ __('monitoring.operations.health.monitoring.last_failure') }}</dt><dd dir="ltr">{{ $formatTime($health['monitoring']['last_automatic_failure']) }}</dd></div>
+                    <div class="flex justify-between gap-4"><dt>{{ __('monitoring.operations.health.monitoring.active_services') }}</dt><dd>{{ number_format($health['monitoring']['active_services']) }}</dd></div>
+                    <div class="flex justify-between gap-4"><dt>{{ __('monitoring.operations.health.monitoring.due_services') }}</dt><dd>{{ number_format($health['monitoring']['due_services']) }}</dd></div>
+                </dl>
+            </article>
+            <article class="rounded-xl bg-white p-6 shadow-sm ring-1 ring-gray-950/5 dark:bg-gray-900 dark:ring-white/10">
+                <h2 class="text-xl font-bold text-gray-950 dark:text-white">{{ __('monitoring.operations.health.application.title') }}</h2>
+                <dl class="mt-4 space-y-2 text-sm text-gray-700 dark:text-gray-300">
+                    <div class="flex justify-between gap-4"><dt>{{ __('monitoring.operations.health.application.database') }}</dt><dd>{{ __('monitoring.operations.health.database_status.'.($health['application']['database_healthy'] ? 'healthy' : 'down')) }}</dd></div>
+                    <div class="flex justify-between gap-4"><dt>{{ __('monitoring.operations.health.application.environment') }}</dt><dd dir="ltr">{{ $health['application']['environment'] }}</dd></div>
+                    <div class="flex justify-between gap-4"><dt>{{ __('monitoring.operations.health.application.version') }}</dt><dd dir="ltr">{{ $health['application']['version'] }}</dd></div>
+                    <div class="flex justify-between gap-4"><dt>{{ __('monitoring.operations.health.application.server_time') }}</dt><dd dir="ltr">{{ $formatTime($health['application']['server_time']) }}</dd></div>
+                    <div class="flex justify-between gap-4"><dt>{{ __('monitoring.operations.health.application.timezone') }}</dt><dd dir="ltr">{{ $health['application']['timezone'] }}</dd></div>
+                </dl>
+            </article>
         </section>
 
         <section class="rounded-xl bg-white p-6 shadow-sm ring-1 ring-gray-950/5 dark:bg-gray-900 dark:ring-white/10">

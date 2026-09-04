@@ -1,0 +1,1 @@
+<livewire:system-health-indicator />
