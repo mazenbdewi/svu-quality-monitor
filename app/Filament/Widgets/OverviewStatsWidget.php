@@ -7,6 +7,7 @@ use App\Models\MaintenanceWindow;
 use App\Models\MonitoredService;
 use App\Models\ReliabilityMetric;
 use App\Models\ServiceCheck;
+use App\Models\SlaMetric;
 use Carbon\Carbon;
 use Filament\Support\Icons\Heroicon;
 use Filament\Widgets\StatsOverviewWidget;
@@ -53,6 +54,9 @@ class OverviewStatsWidget extends StatsOverviewWidget
         $servicesUnderMaintenance = $activeMaintenance->contains('applies_to_all_services', true)
             ? $totalServices
             : $activeMaintenance->flatMap(fn (MaintenanceWindow $window) => $window->monitoredServices->pluck('id'))->unique()->count();
+        $slaCounts = SlaMetric::query()->whereIn('id', function ($query): void {
+            $query->selectRaw('MAX(id)')->from('sla_metrics')->groupBy('monitored_service_id');
+        })->selectRaw('status, COUNT(*) as aggregate')->groupBy('status')->pluck('aggregate', 'status');
 
         return [
             Stat::make(__('monitoring.dashboard.stats.total_services'), number_format($totalServices))
@@ -81,6 +85,14 @@ class OverviewStatsWidget extends StatsOverviewWidget
             Stat::make(__('monitoring.dashboard.stats.services_under_maintenance'), number_format($servicesUnderMaintenance))
                 ->icon(Heroicon::OutlinedWrenchScrewdriver)
                 ->color($servicesUnderMaintenance === 0 ? 'gray' : 'warning'),
+            Stat::make(__('monitoring.sla.dashboard.configured'), number_format(MonitoredService::query()->where('sla_enabled', true)->count()))
+                ->icon(Heroicon::OutlinedShieldCheck)->color('info'),
+            Stat::make(__('monitoring.sla.dashboard.met'), number_format($slaCounts['met'] ?? 0))
+                ->icon(Heroicon::OutlinedCheckCircle)->color('success'),
+            Stat::make(__('monitoring.sla.dashboard.at_risk'), number_format($slaCounts['at_risk'] ?? 0))
+                ->icon(Heroicon::OutlinedExclamationTriangle)->color('warning'),
+            Stat::make(__('monitoring.sla.dashboard.breached'), number_format($slaCounts['breached'] ?? 0))
+                ->icon(Heroicon::OutlinedXCircle)->color('danger'),
         ];
     }
 

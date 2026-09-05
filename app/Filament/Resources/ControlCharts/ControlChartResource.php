@@ -46,6 +46,26 @@ class ControlChartResource extends Resource
 
     protected static ?string $recordTitleAttribute = 'chart_type';
 
+    public static function canViewAny(): bool
+    {
+        return auth()->user()?->can('control_charts.view') ?? false;
+    }
+
+    public static function canView($record): bool
+    {
+        return auth()->user()?->can('control_charts.view') ?? false;
+    }
+
+    public static function canEdit($record): bool
+    {
+        return false;
+    }
+
+    public static function canCreate(): bool
+    {
+        return false;
+    }
+
     public static function getModelLabel(): string
     {
         return __('monitoring.control_charts.resource.model_label');

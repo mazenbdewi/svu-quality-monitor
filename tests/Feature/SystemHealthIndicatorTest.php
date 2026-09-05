@@ -7,6 +7,7 @@ use App\Livewire\SystemHealthIndicator;
 use App\Models\User;
 use App\Services\SystemHealthService;
 use Carbon\Carbon;
+use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Livewire\Livewire;
@@ -124,7 +125,10 @@ class SystemHealthIndicatorTest extends TestCase
     {
         config(['app.env' => 'local']);
 
-        $this->actingAs(User::factory()->create())
+        $this->seed(RolesAndPermissionsSeeder::class);
+        $user = User::factory()->create();
+        $user->assignRole('operator');
+        $this->actingAs($user)
             ->get(SystemOperationsPage::getUrl())
             ->assertOk()
             ->assertSee('data-system-health-indicator="scheduler"', false)

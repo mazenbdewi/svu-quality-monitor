@@ -1,6 +1,12 @@
 <?php
 
 return [
+    'sla' => [
+        'fields' => ['enabled' => 'تفعيل اتفاقية مستوى الخدمة', 'target' => 'هدف SLA (%)'],
+        'labels' => ['target' => 'هدف SLA', 'actual' => 'الإتاحة الفعلية', 'status' => 'حالة SLA'],
+        'dashboard' => ['configured' => 'خدمات لديها SLA', 'met' => 'SLA محقق', 'at_risk' => 'SLA معرّض للخطر', 'breached' => 'SLA مخترق'],
+        'statuses' => ['not_configured' => 'غير مهيأ', 'no_data' => 'لا توجد بيانات', 'met' => 'محقق', 'at_risk' => 'معرّض للخطر', 'breached' => 'مخترق'],
+    ],
     'language_switcher' => [
         'label' => 'تبديل اللغة',
     ],
@@ -57,6 +63,8 @@ return [
         'reliability_metrics' => 'مؤشرات الموثوقية',
         'control_charts' => 'خرائط المراقبة',
         'maintenance_windows' => 'نوافذ الصيانة',
+        'sla_metrics' => 'مؤشرات SLA',
+        'executive_monthly' => 'التقرير التنفيذي الشهري',
         'comprehensive' => 'التقرير الشامل',
         'minitab_ready' => 'تصدير مهيأ لـ Minitab',
     ],
@@ -1474,4 +1482,13 @@ return [
         ],
     ],
     'notifications' => ['settings' => 'إعدادات التنبيهات', 'save' => 'حفظ', 'saved' => 'تم حفظ إعدادات التنبيهات.', 'service_enabled' => 'تفعيل التنبيهات لهذه الخدمة', 'delivery' => 'محاولة تنبيه', 'deliveries' => 'سجل التنبيهات', 'event_type' => 'نوع الحدث', 'channel' => 'القناة', 'incident' => 'الحادثة', 'status' => 'الحالة', 'attempt_number' => 'رقم المحاولة', 'attempted_at' => 'وقت المحاولة', 'sent_at' => 'وقت الإرسال', 'safe_error_message' => 'رسالة الخطأ الآمنة', 'telegram_enabled' => 'تفعيل تيليغرام', 'email_enabled' => 'تفعيل البريد الإلكتروني', 'email_recipients' => 'مستلمو البريد الإلكتروني', 'ssl_expiry_notifications_enabled' => 'تفعيل تنبيهات انتهاء صلاحية شهادة SSL', 'test_telegram' => 'اختبار تيليغرام', 'test_email' => 'اختبار البريد الإلكتروني', 'telegram_queued' => 'تمت جدولة اختبار تيليغرام للإرسال.', 'email_queued' => 'تمت جدولة اختبار البريد الإلكتروني للإرسال.', 'invalid_telegram' => 'يجب تفعيل تيليغرام وإدخال رمز البوت ومعرّف الدردشة.', 'invalid_email' => 'يجب تفعيل البريد الإلكتروني وإدخال مستلم واحد صالح على الأقل.', 'retry' => 'إعادة المحاولة'],
+    'executive' => [
+        'dashboard' => ['title' => 'الملخص التنفيذي', 'operational' => 'نظام المراقبة: يعمل', 'attention_required' => 'نظام المراقبة: يحتاج إلى انتباه'],
+        'cards' => ['total_services' => 'الخدمات المراقبة', 'healthy' => 'الخدمات السليمة', 'down' => 'الخدمات المتوقفة', 'maintenance' => 'تحت الصيانة', 'open_incidents' => 'الحوادث المفتوحة', 'sla_met' => 'SLA محقق', 'sla_at_risk' => 'SLA معرض للخطر', 'sla_breached' => 'SLA متجاوز'],
+        'sections' => ['attention' => 'الخدمات التي تحتاج إلى انتباه', 'sla' => 'أداء SLA', 'incidents' => 'الحوادث', 'ssl' => 'شهادات SSL', 'spc' => 'التحكم الإحصائي بالعمليات'], 'empty' => 'لا توجد خدمات تحتاج إلى انتباه.', 'days' => 'يوم',
+        'sla' => ['configured' => 'الخدمات المفعّل لها SLA', 'weighted_availability' => 'الإتاحة الموزونة', 'history' => 'سجل SLA الشهري', 'month' => 'الشهر', 'eligible' => 'الوقت المؤهل', 'maintenance' => 'الصيانة المخططة', 'downtime' => 'التوقف غير المخطط', 'allowed' => 'التوقف المسموح', 'budget_used' => 'الهامش المستخدم'],
+        'incidents' => ['count' => ':count حادثة خلال الفترة', 'downtime' => 'التوقف غير المخطط', 'most_affected' => 'الخدمة الأكثر تأثرًا'], 'spc' => ['points' => ':count نقطة خارج السيطرة'],
+        'branding' => ['navigation' => 'إعدادات المؤسسة', 'title' => 'إعدادات المؤسسة', 'name' => 'اسم المؤسسة', 'logo' => 'رابط شعار المؤسسة', 'logo_help' => 'رابط صورة عام يظهر في التقرير التنفيذي.', 'saved' => 'تم حفظ إعدادات المؤسسة.'],
+        'report' => ['title' => 'التقرير التنفيذي الشهري', 'system_name' => 'نظام مراقبة الجودة والموثوقية', 'month' => 'شهر التقرير', 'summary_text' => 'بلغ متوسط الإتاحة الموزون للخدمات :availability. حققت :met من أصل :configured خدمات مفعّل لها SLA أهدافها، مع :breached حالة تجاوز.', 'previous_period' => 'مقارنة بالشهر السابق', 'no_previous' => 'لا تتوفر فترة سابقة.', 'recommend_breach' => 'يوصى بتحليل أسباب التوقف للخدمة :service.', 'recommend_budget' => 'الخدمة :service قريبة من استنفاد هامش التوقف المسموح.', 'recommend_ssl' => 'يوصى بتجديد شهادة SSL للخدمة :service.', 'recommend_spc' => 'يوصى بمراجعة أسباب التغير غير الطبيعي في زمن الاستجابة.', 'no_recommendations' => 'لم تظهر مؤشرات حرجة تتطلب إجراءً فوريًا خلال الفترة.'],
+    ],
 ];

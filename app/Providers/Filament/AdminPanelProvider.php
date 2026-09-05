@@ -4,6 +4,7 @@ namespace App\Providers\Filament;
 
 use App\Filament\Pages\Dashboard;
 use App\Filament\Widgets\CurrentServiceStatusWidget;
+use App\Filament\Widgets\ExecutiveDashboardWidget;
 use App\Filament\Widgets\LatestAlertsAndSignalsWidget;
 use App\Filament\Widgets\OverviewStatsWidget;
 use App\Filament\Widgets\ResearchFindingsWidget;
@@ -59,6 +60,7 @@ class AdminPanelProvider extends PanelProvider
             ])
             ->discoverWidgets(in: app_path('Filament/Widgets'), for: 'App\Filament\Widgets')
             ->widgets([
+                ExecutiveDashboardWidget::class,
                 OverviewStatsWidget::class,
                 ResearchFindingsWidget::class,
                 CurrentServiceStatusWidget::class,

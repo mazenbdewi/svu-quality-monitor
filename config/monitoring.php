@@ -28,6 +28,9 @@ return [
         'flapping_transition_count' => (int) env('MONITORING_FLAPPING_TRANSITION_COUNT', 4),
         'flapping_window_seconds' => (int) env('MONITORING_FLAPPING_WINDOW_SECONDS', 900),
     ],
+    'sla' => [
+        'at_risk_error_budget_percent' => (int) env('MONITORING_SLA_AT_RISK_ERROR_BUDGET_PERCENT', 80),
+    ],
     'notifications' => [
         'ssl' => ['enabled' => (bool) env('MONITORING_SSL_EXPIRY_NOTIFICATIONS_ENABLED', true), 'thresholds' => [30, 14, 7, 3, 1]],
     ],

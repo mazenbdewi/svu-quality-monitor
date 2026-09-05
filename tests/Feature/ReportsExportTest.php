@@ -15,18 +15,29 @@ use App\Models\MonitoredService;
 use App\Models\ReliabilityMetric;
 use App\Models\ServiceCheck;
 use App\Models\ServiceIncident;
+use App\Models\User;
 use App\Reports\ComprehensivePdfReport;
 use Barryvdh\DomPDF\Facade\Pdf;
-use Illuminate\Support\Carbon;
+use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Livewire\Livewire;
-use Maatwebsite\Excel\Facades\Excel;
 use Maatwebsite\Excel\Excel as ExcelWriter;
+use Maatwebsite\Excel\Facades\Excel;
 use Tests\TestCase;
 
 class ReportsExportTest extends TestCase
 {
     use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->seed(RolesAndPermissionsSeeder::class);
+        $user = User::factory()->create();
+        $user->assignRole('operator');
+        $this->actingAs($user);
+    }
 
     public function test_reports_page_renders_with_default_report_type(): void
     {

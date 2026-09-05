@@ -21,6 +21,11 @@ use Illuminate\Validation\ValidationException;
 
 class NotificationSettingsPage extends Page
 {
+    public static function canAccess(): bool
+    {
+        return auth()->user()?->can('notifications.manage') ?? false;
+    }
+
     public ?array $data = [];
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedBell;
@@ -64,6 +69,7 @@ class NotificationSettingsPage extends Page
 
     public function save(): void
     {
+        abort_unless(auth()->user()?->can('notifications.manage'), 403);
         $data = $this->form->getState();
         $setting = NotificationSetting::current();
         if (blank($data['telegram_bot_token'] ?? null)) {
@@ -76,6 +82,7 @@ class NotificationSettingsPage extends Page
 
     private function queueTest(string $channel): Notification
     {
+        abort_unless(auth()->user()?->can('notifications.manage'), 403);
         try {
             app(NotificationDispatcher::class)->test($channel);
 

@@ -7,6 +7,7 @@ use App\Exports\Reports\Sheets\MaintenanceWindowsSheet;
 use App\Exports\Reports\Sheets\ReliabilityMetricsSheet;
 use App\Exports\Reports\Sheets\ServiceChecksSheet;
 use App\Exports\Reports\Sheets\ServiceIncidentsSheet;
+use App\Exports\Reports\Sheets\SlaMetricsSheet;
 use InvalidArgumentException;
 use Maatwebsite\Excel\Concerns\WithMultipleSheets;
 
@@ -32,6 +33,7 @@ class ReportExport implements WithMultipleSheets
                 'reliability_metrics' => new ReliabilityMetricsSheet($this->filters),
                 'control_charts' => new ControlChartsSheet($this->filters),
                 'maintenance_windows' => new MaintenanceWindowsSheet($this->filters),
+                'sla_metrics' => new SlaMetricsSheet($this->filters),
                 default => throw new InvalidArgumentException("Unsupported report type [{$this->reportType}]."),
             },
         ];

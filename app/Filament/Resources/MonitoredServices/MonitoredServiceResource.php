@@ -5,6 +5,7 @@ namespace App\Filament\Resources\MonitoredServices;
 use App\Filament\Resources\MonitoredServices\Pages\CreateMonitoredService;
 use App\Filament\Resources\MonitoredServices\Pages\EditMonitoredService;
 use App\Filament\Resources\MonitoredServices\Pages\ListMonitoredServices;
+use App\Filament\Resources\MonitoredServices\RelationManagers\SlaMetricsRelationManager;
 use App\Models\MonitoredService;
 use App\Models\ServiceCheck;
 use App\Services\ServiceCheckRunner;
@@ -40,6 +41,26 @@ class MonitoredServiceResource extends Resource
 
     protected static ?string $recordTitleAttribute = 'name';
 
+    public static function canViewAny(): bool
+    {
+        return auth()->user()?->can('services.view') ?? false;
+    }
+
+    public static function canCreate(): bool
+    {
+        return auth()->user()?->can('services.create') ?? false;
+    }
+
+    public static function canEdit($record): bool
+    {
+        return auth()->user()?->can('services.update') ?? false;
+    }
+
+    public static function canDelete($record): bool
+    {
+        return auth()->user()?->can('services.delete') ?? false;
+    }
+
     public static function getModelLabel(): string
     {
         return __('monitoring.monitored_services.resource.model_label');
@@ -66,6 +87,7 @@ class MonitoredServiceResource extends Resource
             ->label(__('monitoring.actions.check_now'))
             ->icon(Heroicon::OutlinedArrowPath)
             ->action(function (MonitoredService $record): void {
+                abort_unless(auth()->user()?->can('services.check_now'), 403);
                 $check = app(ServiceCheckRunner::class)->run($record);
 
                 static::sendCheckNotification($record, $check);
@@ -184,6 +206,16 @@ class MonitoredServiceResource extends Resource
                     ->helperText(__('monitoring.monitored_services.fields.is_active.helper'))
                     ->required()
                     ->default(true),
+                Toggle::make('sla_enabled')
+                    ->label(__('monitoring.sla.fields.enabled'))
+                    ->live(),
+                TextInput::make('sla_target_percent')
+                    ->label(__('monitoring.sla.fields.target'))
+                    ->numeric()
+                    ->step(0.01)
+                    ->minValue(0.01)
+                    ->maxValue(100)
+                    ->visible(fn (Get $get): bool => (bool) $get('sla_enabled')),
                 Toggle::make('notifications_enabled')
                     ->label(__('monitoring.notifications.service_enabled'))
                     ->default(true),
@@ -198,7 +230,7 @@ class MonitoredServiceResource extends Resource
     public static function table(Table $table): Table
     {
         return $table
-            ->modifyQueryUsing(fn (Builder $query): Builder => $query->with(['latestServiceCheck', 'openIncident']))
+            ->modifyQueryUsing(fn (Builder $query): Builder => $query->with(['latestServiceCheck', 'openIncident', 'latestSlaMetric']))
             ->columns([
                 TextColumn::make('name')
                     ->label(__('monitoring.monitored_services.table.name'))
@@ -249,6 +281,19 @@ class MonitoredServiceResource extends Resource
                     ->label(__('monitoring.monitored_services.table.category'))
                     ->searchable()
                     ->sortable(),
+                TextColumn::make('sla_target_percent')
+                    ->label(__('monitoring.sla.labels.target'))
+                    ->formatStateUsing(fn (MonitoredService $record): string => $record->sla_enabled && $record->sla_target_percent ? number_format((float) $record->sla_target_percent, 2).'%' : '-'),
+                TextColumn::make('latestSlaMetric.availability_percent')
+                    ->label(__('monitoring.sla.labels.actual'))
+                    ->formatStateUsing(fn (MonitoredService $record): string => $record->latestSlaMetric?->availability_percent === null ? '-' : number_format((float) $record->latestSlaMetric->availability_percent, 2).'%'),
+                TextColumn::make('latestSlaMetric.status')
+                    ->label(__('monitoring.sla.labels.status'))
+                    ->badge()
+                    ->formatStateUsing(fn (?string $state): string => __('monitoring.sla.statuses.'.($state ?? 'not_configured')))
+                    ->color(fn (?string $state): string => match ($state) {
+                        'met' => 'success', 'at_risk' => 'warning', 'breached' => 'danger', default => 'gray'
+                    }),
                 TextColumn::make('expected_status_code')
                     ->label(__('monitoring.monitored_services.table.expected_status_code'))
                     ->toggleable(isToggledHiddenByDefault: true),
@@ -328,7 +373,7 @@ class MonitoredServiceResource extends Resource
     public static function getRelations(): array
     {
         return [
-            //
+            SlaMetricsRelationManager::class,
         ];
     }
 

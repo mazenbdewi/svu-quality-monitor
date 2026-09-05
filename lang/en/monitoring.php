@@ -1,6 +1,12 @@
 <?php
 
 return [
+    'sla' => [
+        'fields' => ['enabled' => 'Enable SLA', 'target' => 'SLA target (%)'],
+        'labels' => ['target' => 'SLA Target', 'actual' => 'Actual Availability', 'status' => 'SLA Status'],
+        'dashboard' => ['configured' => 'Services with SLA', 'met' => 'SLA met', 'at_risk' => 'SLA at risk', 'breached' => 'SLA breached'],
+        'statuses' => ['not_configured' => 'Not configured', 'no_data' => 'No data', 'met' => 'Met', 'at_risk' => 'At risk', 'breached' => 'Breached'],
+    ],
     'language_switcher' => [
         'label' => 'Language switcher',
     ],
@@ -57,6 +63,8 @@ return [
         'reliability_metrics' => 'Reliability Metrics',
         'control_charts' => 'Control Charts',
         'maintenance_windows' => 'Maintenance Windows',
+        'sla_metrics' => 'SLA Metrics',
+        'executive_monthly' => 'Monthly Executive Report',
         'comprehensive' => 'Comprehensive Report',
         'minitab_ready' => 'Minitab-ready Export',
     ],
@@ -1473,4 +1481,13 @@ return [
         ],
     ],
     'notifications' => ['settings' => 'Notification Settings', 'save' => 'Save', 'saved' => 'Notification settings saved.', 'service_enabled' => 'Enable notifications for this service', 'delivery' => 'Notification delivery', 'deliveries' => 'Notification deliveries', 'event_type' => 'Event type', 'channel' => 'Channel', 'incident' => 'Incident', 'status' => 'Status', 'attempt_number' => 'Attempt number', 'attempted_at' => 'Attempted at', 'sent_at' => 'Sent at', 'safe_error_message' => 'Safe error message', 'telegram_enabled' => 'Telegram enabled', 'email_enabled' => 'Email enabled', 'email_recipients' => 'Email recipients', 'ssl_expiry_notifications_enabled' => 'SSL expiry notifications enabled', 'test_telegram' => 'Test Telegram', 'test_email' => 'Test Email', 'telegram_queued' => 'Telegram test queued for delivery.', 'email_queued' => 'Email test queued for delivery.', 'invalid_telegram' => 'Telegram must be enabled with a bot token and chat ID.', 'invalid_email' => 'Email must be enabled with at least one valid recipient.', 'retry' => 'Retry'],
+    'executive' => [
+        'dashboard' => ['title' => 'Executive overview', 'operational' => 'Monitoring system: Operational', 'attention_required' => 'Monitoring system: Attention required'],
+        'cards' => ['total_services' => 'Monitored services', 'healthy' => 'Healthy services', 'down' => 'Services down', 'maintenance' => 'Under maintenance', 'open_incidents' => 'Open incidents', 'sla_met' => 'SLA met', 'sla_at_risk' => 'SLA at risk', 'sla_breached' => 'SLA breached'],
+        'sections' => ['attention' => 'Services requiring attention', 'sla' => 'SLA performance', 'incidents' => 'Incidents', 'ssl' => 'SSL certificates', 'spc' => 'Statistical process control'], 'empty' => 'No services require attention.', 'days' => 'days',
+        'sla' => ['configured' => 'SLA-enabled services', 'weighted_availability' => 'Weighted availability', 'history' => 'Monthly SLA history', 'month' => 'Month', 'eligible' => 'Eligible time', 'maintenance' => 'Planned maintenance', 'downtime' => 'Unplanned downtime', 'allowed' => 'Allowed downtime', 'budget_used' => 'Budget used'],
+        'incidents' => ['count' => ':count incident(s) in this period', 'downtime' => 'Unplanned downtime', 'most_affected' => 'Most affected service'], 'spc' => ['points' => ':count out-of-control point(s)'],
+        'branding' => ['navigation' => 'Institution settings', 'title' => 'Institution settings', 'name' => 'Institution name', 'logo' => 'Institution logo URL', 'logo_help' => 'A public image URL shown in the executive PDF.', 'saved' => 'Institution settings saved.'],
+        'report' => ['title' => 'Monthly Executive Report', 'system_name' => 'Quality and Reliability Monitoring System', 'month' => 'Report month', 'summary_text' => 'Weighted service availability was :availability. :met of :configured SLA-enabled services met their targets, with :breached breach(es).', 'previous_period' => 'Previous month comparison', 'no_previous' => 'No previous period available.', 'recommend_breach' => 'Review the causes of downtime for :service.', 'recommend_budget' => ':service is close to using its allowed downtime budget.', 'recommend_ssl' => 'Renew the SSL certificate for :service.', 'recommend_spc' => 'Review the causes of abnormal response-time variation.', 'no_recommendations' => 'No critical indicators require immediate action during this period.'],
+    ],
 ];

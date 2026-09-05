@@ -26,6 +26,10 @@ Schedule::command('reliability:calculate --period=daily')
     ->dailyAt('00:10')
     ->withoutOverlapping();
 
+Schedule::command('sla:calculate')
+    ->dailyAt('00:20')
+    ->withoutOverlapping();
+
 Schedule::command('control-charts:calculate --period=daily')
     ->dailyAt('00:25')
     ->withoutOverlapping();

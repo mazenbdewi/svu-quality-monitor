@@ -13,6 +13,7 @@ use App\Services\NotificationDeliveryRetryService;
 use App\Services\NotificationDispatcher;
 use App\Services\ServiceCheckRunner;
 use Carbon\Carbon;
+use Database\Seeders\RolesAndPermissionsSeeder;
 use Filament\Actions\Testing\TestAction;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -35,7 +36,10 @@ class NotificationEngineTest extends TestCase
     {
         config(['app.env' => 'local']);
 
-        $this->actingAs(User::factory()->create())
+        $this->seed(RolesAndPermissionsSeeder::class);
+        $user = User::factory()->create();
+        $user->assignRole('administrator');
+        $this->actingAs($user)
             ->get(NotificationSettingsPage::getUrl())
             ->assertOk();
     }
@@ -45,7 +49,10 @@ class NotificationEngineTest extends TestCase
         config(['app.env' => 'local']);
         Filament::setCurrentPanel(Filament::getPanel('admin'));
 
-        Livewire::actingAs(User::factory()->create())
+        $this->seed(RolesAndPermissionsSeeder::class);
+        $user = User::factory()->create();
+        $user->assignRole('administrator');
+        Livewire::actingAs($user)
             ->test(NotificationSettingsPage::class)
             ->callAction(TestAction::make('testEmail')->schemaComponent(true, 'content'))
             ->assertNotified();

@@ -6,6 +6,7 @@ use App\Filament\Resources\ControlCharts\ControlChartResource;
 use App\Models\ControlChart;
 use App\Models\MonitoredService;
 use App\Models\User;
+use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -33,7 +34,11 @@ class ControlChartViewPageTest extends TestCase
             'calculated_at' => now(),
         ]);
 
-        $this->actingAs(User::factory()->create())
+        $this->seed(RolesAndPermissionsSeeder::class);
+        $user = User::factory()->create();
+        $user->assignRole('viewer');
+
+        $this->actingAs($user)
             ->get(ControlChartResource::getUrl('view', ['record' => $chart]))
             ->assertOk()
             ->assertSee('SVU Portal')

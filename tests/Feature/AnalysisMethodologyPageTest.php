@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Filament\Pages\AnalysisMethodologyPage;
 use App\Models\User;
+use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
@@ -18,7 +19,11 @@ class AnalysisMethodologyPageTest extends TestCase
 
         Http::preventStrayRequests();
 
-        $this->actingAs(User::factory()->create())
+        $this->seed(RolesAndPermissionsSeeder::class);
+        $user = User::factory()->create();
+        $user->assignRole('viewer');
+
+        $this->actingAs($user)
             ->get(AnalysisMethodologyPage::getUrl())
             ->assertOk()
             ->assertSee(__('monitoring.methodology.title'))

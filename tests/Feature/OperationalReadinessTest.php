@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Filament\Pages\SystemOperationsPage;
 use App\Models\User;
+use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -44,8 +45,10 @@ class OperationalReadinessTest extends TestCase
         $this->assertSame(1, substr_count($console, "Schedule::command('control-charts:calculate --period=daily')"));
         $this->assertStringContainsString('->everyMinute()', $console);
         $this->assertStringContainsString("->dailyAt('00:10')", $console);
+        $this->assertStringContainsString("Schedule::command('sla:calculate')", $console);
+        $this->assertStringContainsString("->dailyAt('00:20')", $console);
         $this->assertStringContainsString("->dailyAt('00:25')", $console);
-        $this->assertSame(5, substr_count($console, '->withoutOverlapping()'));
+        $this->assertSame(6, substr_count($console, '->withoutOverlapping()'));
         $this->assertStringContainsString('system-health:scheduler-heartbeat', $console);
     }
 
@@ -53,7 +56,10 @@ class OperationalReadinessTest extends TestCase
     {
         config(['app.env' => 'local']);
 
-        $this->actingAs(User::factory()->create())
+        $this->seed(RolesAndPermissionsSeeder::class);
+        $user = User::factory()->create();
+        $user->assignRole('operator');
+        $this->actingAs($user)
             ->get(SystemOperationsPage::getUrl())
             ->assertOk()
             ->assertSee(__('monitoring.operations.title'))

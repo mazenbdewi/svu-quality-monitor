@@ -11,6 +11,11 @@ use UnitEnum;
 
 class SystemOperationsPage extends Page
 {
+    public static function canAccess(): bool
+    {
+        return auth()->user()?->can('operations.view') ?? false;
+    }
+
     /** @var array<string, array<string, mixed>> */
     public array $health = [];
 

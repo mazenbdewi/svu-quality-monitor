@@ -81,6 +81,15 @@ class DeliverNotificationJob implements ShouldQueue
         if ($delivery->event_type === 'ssl_expiring') {
             return ['🟠 SSL Certificate Expiring', ["Service: {$service?->name}", 'Expires: '.data_get($delivery->context, 'expires_at', 'Unknown'), 'Days remaining: '.data_get($delivery->context, 'days_remaining', 'Unknown'), 'Threshold: '.data_get($delivery->context, 'threshold').' days']];
         }
+        if (in_array($delivery->event_type, ['sla_at_risk', 'sla_breached'], true)) {
+            $breached = $delivery->event_type === 'sla_breached';
+
+            return [$breached ? '🔴 SLA Breached' : '🟠 SLA At Risk', [
+                "Service: {$service?->name}", 'Target: '.data_get($delivery->context, 'target').'%',
+                'Actual: '.data_get($delivery->context, 'actual').'%', 'Error budget used: '.data_get($delivery->context, 'budget_used').'%',
+                'Period: '.data_get($delivery->context, 'period'),
+            ]];
+        }
         if (in_array($delivery->event_type, ['telegram_test', 'email_test'], true)) {
             return [config('app.name').' — '.ucfirst($delivery->channel).' test', ['Notification test requested successfully.', 'Server time: '.data_get($delivery->context, 'server_time'), 'Environment: '.data_get($delivery->context, 'environment')]];
         }

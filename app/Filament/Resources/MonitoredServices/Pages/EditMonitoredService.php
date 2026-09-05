@@ -32,6 +32,10 @@ class EditMonitoredService extends EditRecord
 
     protected function mutateFormDataBeforeSave(array $data): array
     {
+        if (! auth()->user()?->can('sla.manage')) {
+            unset($data['sla_enabled'], $data['sla_target_percent']);
+        }
+
         $existingHeaders = $this->record->check_config['headers'] ?? [];
 
         foreach (($data['check_config']['headers'] ?? []) as $name => $value) {

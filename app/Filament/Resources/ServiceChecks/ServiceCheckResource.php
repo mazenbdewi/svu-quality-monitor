@@ -38,6 +38,16 @@ class ServiceCheckResource extends Resource
 
     protected static ?string $recordTitleAttribute = 'checked_at';
 
+    public static function canViewAny(): bool
+    {
+        return auth()->user()?->can('services.view') ?? false;
+    }
+
+    public static function canView($record): bool
+    {
+        return auth()->user()?->can('services.view') ?? false;
+    }
+
     public static function getModelLabel(): string
     {
         return __('monitoring.service_checks.resource.model_label');

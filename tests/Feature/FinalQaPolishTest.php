@@ -6,6 +6,7 @@ use App\Filament\Pages\AboutSystemPage;
 use App\Filament\Pages\Dashboard;
 use App\Filament\Pages\ReportsPage;
 use App\Models\User;
+use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Lang;
@@ -20,7 +21,11 @@ class FinalQaPolishTest extends TestCase
     {
         config(['app.env' => 'local']);
 
-        $this->actingAs(User::factory()->create())
+        $this->seed(RolesAndPermissionsSeeder::class);
+        $user = User::factory()->create();
+        $user->assignRole('viewer');
+
+        $this->actingAs($user)
             ->get(AboutSystemPage::getUrl())
             ->assertOk()
             ->assertSee(__('monitoring.about.title'))
@@ -34,7 +39,11 @@ class FinalQaPolishTest extends TestCase
 
         Http::preventStrayRequests();
 
-        $this->actingAs(User::factory()->create())
+        $this->seed(RolesAndPermissionsSeeder::class);
+        $user = User::factory()->create();
+        $user->assignRole('viewer');
+
+        $this->actingAs($user)
             ->get(Dashboard::getUrl())
             ->assertOk()
             ->assertSee(__('monitoring.dashboard.title'));
@@ -42,7 +51,11 @@ class FinalQaPolishTest extends TestCase
 
     public function test_reports_page_still_renders_with_default_export_format(): void
     {
-        Livewire::test(ReportsPage::class)
+        $this->seed(RolesAndPermissionsSeeder::class);
+        $user = User::factory()->create();
+        $user->assignRole('operator');
+
+        Livewire::actingAs($user)->test(ReportsPage::class)
             ->assertSet('data.report_type', 'service_checks')
             ->assertSet('data.export_format', 'excel');
     }

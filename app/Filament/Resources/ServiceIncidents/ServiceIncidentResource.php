@@ -6,6 +6,7 @@ use App\Filament\Resources\ServiceIncidents\Pages\CreateServiceIncident;
 use App\Filament\Resources\ServiceIncidents\Pages\EditServiceIncident;
 use App\Filament\Resources\ServiceIncidents\Pages\ListServiceIncidents;
 use App\Models\ServiceIncident;
+use App\Services\IncidentAcknowledgementService;
 use BackedEnum;
 use Carbon\Carbon;
 use Filament\Actions\Action;
@@ -37,6 +38,11 @@ class ServiceIncidentResource extends Resource
     protected static ?int $navigationSort = 4;
 
     protected static ?string $recordTitleAttribute = 'started_at';
+
+    public static function canViewAny(): bool
+    {
+        return auth()->user()?->can('incidents.view') ?? false;
+    }
 
     public static function getModelLabel(): string
     {
@@ -181,6 +187,8 @@ class ServiceIncidentResource extends Resource
                     ->label(__('monitoring.service_incidents.table.updated_at'))
                     ->dateTime()
                     ->sortable(),
+                TextColumn::make('acknowledgedBy.name')->label('Acknowledged by'),
+                TextColumn::make('acknowledged_at')->label('Acknowledged at')->dateTime(),
             ])
             ->emptyStateIcon(Heroicon::OutlinedExclamationTriangle)
             ->emptyStateHeading(__('monitoring.empty_states.no_incidents'))
@@ -238,6 +246,13 @@ class ServiceIncidentResource extends Resource
                     }),
             ])
             ->recordActions([
+                Action::make('acknowledge')
+                    ->label('Acknowledge incident')
+                    ->visible(fn (ServiceIncident $record): bool => $record->status === 'open' && $record->acknowledged_at === null && (auth()->user()?->can('incidents.acknowledge') ?? false))
+                    ->action(function (ServiceIncident $record): void {
+                        abort_unless(auth()->user()?->can('incidents.acknowledge'), 403);
+                        app(IncidentAcknowledgementService::class)->acknowledge(auth()->user(), $record);
+                    }),
                 static::markClosedAction(),
                 static::reopenAction(),
                 EditAction::make()

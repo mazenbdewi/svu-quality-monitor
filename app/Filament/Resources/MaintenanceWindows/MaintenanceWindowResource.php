@@ -30,6 +30,26 @@ class MaintenanceWindowResource extends Resource
 
     protected static ?int $navigationSort = 4;
 
+    public static function canViewAny(): bool
+    {
+        return auth()->user()?->can('maintenance.view') ?? false;
+    }
+
+    public static function canCreate(): bool
+    {
+        return auth()->user()?->can('maintenance.create') ?? false;
+    }
+
+    public static function canEdit($record): bool
+    {
+        return auth()->user()?->can('maintenance.update') ?? false;
+    }
+
+    public static function canDelete($record): bool
+    {
+        return auth()->user()?->can('maintenance.delete') ?? false;
+    }
+
     public static function getModelLabel(): string
     {
         return __('monitoring.maintenance.resource.model_label');

@@ -44,6 +44,26 @@ class ReliabilityMetricResource extends Resource
 
     protected static ?string $recordTitleAttribute = 'period_start';
 
+    public static function canViewAny(): bool
+    {
+        return auth()->user()?->can('reliability.view') ?? false;
+    }
+
+    public static function canView($record): bool
+    {
+        return auth()->user()?->can('reliability.view') ?? false;
+    }
+
+    public static function canEdit($record): bool
+    {
+        return false;
+    }
+
+    public static function canCreate(): bool
+    {
+        return false;
+    }
+
     public static function getModelLabel(): string
     {
         return __('monitoring.reliability_metrics.resource.model_label');

@@ -8,6 +8,7 @@ use App\Models\NotificationDelivery;
 use App\Models\NotificationSetting;
 use App\Models\ServiceCheck;
 use App\Models\ServiceIncident;
+use App\Models\SlaMetric;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -28,6 +29,20 @@ class NotificationDispatcher
     public function health(string $component, string $event, string $cycle): void
     {
         $this->create("health_{$event}", null, null, "health:{$component}:{$cycle}:{$event}", ['component' => $component]);
+    }
+
+    public function sla(SlaMetric $metric): void
+    {
+        if (! in_array($metric->status, ['at_risk', 'breached'], true)) {
+            return;
+        }
+
+        $period = $metric->period_start->format('Y-m');
+        $this->create('sla_'.$metric->status, $metric->monitoredService, null, "sla:{$metric->monitored_service_id}:{$period}:{$metric->status}", [
+            'target' => $metric->target_percent, 'actual' => $metric->availability_percent,
+            'budget_used' => $metric->error_budget_consumed_percent, 'period' => $period,
+            'downtime_seconds' => $metric->unplanned_downtime_seconds, 'allowed_seconds' => $metric->allowed_downtime_seconds,
+        ]);
     }
 
     public function test(string $channel): NotificationDelivery

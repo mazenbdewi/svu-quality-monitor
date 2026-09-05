@@ -14,6 +14,8 @@ class ServiceIncident extends Model
         'monitored_service_id',
         'started_at',
         'confirmed_at',
+        'acknowledged_at',
+        'acknowledged_by',
         'ended_at',
         'resolved_at',
         'duration_minutes',
@@ -38,6 +40,7 @@ class ServiceIncident extends Model
         return [
             'started_at' => 'datetime',
             'confirmed_at' => 'datetime',
+            'acknowledged_at' => 'datetime',
             'ended_at' => 'datetime',
             'resolved_at' => 'datetime',
             'duration_minutes' => 'integer',
@@ -47,5 +50,10 @@ class ServiceIncident extends Model
     public function monitoredService(): BelongsTo
     {
         return $this->belongsTo(MonitoredService::class);
+    }
+
+    public function acknowledgedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'acknowledged_by');
     }
 }

@@ -36,6 +36,8 @@ class MonitoredService extends Model
         'warning_response_ms',
         'critical_response_ms',
         'is_active',
+        'sla_enabled',
+        'sla_target_percent',
         'notifications_enabled',
         'operational_state',
         'failure_confirmation_count',
@@ -50,6 +52,8 @@ class MonitoredService extends Model
     {
         return [
             'is_active' => 'boolean',
+            'sla_enabled' => 'boolean',
+            'sla_target_percent' => 'decimal:2',
             'notifications_enabled' => 'boolean',
             'is_flapping' => 'boolean',
             'first_failure_at' => 'datetime',
@@ -78,6 +82,16 @@ class MonitoredService extends Model
     public function reliabilityMetrics(): HasMany
     {
         return $this->hasMany(ReliabilityMetric::class);
+    }
+
+    public function slaMetrics(): HasMany
+    {
+        return $this->hasMany(SlaMetric::class);
+    }
+
+    public function latestSlaMetric(): HasOne
+    {
+        return $this->hasOne(SlaMetric::class)->latestOfMany('period_start');
     }
 
     public function maintenanceWindows(): BelongsToMany

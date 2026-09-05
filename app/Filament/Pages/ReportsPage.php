@@ -11,10 +11,13 @@ use App\Exports\Reports\Sheets\OutOfControlPointsSheet;
 use App\Exports\Reports\Sheets\ReliabilityMetricsSheet;
 use App\Exports\Reports\Sheets\ServiceChecksSheet;
 use App\Exports\Reports\Sheets\ServiceIncidentsSheet;
+use App\Exports\Reports\Sheets\SlaMetricsSheet;
 use App\Models\MonitoredService;
 use App\Reports\ComprehensivePdfReport;
+use App\Reports\ExecutiveMonthlyPdfReport;
 use BackedEnum;
 use Barryvdh\DomPDF\Facade\Pdf;
+use Carbon\Carbon;
 use Filament\Actions\Action;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Select;
@@ -36,6 +39,11 @@ use UnitEnum;
 
 class ReportsPage extends Page
 {
+    public static function canAccess(): bool
+    {
+        return auth()->user()?->can('reports.view') ?? false;
+    }
+
     /**
      * @var array<string, mixed> | null
      */
@@ -69,6 +77,7 @@ class ReportsPage extends Page
         $this->form->fill([
             'report_type' => 'service_checks',
             'export_format' => 'excel',
+            'report_month' => now()->startOfMonth()->toDateString(),
         ]);
     }
 
@@ -125,6 +134,11 @@ class ReportsPage extends Page
                     ->label(__('monitoring.reports.fields.date_to'))
                     ->helperText(__('monitoring.reports.helpers.date_to'))
                     ->afterOrEqual(fn (Get $get): mixed => $get('date_from')),
+                DatePicker::make('report_month')
+                    ->label(__('monitoring.executive.report.month'))
+                    ->displayFormat('Y-m')
+                    ->visible(fn (Get $get): bool => $get('report_type') === 'executive_monthly')
+                    ->required(fn (Get $get): bool => $get('report_type') === 'executive_monthly'),
                 Select::make('status')
                     ->label(__('monitoring.reports.fields.status'))
                     ->options(fn (Get $get): array => match ($get('report_type')) {
@@ -208,6 +222,7 @@ class ReportsPage extends Page
 
     public function export(): ?Response
     {
+        abort_unless(auth()->user()?->can('reports.generate'), 403);
         $data = $this->normalizeFilters($this->form->getState());
         $reportType = (string) $data['report_type'];
         $exportFormat = (string) ($data['export_format'] ?? 'excel');
@@ -225,7 +240,7 @@ class ReportsPage extends Page
             ]);
         }
 
-        if ($exportFormat === 'pdf' && $reportType !== 'comprehensive') {
+        if ($exportFormat === 'pdf' && ! in_array($reportType, ['comprehensive', 'executive_monthly'], true)) {
             Notification::make()
                 ->danger()
                 ->title(__('monitoring.pdf_reports.pdf_only_comprehensive'))
@@ -243,6 +258,15 @@ class ReportsPage extends Page
                 ->send();
 
             return null;
+        }
+
+        if ($exportFormat === 'pdf' && $reportType === 'executive_monthly') {
+            $report = new ExecutiveMonthlyPdfReport((string) ($data['report_month'] ?? now()->toDateString()));
+            $pdf = Pdf::loadView('reports.executive-monthly-pdf', $report->data())->setPaper('a4');
+
+            return response()->streamDownload(static function () use ($pdf): void {
+                echo $pdf->output();
+            }, 'executive-quality-report-'.Carbon::parse($data['report_month'] ?? now())->format('Y-m').'.pdf', ['Content-Type' => 'application/pdf']);
         }
 
         if ($exportFormat === 'pdf') {
@@ -292,6 +316,10 @@ class ReportsPage extends Page
             $data['slow_status'] = null;
         }
 
+        if (($data['report_type'] ?? null) !== 'executive_monthly') {
+            $data['report_month'] = null;
+        }
+
         if (! in_array($data['report_type'] ?? null, ['service_checks', 'incidents'], true)) {
             $data['status'] = null;
         }
@@ -327,6 +355,8 @@ class ReportsPage extends Page
             'reliability_metrics' => 'reliability-metrics-report',
             'control_charts' => 'control-charts-report',
             'maintenance_windows' => 'maintenance-windows-report',
+            'sla_metrics' => 'sla-metrics-report',
+            'executive_monthly' => 'executive-quality-report',
             'comprehensive' => 'comprehensive-research-report',
             'minitab_ready' => 'minitab-ready-export',
             default => 'report',
@@ -351,6 +381,8 @@ class ReportsPage extends Page
             'reliability_metrics' => (new ReliabilityMetricsSheet($filters))->query()->exists(),
             'control_charts' => (new ControlChartsSheet($filters))->query()->exists(),
             'maintenance_windows' => (new MaintenanceWindowsSheet($filters))->query()->exists(),
+            'sla_metrics' => (new SlaMetricsSheet($filters))->query()->exists(),
+            'executive_monthly' => (new ExecutiveMonthlyPdfReport((string) ($filters['report_month'] ?? now()->toDateString())))->hasData(),
             'comprehensive' => (new ServiceChecksSheet($filters))->query()->exists()
                 || (new ServiceIncidentsSheet($filters))->query()->exists()
                 || (new ReliabilityMetricsSheet($filters))->query()->exists()
@@ -375,6 +407,8 @@ class ReportsPage extends Page
             'reliability_metrics' => __('monitoring.report_types.reliability_metrics'),
             'control_charts' => __('monitoring.report_types.control_charts'),
             'maintenance_windows' => __('monitoring.report_types.maintenance_windows'),
+            'sla_metrics' => __('monitoring.report_types.sla_metrics'),
+            'executive_monthly' => __('monitoring.report_types.executive_monthly'),
             'comprehensive' => __('monitoring.report_types.comprehensive'),
             'minitab_ready' => __('monitoring.report_types.minitab_ready'),
         ];

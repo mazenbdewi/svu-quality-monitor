@@ -20,6 +20,11 @@ class NotificationDeliveryResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedBellAlert;
 
+    public static function canViewAny(): bool
+    {
+        return auth()->user()?->can('notifications.view') ?? false;
+    }
+
     public static function getModelLabel(): string
     {
         return __('monitoring.notifications.delivery');
@@ -58,7 +63,10 @@ class NotificationDeliveryResource extends Resource
             TextColumn::make('sent_at')->label(__('monitoring.notifications.sent_at'))->dateTime(),
             TextColumn::make('safe_error_message')->label(__('monitoring.notifications.safe_error_message'))->wrap(),
         ])->recordActions([
-            Action::make('retry')->label(__('monitoring.notifications.retry'))->visible(fn (NotificationDelivery $record): bool => $record->status === 'failed')->action(fn (NotificationDelivery $record) => app(NotificationDeliveryRetryService::class)->retry($record)),
+            Action::make('retry')->label(__('monitoring.notifications.retry'))->visible(fn (NotificationDelivery $record): bool => $record->status === 'failed' && (auth()->user()?->can('notifications.manage') ?? false))->action(function (NotificationDelivery $record): void {
+                abort_unless(auth()->user()?->can('notifications.manage'), 403);
+                app(NotificationDeliveryRetryService::class)->retry($record);
+            }),
         ]);
     }
 
