@@ -1,0 +1,45 @@
+# An isolated acceptance environment: no production env_file, volume or port.
+services:
+  closure-db:
+    image: mysql:8.4@sha256:da906917ca4ace3ba55538b7c2ee97a9bc865ef14a4b6920b021f0249d603f3d
+    environment:
+      MYSQL_ALLOW_EMPTY_PASSWORD: "yes"
+      MYSQL_DATABASE: closure_drill
+    tmpfs:
+      - /var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "--silent"]
+      interval: 2s
+      timeout: 5s
+      retries: 60
+  verifier:
+    image: svu-quality-monitor-app:latest
+    depends_on:
+      closure-db:
+        condition: service_healthy
+    environment:
+      APP_ENV: testing
+      APP_DEBUG: "false"
+      APP_KEY: base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+      DB_CONNECTION: mysql
+      DB_HOST: closure-db
+      DB_PORT: "3306"
+      DB_DATABASE: closure_drill
+      DB_USERNAME: root
+      DB_PASSWORD: ""
+      CACHE_STORE: array
+      SESSION_DRIVER: array
+      QUEUE_CONNECTION: sync
+      BACKUP_MINIMUM_FREE_BYTES: "0"
+    tmpfs:
+      - /var/www/html/storage
+      - /var/backups/svu-quality-monitor
+      - /tmp
+    volumes:
+      - ${CLOSURE_BUNDLE_DIRECTORY:?Set private copied bundle path}:/source-bundle:ro
+      - ./closure-drill.php:/var/www/html/closure-drill.php:ro
+      - ./closure-endpoint.php:/var/www/html/closure-endpoint.php:ro
+    command: ["php", "closure-drill.php"]
+networks:
+  default:
+    internal: true

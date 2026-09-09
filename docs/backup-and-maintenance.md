@@ -1,26 +1,33 @@
 # Backup and Maintenance
 
-## Database Backup
+> Superseded for phase 9: use [Backup and restore](backup-and-restore.md) and
+> [Safe updates](safe-update.md). The old commands below are reference only;
+> `.env` must be saved separately in secure secret storage, never in ordinary bundles.
 
-Use placeholders for documentation and replace them only on the actual server:
+## Current tools
+
+Use the guarded commands in the linked guides:
 
 ```bash
-mysqldump -u USER -p DATABASE_NAME > backup.sql
+php artisan backup:create --actor-email=EXISTING_ADMIN_EMAIL
+php artisan backup:verify /path/to/BUNDLE --actor-email=EXISTING_ADMIN_EMAIL
 ```
 
-## Database Restore
+## Restore
 
 ```bash
-mysql -u USER -p DATABASE_NAME < backup.sql
+php artisan backup:restore /path/to/BUNDLE --force --workers-stopped --actor-email=EXISTING_SUPER_ADMIN_EMAIL
 ```
 
 ## Files to Back Up
 
 Back up:
 
-- `.env`
 - The database
-- `storage/` if uploaded or generated files need to be preserved
+- `storage/app/public` and `storage/app/private`
+
+Keep `.env` and APP_KEY separately in secure secret storage. Stop all writers and
+follow the restore runbook before running the destructive command above.
 
 Do not store backups in a public web directory.
 

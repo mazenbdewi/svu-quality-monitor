@@ -3,6 +3,8 @@
 # --------------------------------------------------
 # PHP runtime and Composer
 # --------------------------------------------------
+FROM mysql:8.4@sha256:da906917ca4ace3ba55538b7c2ee97a9bc865ef14a4b6920b021f0249d603f3d AS mysql-tools
+
 FROM php:8.4-fpm-bookworm AS php-base
 
 RUN apt-get update \
@@ -87,6 +89,10 @@ RUN npm run build
 # --------------------------------------------------
 FROM php-base AS app
 
+RUN apt-get update && apt-get install -y --no-install-recommends libncurses6 && rm -rf /var/lib/apt/lists/*
+COPY --from=mysql-tools /usr/bin/mysql /usr/local/bin/mysql
+COPY --from=mysql-tools /usr/bin/mysqldump /usr/local/bin/mysqldump
+
 WORKDIR /var/www/html
 
 COPY --from=vendor --chown=www-data:www-data /app /var/www/html
@@ -108,6 +114,9 @@ RUN chmod +x /usr/local/bin/application-entrypoint \
         storage/logs \
         bootstrap/cache \
     && chown -R www-data:www-data storage bootstrap/cache
+
+# Match published Filament assets to the locked PHP packages, not stale source assets.
+RUN APP_ENV=production APP_DEBUG=false CACHE_STORE=array SESSION_DRIVER=array php artisan filament:assets
 
 ENTRYPOINT ["application-entrypoint"]
 

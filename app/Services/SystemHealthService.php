@@ -135,7 +135,7 @@ class SystemHealthService
     /**
      * @return array{pending_jobs: ?int, failed_jobs: ?int}
      */
-    private function queueCounts(): array
+    public function queueCounts(): array
     {
         $connection = config('queue.connections.'.config('queue.default'));
 

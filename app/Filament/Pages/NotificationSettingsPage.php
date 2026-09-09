@@ -3,6 +3,8 @@
 namespace App\Filament\Pages;
 
 use App\Models\NotificationSetting;
+use App\Services\AdministrativeAudit;
+use App\Services\AuditLogger;
 use App\Services\NotificationDispatcher;
 use BackedEnum;
 use Filament\Actions\Action;
@@ -17,6 +19,7 @@ use Filament\Schemas\Components\Form;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 class NotificationSettingsPage extends Page
@@ -57,9 +60,10 @@ class NotificationSettingsPage extends Page
 
     public function form(Schema $schema): Schema
     {
-        return $schema->components([
+        return $schema->statePath('data')->components([
             Toggle::make('telegram_enabled')->label(__('monitoring.notifications.telegram_enabled')),
             TextInput::make('telegram_bot_token')->password()->revealable(),
+            Toggle::make('remove_telegram_token')->label(__('administration.remove_telegram_token'))->default(false),
             TextInput::make('telegram_chat_id'),
             Toggle::make('email_enabled')->label(__('monitoring.notifications.email_enabled')),
             TagsInput::make('email_recipients')->label(__('monitoring.notifications.email_recipients'))->nestedRecursiveRules(['email']),
@@ -75,8 +79,17 @@ class NotificationSettingsPage extends Page
         if (blank($data['telegram_bot_token'] ?? null)) {
             unset($data['telegram_bot_token']);
         }
+        if ($data['remove_telegram_token'] ?? false) {
+            $data['telegram_bot_token'] = null;
+        }
+        unset($data['remove_telegram_token']);
         $this->validateSettings($data, $setting);
-        $setting->update($data);
+        DB::transaction(function () use ($setting, $data): void {
+            $audit = app(AdministrativeAudit::class);
+            $before = $audit->snapshot($setting);
+            $setting->update($data);
+            $audit->record($setting->fresh(), $before);
+        });
         Notification::make()->success()->title(__('monitoring.notifications.saved'))->send();
     }
 
@@ -84,7 +97,11 @@ class NotificationSettingsPage extends Page
     {
         abort_unless(auth()->user()?->can('notifications.manage'), 403);
         try {
-            app(NotificationDispatcher::class)->test($channel);
+            DB::transaction(function () use ($channel): void {
+                $delivery = app(NotificationDispatcher::class)->test($channel);
+                $event = 'notification.'.$channel.'_test_requested';
+                app(AuditLogger::class)->log($event, $delivery, __('administration.audit.events')[$event], context: ['channel' => $channel]);
+            });
 
             return Notification::make()->success()->title(__($channel === 'telegram' ? 'monitoring.notifications.telegram_queued' : 'monitoring.notifications.email_queued'))->send();
         } catch (ValidationException $exception) {
@@ -95,7 +112,7 @@ class NotificationSettingsPage extends Page
     /** @param array<string, mixed> $data */
     private function validateSettings(array $data, NotificationSetting $setting): void
     {
-        $token = $data['telegram_bot_token'] ?? $setting->telegram_bot_token;
+        $token = array_key_exists('telegram_bot_token', $data) ? $data['telegram_bot_token'] : $setting->telegram_bot_token;
         if (($data['telegram_enabled'] ?? false) && (blank($token) || blank($data['telegram_chat_id'] ?? null))) {
             throw ValidationException::withMessages(['data.telegram_bot_token' => __('monitoring.notifications.invalid_telegram')]);
         }

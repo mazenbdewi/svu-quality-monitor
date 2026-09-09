@@ -3,15 +3,21 @@
 namespace Tests\Feature;
 
 use App\Filament\Pages\Dashboard;
+use App\Filament\Pages\InstitutionSettingsPage;
 use App\Filament\Pages\NotificationSettingsPage;
+use App\Filament\Pages\ReportsPage;
 use App\Filament\Pages\SystemOperationsPage;
+use App\Filament\Resources\AuditLogs\AuditLogResource;
 use App\Filament\Resources\ControlCharts\ControlChartResource;
 use App\Filament\Resources\MaintenanceWindows\MaintenanceWindowResource;
 use App\Filament\Resources\MonitoredServices\MonitoredServiceResource;
+use App\Filament\Resources\NotificationDeliveries\NotificationDeliveryResource;
 use App\Filament\Resources\ReliabilityMetrics\ReliabilityMetricResource;
 use App\Filament\Resources\ServiceChecks\ServiceCheckResource;
+use App\Filament\Resources\ServiceIncidents\ServiceIncidentResource;
 use App\Filament\Resources\Users\UserResource;
 use App\Models\ControlChart;
+use App\Models\MaintenanceWindow;
 use App\Models\MonitoredService;
 use App\Models\ReliabilityMetric;
 use App\Models\ServiceCheck;
@@ -19,6 +25,7 @@ use App\Models\User;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 class FilamentAuthorizationTest extends TestCase
@@ -91,5 +98,51 @@ class FilamentAuthorizationTest extends TestCase
         $user->assignRole($role);
 
         return $user;
+    }
+
+    public static function remainingRoles(): array
+    {
+        return [['viewer'], ['operator'], ['administrator'], ['super_admin']];
+    }
+
+    #[DataProvider('remainingRoles')]
+    public function test_remaining_direct_urls_follow_matrix(string $role): void
+    {
+        $this->actingAs($this->user($role));
+        $admin = in_array($role, ['administrator', 'super_admin'], true);
+        $service = MonitoredService::factory()->create(['is_active' => true]);
+        $target = User::factory()->create(['is_active' => true]);
+        $window = MaintenanceWindow::query()->create(['name' => 'Planned', 'starts_at' => now()->addDay(), 'ends_at' => now()->addDays(2), 'applies_to_all_services' => true]);
+        $urls = [
+            [ReportsPage::getUrl(), true],
+            [ServiceIncidentResource::getUrl(), true],
+            [ReliabilityMetricResource::getUrl(), true],
+            [ControlChartResource::getUrl(), true],
+            [MaintenanceWindowResource::getUrl(), true],
+            [NotificationDeliveryResource::getUrl(), $role !== 'viewer'],
+            [InstitutionSettingsPage::getUrl(), $admin],
+            [AuditLogResource::getUrl(), $role !== 'operator'],
+            [MonitoredServiceResource::getUrl('create'), $admin],
+            [MonitoredServiceResource::getUrl('edit', ['record' => $service]), $admin],
+            [UserResource::getUrl('create'), $admin],
+            [UserResource::getUrl('edit', ['record' => $target]), $admin],
+            [MaintenanceWindowResource::getUrl('create'), $role !== 'viewer'],
+            [MaintenanceWindowResource::getUrl('edit', ['record' => $window]), $role !== 'viewer'],
+        ];
+        foreach ($urls as [$url, $allowed]) {
+            $this->get($url)->assertStatus($allowed ? 200 : 403);
+        }
+    }
+
+    public function test_inactive_and_roleless_users_cannot_access_panel(): void
+    {
+        $inactive = $this->user('super_admin');
+        $inactive->update(['is_active' => false]);
+        $roleless = User::factory()->create(['is_active' => true]);
+        foreach ([$inactive, $roleless] as $user) {
+            $this->actingAs($user)->get('/admin')->assertForbidden();
+            $this->get(MonitoredServiceResource::getUrl())->assertForbidden();
+            $this->get(UserResource::getUrl())->assertForbidden();
+        }
     }
 }

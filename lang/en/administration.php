@@ -1,0 +1,33 @@
+<?php
+
+return [
+    'remove_telegram_token' => 'Remove saved Telegram token',
+    'users' => 'Users', 'user' => 'User', 'name' => 'Name', 'email' => 'Email', 'password' => 'Password', 'role' => 'Role', 'status' => 'Status', 'active' => 'Active', 'inactive' => 'Inactive', 'activate' => 'Activate', 'deactivate' => 'Deactivate', 'last_login' => 'Last login', 'never' => 'Never', 'created_at' => 'Created at',
+    'roles' => ['viewer' => 'Viewer', 'operator' => 'Operator', 'administrator' => 'Administrator', 'super_admin' => 'Super Admin'],
+    'errors' => ['super_admin' => 'Only a Super Admin may grant this role or modify a Super Admin.', 'last_super_admin' => 'The last active Super Admin cannot be deactivated or lose their role.'],
+    'audit' => ['title' => 'Audit log', 'entry' => 'Audit entry', 'actor' => 'Actor', 'event' => 'Event', 'resource' => 'Resource', 'resource_id' => 'Resource ID', 'description' => 'Description', 'timestamp' => 'Date/time', 'ip' => 'IP address', 'user_agent' => 'User agent', 'before' => 'Before', 'after' => 'After', 'context' => 'Metadata', 'from' => 'Date from', 'to' => 'Date to', 'dates' => 'Date range', 'system' => 'System / unavailable',
+        'events' => [
+            'service.created' => 'Monitoring service created',
+            'service.updated' => 'Monitoring service updated',
+            'service.enabled' => 'Monitoring service enabled',
+            'service.disabled' => 'Monitoring service disabled',
+            'service.deleted' => 'Monitoring service deleted',
+            'service.sla_updated' => 'Service SLA updated',
+            'service.monitoring_config_updated' => 'Monitoring configuration updated',
+            'maintenance.created' => 'Maintenance window created',
+            'maintenance.updated' => 'Maintenance window updated',
+            'maintenance.deleted' => 'Maintenance window deleted',
+            'notification.settings_updated' => 'Notification settings updated',
+            'notification.telegram_test_requested' => 'Telegram test requested',
+            'notification.email_test_requested' => 'Email test requested',
+            'notification.retry_requested' => 'Notification retry requested',
+            'institution.updated' => 'Institution settings updated',
+            'user.created' => 'User created',
+            'user.updated' => 'User updated',
+            'user.activated' => 'User activated',
+            'user.role_changed' => 'User role changed',
+            'user.password_changed_by_admin' => 'Password changed by administrator',
+            'report.generated' => 'Report generated',
+            'user.logged_in' => 'User logged in', 'user.deactivated' => 'User deactivated', 'user.roles_updated' => 'User roles updated', 'incident.acknowledged' => 'Incident acknowledged'],
+    ],
+];

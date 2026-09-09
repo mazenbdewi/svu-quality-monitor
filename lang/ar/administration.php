@@ -1,0 +1,33 @@
+<?php
+
+return [
+    'remove_telegram_token' => 'إزالة رمز تيليغرام المحفوظ',
+    'users' => 'المستخدمون', 'user' => 'مستخدم', 'name' => 'الاسم', 'email' => 'البريد الإلكتروني', 'password' => 'كلمة المرور', 'role' => 'الدور', 'status' => 'الحالة', 'active' => 'نشط', 'inactive' => 'غير نشط', 'activate' => 'تفعيل', 'deactivate' => 'تعطيل', 'last_login' => 'آخر تسجيل دخول', 'never' => 'لم يسجل الدخول بعد', 'created_at' => 'تاريخ الإنشاء',
+    'roles' => ['viewer' => 'مشاهد', 'operator' => 'مشغّل', 'administrator' => 'مسؤول', 'super_admin' => 'مسؤول أعلى'],
+    'errors' => ['super_admin' => 'المسؤول الأعلى فقط يستطيع منح هذا الدور أو تعديل مسؤول أعلى.', 'last_super_admin' => 'لا يمكن تعطيل آخر مسؤول أعلى نشط أو إزالة دوره.'],
+    'audit' => ['title' => 'سجل التدقيق', 'entry' => 'سجل تدقيق', 'actor' => 'المنفّذ', 'event' => 'الحدث', 'resource' => 'نوع المورد', 'resource_id' => 'معرّف المورد', 'description' => 'الوصف', 'timestamp' => 'التاريخ والوقت', 'ip' => 'عنوان IP', 'user_agent' => 'وكيل المستخدم', 'before' => 'قبل', 'after' => 'بعد', 'context' => 'البيانات الوصفية', 'from' => 'من تاريخ', 'to' => 'إلى تاريخ', 'dates' => 'الفترة الزمنية', 'system' => 'النظام / غير متاح',
+        'events' => [
+            'service.created' => 'تم إنشاء خدمة المراقبة',
+            'service.updated' => 'تم تعديل خدمة المراقبة',
+            'service.enabled' => 'تم تفعيل خدمة المراقبة',
+            'service.disabled' => 'تم تعطيل خدمة المراقبة',
+            'service.deleted' => 'تم حذف خدمة المراقبة',
+            'service.sla_updated' => 'تم تعديل اتفاقية مستوى الخدمة',
+            'service.monitoring_config_updated' => 'تم تعديل إعدادات المراقبة',
+            'maintenance.created' => 'تم إنشاء نافذة صيانة',
+            'maintenance.updated' => 'تم تعديل نافذة الصيانة',
+            'maintenance.deleted' => 'تم حذف نافذة الصيانة',
+            'notification.settings_updated' => 'تم تعديل إعدادات الإشعارات',
+            'notification.telegram_test_requested' => 'تم طلب اختبار تيليغرام',
+            'notification.email_test_requested' => 'تم طلب اختبار البريد الإلكتروني',
+            'notification.retry_requested' => 'تم طلب إعادة إرسال الإشعار',
+            'institution.updated' => 'تم تعديل إعدادات المؤسسة',
+            'user.created' => 'تم إنشاء المستخدم',
+            'user.updated' => 'تم تعديل المستخدم',
+            'user.activated' => 'تم تفعيل المستخدم',
+            'user.role_changed' => 'تم تغيير دور المستخدم',
+            'user.password_changed_by_admin' => 'تم تغيير كلمة المرور بواسطة المسؤول',
+            'report.generated' => 'تم توليد التقرير',
+            'user.logged_in' => 'تسجيل دخول المستخدم', 'user.deactivated' => 'تم تعطيل المستخدم', 'user.roles_updated' => 'تم تحديث أدوار المستخدم', 'incident.acknowledged' => 'تم تأكيد الاطلاع على العطل'],
+    ],
+];

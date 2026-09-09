@@ -101,5 +101,4 @@ class ResearchFindingsWidget extends Widget
 
         return ['label' => __('monitoring.interpretation.levels.warning'), 'color' => 'warning', 'message' => __('monitoring.dashboard.research_cards.spc_attention_message')];
     }
-
 }

@@ -2,8 +2,8 @@
 
 namespace App\Filament\Widgets;
 
-use App\Models\ServiceCheck;
 use App\Models\MonitoredService;
+use App\Models\ServiceCheck;
 use Filament\Widgets\ChartWidget;
 
 class ResponseTimeTrendWidget extends ChartWidget

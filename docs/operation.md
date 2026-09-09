@@ -34,31 +34,39 @@ php artisan schedule:work
 
 This keeps Laravel's scheduler running in the foreground.
 
-## Configure Cron on a Server
+## Configure Cron on a Non-Docker Server
 
-On a production server, add one cron entry:
+Only when NOT using the Docker scheduler service, add one cron entry:
 
 ```cron
 * * * * * cd /path/to/svu-quality-monitor && php artisan schedule:run >> /dev/null 2>&1
 ```
 
 Replace `/path/to/svu-quality-monitor` with the actual project path on the server.
+Do not add this cron alongside Docker `scheduler` / `schedule:work`, or tasks may run twice.
 
 ## Scheduled Tasks
 
 The scheduler runs:
 
 - `php artisan services:check-due` every minute
+- `system-health:scheduler-heartbeat` every minute
+- `php artisan system:check-background-health` every 5 minutes
 - `php artisan reliability:calculate --period=daily` daily at `00:10`
+- `php artisan sla:calculate` daily at `00:20`
 - `php artisan control-charts:calculate --period=daily` daily at `00:25`
+- `php artisan backup:create --scheduled` daily at `02:00`
+- `php artisan backup:cleanup --scheduled` daily at `03:00`
 
-Each scheduled command uses `withoutOverlapping()` to reduce duplicate concurrent runs.
+Scheduled commands use `withoutOverlapping()` to reduce duplicate concurrent runs;
+the lightweight heartbeat is a named callback. Times follow the configured application timezone.
 
 For service checks, the command only identifies due active services and dispatches one `CheckMonitoredServiceJob` per service. The queue worker executes the HTTP check through `ServiceCheckRunner`. Each job is unique per monitored service and also has a short execution lock, so repeated scheduling, retries, or a slow request cannot run two checks for the same service concurrently. The uniqueness lock expires safely if a worker dies.
 
 ## Background Health Rules
 
-The System Operations page records and displays runtime heartbeats; it does not infer health merely from the presence of a Docker container.
+System Operations displays runtime heartbeats recorded by the scheduler and queue worker;
+opening the page does not record a heartbeat or infer health from a Docker container.
 
 - Scheduler heartbeat: written by a Laravel scheduled task every minute. It is **Healthy** through 3 minutes since the last heartbeat, **Warning** until 5 minutes, and **Down** after 5 minutes.
 - Queue heartbeat: written by the queue worker polling loop even when there are no jobs. It is **Healthy** through 90 seconds, **Warning** until 3 minutes, and **Down** after 3 minutes.

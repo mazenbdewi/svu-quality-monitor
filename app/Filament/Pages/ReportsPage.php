@@ -15,6 +15,7 @@ use App\Exports\Reports\Sheets\SlaMetricsSheet;
 use App\Models\MonitoredService;
 use App\Reports\ComprehensivePdfReport;
 use App\Reports\ExecutiveMonthlyPdfReport;
+use App\Services\AuditLogger;
 use BackedEnum;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
@@ -264,8 +265,11 @@ class ReportsPage extends Page
             $report = new ExecutiveMonthlyPdfReport((string) ($data['report_month'] ?? now()->toDateString()));
             $pdf = Pdf::loadView('reports.executive-monthly-pdf', $report->data())->setPaper('a4');
 
-            return response()->streamDownload(static function () use ($pdf): void {
-                echo $pdf->output();
+            $content = $pdf->output();
+            $this->auditReport($reportType, $exportFormat, $data);
+
+            return response()->streamDownload(static function () use ($content): void {
+                echo $content;
             }, 'executive-quality-report-'.Carbon::parse($data['report_month'] ?? now())->format('Y-m').'.pdf', ['Content-Type' => 'application/pdf']);
         }
 
@@ -281,9 +285,12 @@ class ReportsPage extends Page
                 ->title(__('monitoring.reports.notifications.success'))
                 ->send();
 
+            $content = $pdf->output();
+            $this->auditReport($reportType, $exportFormat, $data);
+
             return response()->streamDownload(
-                static function () use ($pdf): void {
-                    echo $pdf->output();
+                static function () use ($content): void {
+                    echo $content;
                 },
                 $this->pdfFileName(),
                 ['Content-Type' => 'application/pdf'],
@@ -301,7 +308,18 @@ class ReportsPage extends Page
             ->title(__('monitoring.reports.notifications.success'))
             ->send();
 
-        return Excel::download($export, $this->fileName($reportType));
+        $response = Excel::download($export, $this->fileName($reportType));
+        $this->auditReport($reportType, $exportFormat, $data);
+
+        return $response;
+    }
+
+    private function auditReport(string $type, string $format, array $data): void
+    {
+        app(AuditLogger::class)->log('report.generated', null, __('administration.audit.events')['report.generated'], context: [
+            'report_type' => $type, 'format' => $format, 'language' => app()->getLocale(),
+            'period' => Arr::only($data, ['report_month', 'date_from', 'date_to', 'period_type']),
+        ]);
     }
 
     /**

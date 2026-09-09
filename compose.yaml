@@ -12,6 +12,7 @@ services:
         condition: service_healthy
     volumes:
       - application_storage:/var/www/html/storage
+      - backup_data:/var/backups/svu-quality-monitor
 
   web:
     build:
@@ -51,6 +52,7 @@ services:
       start_period: 30s
 
   queue:
+    stop_grace_period: 120s
     build:
       context: .
       dockerfile: Dockerfile
@@ -73,6 +75,7 @@ services:
       - --max-time=3600
 
   scheduler:
+    stop_grace_period: 120s
     build:
       context: .
       dockerfile: Dockerfile
@@ -85,6 +88,7 @@ services:
         condition: service_healthy
     volumes:
       - application_storage:/var/www/html/storage
+      - backup_data:/var/backups/svu-quality-monitor
     command:
       - php
       - artisan
@@ -93,3 +97,4 @@ services:
 volumes:
   database_data:
   application_storage:
+  backup_data:

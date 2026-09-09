@@ -1,0 +1,26 @@
+# Opt-in deployment overlay, NOT active in compose.yaml. Docker Compose 2.24.4+.
+# PUBLIC_DOMAIN must be a real, validated DNS hostname (no scheme/path).
+services:
+  web:
+    ports: !override
+      - "80:80"
+      - "443:443"
+    environment:
+      PUBLIC_DOMAIN: ${PUBLIC_DOMAIN:?Set your real DNS hostname}
+      NGINX_ENVSUBST_FILTER: ^PUBLIC_DOMAIN$
+    volumes:
+      - ./docker/nginx/https.conf.template:/etc/nginx/templates/default.conf.template:ro
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+      - /var/lib/svu-acme:/var/www/acme:ro
+  app:
+    environment:
+      APP_URL: https://${PUBLIC_DOMAIN:?Set your real DNS hostname}
+      SESSION_SECURE_COOKIE: "true"
+  scheduler:
+    environment:
+      APP_URL: https://${PUBLIC_DOMAIN:?Set your real DNS hostname}
+      SESSION_SECURE_COOKIE: "true"
+  queue:
+    environment:
+      APP_URL: https://${PUBLIC_DOMAIN:?Set your real DNS hostname}
+      SESSION_SECURE_COOKIE: "true"

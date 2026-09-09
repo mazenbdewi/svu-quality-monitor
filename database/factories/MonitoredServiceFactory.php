@@ -10,6 +10,11 @@ use Illuminate\Database\Eloquent\Factories\Factory;
  */
 class MonitoredServiceFactory extends Factory
 {
+    public function inactive(): static
+    {
+        return $this->state(fn () => ['is_active' => false]);
+    }
+
     /**
      * Define the model's default state.
      *
@@ -18,7 +23,7 @@ class MonitoredServiceFactory extends Factory
     public function definition(): array
     {
         return [
-            'name' => fake()->company() . ' Service',
+            'name' => fake()->company().' Service',
             'url' => fake()->url(),
             'category' => fake()->optional()->randomElement(['API', 'Website', 'Portal', 'Integration']),
             'expected_status_code' => 200,
@@ -26,7 +31,7 @@ class MonitoredServiceFactory extends Factory
             'check_interval_minutes' => fake()->randomElement([5, 10, 15, 30, 60]),
             'warning_response_ms' => 1500,
             'critical_response_ms' => 3000,
-            'is_active' => fake()->boolean(85),
+            'is_active' => true,
             'notes' => fake()->optional()->sentence(),
         ];
     }

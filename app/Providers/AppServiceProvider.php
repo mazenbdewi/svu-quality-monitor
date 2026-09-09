@@ -47,8 +47,8 @@ class AppServiceProvider extends ServiceProvider
         Gate::before(fn (User $user): ?bool => $user->hasRole('super_admin') ? true : null);
         Event::listen(Login::class, function (Login $event): void {
             if ($event->user instanceof User) {
-                $event->user->update(['last_login_at' => now()]);
-                app(AuditLogger::class)->log('user.logged_in', $event->user, 'User logged in');
+                $event->user->forceFill(['last_login_at' => now()])->save();
+                app(AuditLogger::class)->log('user.logged_in', $event->user, 'User logged in', actor: $event->user);
             }
         });
         Queue::looping(fn (): mixed => app(SystemHealthService::class)->recordQueueHeartbeat());

@@ -1,6 +1,7 @@
 <?php
 
 return [
+    'audit' => ['sensitive_changed' => 'تم إخفاء القيمة الحساسة'],
     'sla' => [
         'fields' => ['enabled' => 'تفعيل اتفاقية مستوى الخدمة', 'target' => 'هدف SLA (%)'],
         'labels' => ['target' => 'هدف SLA', 'actual' => 'الإتاحة الفعلية', 'status' => 'حالة SLA'],
@@ -17,6 +18,7 @@ return [
     ],
 
     'navigation_groups' => [
+        'system' => 'النظام',
         'monitoring' => 'لوحة المتابعة',
         'analysis_reliability' => 'التحليل والموثوقية',
         'reports' => 'التقارير',
@@ -164,6 +166,7 @@ return [
     ],
 
     'actions' => [
+        'save' => 'حفظ',
         'create_monitored_service' => 'إضافة خدمة مراقبة',
         'create_service_check' => 'إضافة نتيجة فحص',
         'edit' => 'تعديل',
@@ -1007,6 +1010,7 @@ return [
             'closed' => 'مغلقة',
         ],
         'incident_types' => [
+            'critical' => 'أداء حرج',
             'down' => 'توقف الخدمة',
             'slow' => 'بطء الخدمة',
             'server_error' => 'خطأ خادم',

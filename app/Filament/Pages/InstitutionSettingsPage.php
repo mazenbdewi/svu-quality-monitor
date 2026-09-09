@@ -3,6 +3,7 @@
 namespace App\Filament\Pages;
 
 use App\Models\InstitutionSetting;
+use App\Services\AdministrativeAudit;
 use BackedEnum;
 use Filament\Actions\Action;
 use Filament\Forms\Components\TextInput;
@@ -13,6 +14,7 @@ use Filament\Schemas\Components\EmbeddedSchema;
 use Filament\Schemas\Components\Form;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
+use Illuminate\Support\Facades\DB;
 use UnitEnum;
 
 class InstitutionSettingsPage extends Page
@@ -71,7 +73,14 @@ class InstitutionSettingsPage extends Page
     public function save(): void
     {
         abort_unless(auth()->user()?->can('institution.manage'), 403);
-        InstitutionSetting::current()->update($this->form->getState());
+        $data = $this->form->getState();
+        DB::transaction(function () use ($data): void {
+            $setting = InstitutionSetting::current();
+            $audit = app(AdministrativeAudit::class);
+            $before = $audit->snapshot($setting);
+            $setting->update($data);
+            $audit->record($setting->fresh(), $before);
+        });
         Notification::make()->success()->title(__('monitoring.executive.branding.saved'))->send();
     }
 }

@@ -2,6 +2,7 @@
 
 namespace App\Filament\Pages;
 
+use App\Services\BackupService;
 use App\Services\SystemHealthService;
 use BackedEnum;
 use Filament\Pages\Page;
@@ -47,5 +48,12 @@ class SystemOperationsPage extends Page
     public function mount(SystemHealthService $systemHealth): void
     {
         $this->health = $systemHealth->snapshot();
+    }
+
+    public function backupHealth(): array
+    {
+        abort_unless(auth()->user()?->can('backups.view'), 403);
+
+        return app(BackupService::class)->health();
     }
 }

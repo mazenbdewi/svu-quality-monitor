@@ -18,6 +18,20 @@
 @endphp
 
 <x-filament-panels::page>
+    @can('backups.view')
+        @php($backupHealth = $this->backupHealth())
+        <x-filament::section :heading="__('backup.title')" wire:poll.60s>
+            <x-filament::badge :color="match ($backupHealth['status']) { 'healthy' => 'success', 'warning' => 'warning', default => 'danger' }">
+                {{ __('monitoring.operations.health.statuses.'.$backupHealth['status']) }}
+            </x-filament::badge>
+            <dl>
+                <dt>{{ __('backup.last_success') }}</dt><dd>{{ $backupHealth['success']['finished_at'] ?? '—' }}</dd>
+                <dt>{{ __('backup.last_failure') }}</dt><dd>{{ $backupHealth['failure']['finished_at'] ?? '—' }}</dd>
+                <dt>{{ __('backup.age') }}</dt><dd>{{ $backupHealth['age'] === null ? '—' : number_format($backupHealth['age'], 1) }}</dd>
+                <dt>{{ __('backup.size') }}</dt><dd>{{ $backupHealth['success']['size'] ?? '—' }}</dd>
+            </dl>
+        </x-filament::section>
+    @endcan
     <div dir="{{ $direction }}" class="space-y-6 {{ $isRtl ? 'text-right' : 'text-left' }}">
         <section class="rounded-xl bg-white p-6 shadow-sm ring-1 ring-gray-950/5 dark:bg-gray-900 dark:ring-white/10">
             <p class="text-sm font-semibold text-primary-600 dark:text-primary-400">

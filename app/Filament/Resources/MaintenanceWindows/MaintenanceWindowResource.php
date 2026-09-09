@@ -6,6 +6,7 @@ use App\Filament\Resources\MaintenanceWindows\Pages\CreateMaintenanceWindow;
 use App\Filament\Resources\MaintenanceWindows\Pages\EditMaintenanceWindow;
 use App\Filament\Resources\MaintenanceWindows\Pages\ListMaintenanceWindows;
 use App\Models\MaintenanceWindow;
+use App\Services\AdministrativeAudit;
 use BackedEnum;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\EditAction;
@@ -20,6 +21,7 @@ use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Model;
 use UnitEnum;
 
 class MaintenanceWindowResource extends Resource
@@ -115,7 +117,7 @@ class MaintenanceWindowResource extends Resource
                 }),
         ])->recordActions([
             EditAction::make()->label(__('monitoring.actions.edit'))->visible(fn (MaintenanceWindow $record): bool => $record->statusAt() !== 'completed'),
-            DeleteAction::make()->label(__('monitoring.actions.delete'))->visible(fn (MaintenanceWindow $record): bool => $record->statusAt() === 'scheduled'),
+            DeleteAction::make()->using(fn (Model $record): bool => app(AdministrativeAudit::class)->delete($record))->label(__('monitoring.actions.delete'))->visible(fn (MaintenanceWindow $record): bool => $record->statusAt() === 'scheduled'),
         ]);
     }
 

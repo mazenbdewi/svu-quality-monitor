@@ -3,6 +3,7 @@
 namespace App\Exports\Reports\Sheets;
 
 use App\Exports\Reports\Sheets\Concerns\AppliesReportSheetFormatting;
+use App\Models\MonitoredService;
 use App\Models\ServiceCheck;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
@@ -31,7 +32,7 @@ class MinitabRawChecksSheet implements FromQuery, ShouldAutoSize, WithEvents, Wi
             ->when($this->filters['date_from'] ?? null, fn (Builder $query, $date): Builder => $query->where('checked_at', '>=', Carbon::parse($date)->startOfDay()))
             ->when($this->filters['date_to'] ?? null, fn (Builder $query, $date): Builder => $query->where('checked_at', '<=', Carbon::parse($date)->endOfDay()))
             ->orderBy(
-                \App\Models\MonitoredService::query()
+                MonitoredService::query()
                     ->select('name')
                     ->whereColumn('monitored_services.id', 'service_checks.monitored_service_id')
                     ->limit(1)

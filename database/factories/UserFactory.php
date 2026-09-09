@@ -34,6 +34,11 @@ class UserFactory extends Factory
         ];
     }
 
+    public function inactive(): static
+    {
+        return $this->state(fn () => ['is_active' => false]);
+    }
+
     /**
      * Indicate that the model's email address should be unverified.
      */

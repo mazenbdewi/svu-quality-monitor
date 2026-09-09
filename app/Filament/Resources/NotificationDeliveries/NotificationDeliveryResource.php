@@ -65,7 +65,7 @@ class NotificationDeliveryResource extends Resource
         ])->recordActions([
             Action::make('retry')->label(__('monitoring.notifications.retry'))->visible(fn (NotificationDelivery $record): bool => $record->status === 'failed' && (auth()->user()?->can('notifications.manage') ?? false))->action(function (NotificationDelivery $record): void {
                 abort_unless(auth()->user()?->can('notifications.manage'), 403);
-                app(NotificationDeliveryRetryService::class)->retry($record);
+                app(NotificationDeliveryRetryService::class)->retry($record, auth()->user());
             }),
         ]);
     }

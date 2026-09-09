@@ -2,12 +2,17 @@
 
 namespace App\Filament\Resources\MonitoredServices\Pages;
 
+use App\Filament\Resources\Concerns\AuditsAdministrativeChanges;
 use App\Filament\Resources\MonitoredServices\MonitoredServiceResource;
+use App\Services\AdministrativeAudit;
 use Filament\Actions\DeleteAction;
 use Filament\Resources\Pages\EditRecord;
+use Illuminate\Database\Eloquent\Model;
 
 class EditMonitoredService extends EditRecord
 {
+    use AuditsAdministrativeChanges;
+
     private const MASKED_SECRET = '••••••••';
 
     protected static string $resource = MonitoredServiceResource::class;
@@ -16,7 +21,7 @@ class EditMonitoredService extends EditRecord
     {
         return [
             MonitoredServiceResource::checkNowAction(),
-            DeleteAction::make()
+            DeleteAction::make()->using(fn (Model $record): bool => app(AdministrativeAudit::class)->delete($record))
                 ->label(__('monitoring.actions.delete')),
         ];
     }

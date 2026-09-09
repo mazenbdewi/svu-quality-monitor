@@ -1,0 +1,49 @@
+# Opt-in only: requires a real certificate and PUBLIC_DOMAIN supplied by the operator.
+server {
+    listen 80;
+    listen [::]:80;
+    server_name ${PUBLIC_DOMAIN};
+    location ^~ /.well-known/acme-challenge/ {
+        root /var/www/acme;
+        try_files $uri =404;
+    }
+    location / { return 308 https://${PUBLIC_DOMAIN}$request_uri; }
+}
+
+server {
+    listen 443 ssl;
+    listen [::]:443 ssl;
+    server_name ${PUBLIC_DOMAIN};
+    ssl_certificate /etc/letsencrypt/live/${PUBLIC_DOMAIN}/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/${PUBLIC_DOMAIN}/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_session_cache shared:SSL:10m;
+    ssl_session_tickets off;
+
+    root /var/www/html/public;
+    index index.php;
+    charset utf-8;
+    client_max_body_size 100M;
+    add_header X-Frame-Options SAMEORIGIN always;
+    add_header X-Content-Type-Options nosniff always;
+
+    location / { try_files $uri $uri/ /index.php?$query_string; }
+    location /storage/ {
+        alias /var/www/html/storage/app/public/;
+        access_log off;
+        expires 7d;
+    }
+    location = /favicon.ico { access_log off; log_not_found off; }
+    location = /robots.txt { access_log off; log_not_found off; }
+    error_page 404 /index.php;
+    location ~ ^/index\.php(/|$) {
+        include fastcgi_params;
+        fastcgi_pass app:9000;
+        fastcgi_param SCRIPT_FILENAME /var/www/html/public/index.php;
+        fastcgi_param DOCUMENT_ROOT /var/www/html/public;
+        fastcgi_param HTTPS on;
+        fastcgi_hide_header X-Powered-By;
+    }
+    location ~ \.php$ { return 404; }
+    location ~ /\.(?!well-known).* { deny all; }
+}

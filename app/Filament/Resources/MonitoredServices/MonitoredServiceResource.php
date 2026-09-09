@@ -8,6 +8,7 @@ use App\Filament\Resources\MonitoredServices\Pages\ListMonitoredServices;
 use App\Filament\Resources\MonitoredServices\RelationManagers\SlaMetricsRelationManager;
 use App\Models\MonitoredService;
 use App\Models\ServiceCheck;
+use App\Services\AdministrativeAudit;
 use App\Services\ServiceCheckRunner;
 use BackedEnum;
 use Filament\Actions\Action;
@@ -57,6 +58,11 @@ class MonitoredServiceResource extends Resource
     }
 
     public static function canDelete($record): bool
+    {
+        return auth()->user()?->can('services.delete') ?? false;
+    }
+
+    public static function canDeleteAny(): bool
     {
         return auth()->user()?->can('services.delete') ?? false;
     }
@@ -364,7 +370,13 @@ class MonitoredServiceResource extends Resource
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
-                    DeleteBulkAction::make()
+                    DeleteBulkAction::make()->databaseTransaction()
+                        ->using(function ($records, DeleteBulkAction $action): void {
+                            foreach ($records as $record) {
+                                app(AdministrativeAudit::class)->delete($record) || $action->reportBulkProcessingFailure();
+                            }
+                        })
+                        ->authorize(fn (): bool => static::canDeleteAny())
                         ->label(__('monitoring.actions.delete_selected')),
                 ]),
             ]);

@@ -1,6 +1,7 @@
 <?php
 
 return [
+    'audit' => ['sensitive_changed' => 'Sensitive value hidden'],
     'sla' => [
         'fields' => ['enabled' => 'Enable SLA', 'target' => 'SLA target (%)'],
         'labels' => ['target' => 'SLA Target', 'actual' => 'Actual Availability', 'status' => 'SLA Status'],
@@ -17,6 +18,7 @@ return [
     ],
 
     'navigation_groups' => [
+        'system' => 'System',
         'monitoring' => 'Monitoring',
         'analysis_reliability' => 'Analysis & Reliability',
         'reports' => 'Reports',
@@ -164,6 +166,7 @@ return [
     ],
 
     'actions' => [
+        'save' => 'Save',
         'create_monitored_service' => 'Create monitored service',
         'create_service_check' => 'Create service check',
         'edit' => 'Edit',
@@ -638,6 +641,7 @@ return [
     'dashboard' => [
         'title' => 'Monitoring Dashboard',
         'stats' => [
+            'available_now' => 'Available Now',
             'total_services' => 'Total Services',
             'active_services' => 'Active Services',
             'today_checks' => 'Today Checks',
@@ -1377,6 +1381,7 @@ return [
             'failed' => 'Failed',
         ],
         'slow_status_options' => [
+            'critical' => 'Critical performance',
             'slow' => 'Slow',
             'not_slow' => 'Not Slow',
         ],
