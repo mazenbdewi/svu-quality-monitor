@@ -7,6 +7,7 @@ use App\Models\NotificationDelivery;
 use App\Services\NotificationDeliveryRetryService;
 use BackedEnum;
 use Filament\Actions\Action;
+use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
@@ -52,20 +53,31 @@ class NotificationDeliveryResource extends Resource
 
     public static function table(Table $table): Table
     {
-        return $table->defaultSort('created_at', 'desc')->columns([
-            TextColumn::make('event_type')->label(__('monitoring.notifications.event_type')),
-            TextColumn::make('channel')->label(__('monitoring.notifications.channel'))->badge(),
+        return $table->emptyStateIcon(Heroicon::OutlinedBellAlert)->emptyStateHeading(__('ux.empty.deliveries'))->emptyStateDescription(__('ux.empty.deliveries_help'))->defaultSort('created_at', 'desc')->columns([
+            TextColumn::make('event_type')->label(__('monitoring.notifications.event_type'))->formatStateUsing(fn (string $state): string => __('ux.delivery_events')[$state] ?? $state),
+            TextColumn::make('channel')->label(__('monitoring.notifications.channel'))->badge()->color('gray'),
             TextColumn::make('monitoredService.name')->label(__('monitoring.report_columns.service_name')),
-            TextColumn::make('service_incident_id')->label(__('monitoring.notifications.incident')),
-            TextColumn::make('status')->label(__('monitoring.notifications.status'))->badge(),
-            TextColumn::make('attempt_number')->label(__('monitoring.notifications.attempt_number')),
-            TextColumn::make('attempted_at')->label(__('monitoring.notifications.attempted_at'))->dateTime(),
+            TextColumn::make('service_incident_id')->toggleable(isToggledHiddenByDefault: true)->label(__('monitoring.notifications.incident')),
+            TextColumn::make('status')->label(__('monitoring.notifications.status'))->badge()->formatStateUsing(fn (string $state): string => __('ux.delivery_statuses')[$state] ?? $state)->color(fn (string $state): string => match ($state) {
+                'sent' => 'success', 'failed' => 'danger', 'pending' => 'warning', default => 'gray'
+            }),
+            TextColumn::make('attempt_number')->toggleable(isToggledHiddenByDefault: true)->label(__('monitoring.notifications.attempt_number')),
+            TextColumn::make('attempted_at')->toggleable(isToggledHiddenByDefault: true)->label(__('monitoring.notifications.attempted_at'))->dateTime(),
             TextColumn::make('sent_at')->label(__('monitoring.notifications.sent_at'))->dateTime(),
             TextColumn::make('safe_error_message')->label(__('monitoring.notifications.safe_error_message'))->wrap(),
         ])->recordActions([
             Action::make('retry')->label(__('monitoring.notifications.retry'))->visible(fn (NotificationDelivery $record): bool => $record->status === 'failed' && (auth()->user()?->can('notifications.manage') ?? false))->action(function (NotificationDelivery $record): void {
                 abort_unless(auth()->user()?->can('notifications.manage'), 403);
-                app(NotificationDeliveryRetryService::class)->retry($record, auth()->user());
+                try {
+                    if (app(NotificationDeliveryRetryService::class)->retry($record, auth()->user())) {
+                        Notification::make()->success()->title(__('ux.retry_queued'))->send();
+                    } else {
+                        Notification::make()->info()->title(__('ux.already_sent'))->send();
+                    }
+                } catch (\RuntimeException $exception) {
+                    report($exception);
+                    Notification::make()->danger()->title(__('ux.retry_failed'))->send();
+                }
             }),
         ]);
     }

@@ -376,10 +376,10 @@ return [
                 'down' => 'Down',
             ],
             'scheduler' => [
-                'title' => 'Scheduler',
+                'title' => 'Automatic checks',
             ],
             'queue' => [
-                'title' => 'Queue Worker',
+                'title' => 'Background processing',
                 'last_success' => 'Last successful job',
                 'last_failure' => 'Last failed job',
                 'pending_jobs' => 'Pending jobs',
@@ -455,7 +455,7 @@ return [
         'safe_use_note_body' => 'The report is based on previously stored lightweight checks and does not include stress testing, security scanning, or access to personal data.',
         'no_data' => 'No data matches the selected filters.',
         'export_pdf' => 'Export PDF',
-        'pdf_only_comprehensive' => 'PDF export is currently available only for the comprehensive report.',
+        'pdf_only_comprehensive' => 'PDF export supports the monthly executive and comprehensive reports.',
         'export_formats' => [
             'excel' => 'Excel',
             'pdf' => 'PDF',
@@ -786,17 +786,17 @@ return [
             'name' => [
                 'label' => 'Service name',
                 'placeholder' => 'Example: SVUIS student information system',
-                'helper' => 'Enter a clear name for the service you want to monitor. This name will appear later in reports and charts.',
+                'helper' => 'A clear name shown in tables and reports.',
             ],
             'url' => [
                 'label' => 'Service URL',
                 'placeholder' => 'https://svuis.svuonline.org',
-                'helper' => 'Enter the full URL of the service that will be checked periodically. The URL must start with http or https.',
+                'helper' => 'Full service URL, starting with http or https.',
             ],
             'category' => [
                 'label' => 'Service category',
                 'placeholder' => 'Example: student information system, LMS, main website',
-                'helper' => 'The category helps organize and group services in reports, such as educational services, administrative services, or public pages.',
+                'helper' => 'Optional category for organizing services in reports.',
             ],
             'expected_status_code' => [
                 'label' => 'Expected status code',
@@ -811,26 +811,26 @@ return [
             'check_interval_minutes' => [
                 'label' => 'Check interval in minutes',
                 'placeholder' => '15',
-                'helper' => 'How often this service should be checked. A light interval such as 10 or 15 minutes is recommended to avoid putting pressure on the website.',
+                'helper' => 'Interval between automatic checks, in minutes.',
             ],
             'warning_response_ms' => [
                 'label' => 'Response time warning limit',
                 'placeholder' => '1500',
-                'helper' => 'If the response time is higher than this value in milliseconds, the service is considered relatively slow but not critical.',
+                'helper' => 'Performance is slow above this value in milliseconds.',
             ],
             'critical_response_ms' => [
                 'label' => 'Response time critical limit',
                 'placeholder' => '3000',
-                'helper' => 'If the response time exceeds this value, it indicates severe slowness and may be treated as an early indicator of a service quality problem.',
+                'helper' => 'Performance is critical above this value in milliseconds; this alone does not mean the service is down.',
             ],
             'is_active' => [
                 'label' => 'Enable monitoring',
-                'helper' => 'When enabled, this service will be included in scheduled checks later. When disabled, the service remains saved but will not be checked.',
+                'helper' => 'Turn off to stop scheduled checks for this service.',
             ],
             'notes' => [
                 'label' => 'Notes',
                 'placeholder' => 'Any additional information about the service or why it was selected for the study',
-                'helper' => 'Write any notes that help explain why the service was selected or how it is used in the study.',
+                'helper' => 'Additional information for the monitoring team.',
             ],
         ],
         'table' => [
@@ -1352,7 +1352,7 @@ return [
         ],
         'helpers' => [
             'report_type' => 'Choose the dataset or comprehensive research report to export.',
-            'export_format' => 'Excel is available for all report types. PDF is available for the comprehensive report only.',
+            'export_format' => 'Excel is available for all reports. PDF supports the monthly executive and comprehensive reports.',
             'service_id' => 'Limit the report to one monitored service, or leave empty for all services.',
             'date_from' => 'Start date for filtering stored records.',
             'date_to' => 'End date for filtering stored records.',
@@ -1473,7 +1473,7 @@ return [
             'services' => 'Services', 'applies_to_all_services' => 'Apply to all services',
         ],
         'table' => ['name' => 'Name', 'services' => 'Services', 'starts_at' => 'Starts at', 'ends_at' => 'Ends at', 'duration' => 'Duration', 'status' => 'Status'],
-        'statuses' => ['scheduled' => 'Scheduled', 'active' => 'Active', 'completed' => 'Completed'],
+        'statuses' => ['scheduled' => 'Scheduled', 'active' => 'In progress', 'completed' => 'Completed'],
         'all_services' => 'All services',
         'actions' => ['create' => 'Create maintenance window'],
         'validation' => [
@@ -1490,7 +1490,7 @@ return [
         'dashboard' => ['title' => 'Executive overview', 'operational' => 'Monitoring system: Operational', 'attention_required' => 'Monitoring system: Attention required'],
         'cards' => ['total_services' => 'Monitored services', 'healthy' => 'Healthy services', 'down' => 'Services down', 'maintenance' => 'Under maintenance', 'open_incidents' => 'Open incidents', 'sla_met' => 'SLA met', 'sla_at_risk' => 'SLA at risk', 'sla_breached' => 'SLA breached'],
         'sections' => ['attention' => 'Services requiring attention', 'sla' => 'SLA performance', 'incidents' => 'Incidents', 'ssl' => 'SSL certificates', 'spc' => 'Statistical process control'], 'empty' => 'No services require attention.', 'days' => 'days',
-        'sla' => ['configured' => 'SLA-enabled services', 'weighted_availability' => 'Weighted availability', 'history' => 'Monthly SLA history', 'month' => 'Month', 'eligible' => 'Eligible time', 'maintenance' => 'Planned maintenance', 'downtime' => 'Unplanned downtime', 'allowed' => 'Allowed downtime', 'budget_used' => 'Budget used'],
+        'sla' => ['configured' => 'Services with calculated SLA data', 'weighted_availability' => 'Weighted availability', 'history' => 'Monthly SLA history', 'month' => 'Month', 'eligible' => 'Eligible time', 'maintenance' => 'Planned maintenance', 'downtime' => 'Unplanned downtime', 'allowed' => 'Allowed downtime', 'budget_used' => 'Budget used'],
         'incidents' => ['count' => ':count incident(s) in this period', 'downtime' => 'Unplanned downtime', 'most_affected' => 'Most affected service'], 'spc' => ['points' => ':count out-of-control point(s)'],
         'branding' => ['navigation' => 'Institution settings', 'title' => 'Institution settings', 'name' => 'Institution name', 'logo' => 'Institution logo URL', 'logo_help' => 'A public image URL shown in the executive PDF.', 'saved' => 'Institution settings saved.'],
         'report' => ['title' => 'Monthly Executive Report', 'system_name' => 'Quality and Reliability Monitoring System', 'month' => 'Report month', 'summary_text' => 'Weighted service availability was :availability. :met of :configured SLA-enabled services met their targets, with :breached breach(es).', 'previous_period' => 'Previous month comparison', 'no_previous' => 'No previous period available.', 'recommend_breach' => 'Review the causes of downtime for :service.', 'recommend_budget' => ':service is close to using its allowed downtime budget.', 'recommend_ssl' => 'Renew the SSL certificate for :service.', 'recommend_spc' => 'Review the causes of abnormal response-time variation.', 'no_recommendations' => 'No critical indicators require immediate action during this period.'],

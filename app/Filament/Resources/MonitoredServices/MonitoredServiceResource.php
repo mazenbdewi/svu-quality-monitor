@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\MonitoredServices;
 
+use App\Enums\MonitoringCheckType;
 use App\Filament\Resources\MonitoredServices\Pages\CreateMonitoredService;
 use App\Filament\Resources\MonitoredServices\Pages\EditMonitoredService;
 use App\Filament\Resources\MonitoredServices\Pages\ListMonitoredServices;
@@ -22,6 +23,7 @@ use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
 use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
+use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
@@ -105,131 +107,176 @@ class MonitoredServiceResource extends Resource
         return $schema
             ->columns(2)
             ->components([
-                TextInput::make('name')
-                    ->label(__('monitoring.monitored_services.fields.name.label'))
-                    ->placeholder(__('monitoring.monitored_services.fields.name.placeholder'))
-                    ->helperText(__('monitoring.monitored_services.fields.name.helper'))
-                    ->required()
-                    ->maxLength(255),
-                Select::make('check_type')
-                    ->label(__('monitoring.monitored_services.fields.check_type.label'))
-                    ->options([
-                        'http' => 'HTTP / HTTPS', 'api' => 'API', 'dns' => 'DNS', 'ssl' => 'SSL Certificate', 'tcp' => 'TCP Port',
-                    ])
-                    ->default('http')
-                    ->live()
-                    ->required()
-                    ->native(false),
-                TextInput::make('url')
-                    ->label(fn (Get $get): string => in_array($get('check_type'), ['dns', 'ssl', 'tcp'], true) ? __('monitoring.monitored_services.fields.hostname.label') : __('monitoring.monitored_services.fields.url.label'))
-                    ->placeholder(fn (Get $get): string => in_array($get('check_type'), ['dns', 'ssl', 'tcp'], true) ? 'example.org' : __('monitoring.monitored_services.fields.url.placeholder'))
-                    ->helperText(fn (Get $get): string => in_array($get('check_type'), ['dns', 'ssl', 'tcp'], true) ? __('monitoring.monitored_services.fields.hostname.helper') : __('monitoring.monitored_services.fields.url.helper'))
-                    ->required()
-                    ->maxLength(2048),
-                TextInput::make('category')
-                    ->label(__('monitoring.monitored_services.fields.category.label'))
-                    ->placeholder(__('monitoring.monitored_services.fields.category.placeholder'))
-                    ->helperText(__('monitoring.monitored_services.fields.category.helper'))
-                    ->maxLength(255),
-                TextInput::make('expected_status_code')
-                    ->label(__('monitoring.monitored_services.fields.expected_status_code.label'))
-                    ->placeholder(__('monitoring.monitored_services.fields.expected_status_code.placeholder'))
-                    ->helperText(__('monitoring.monitored_services.fields.expected_status_code.helper'))
-                    ->required()
-                    ->integer()
-                    ->minValue(100)
-                    ->maxValue(599)
-                    ->default(200)
-                    ->visible(fn (Get $get): bool => in_array($get('check_type'), ['http', 'api'], true)),
-                TextInput::make('expected_keyword')
-                    ->label(__('monitoring.monitored_services.fields.expected_keyword.label'))
-                    ->placeholder(__('monitoring.monitored_services.fields.expected_keyword.placeholder'))
-                    ->helperText(__('monitoring.monitored_services.fields.expected_keyword.helper'))
-                    ->maxLength(255)
-                    ->visible(fn (Get $get): bool => $get('check_type') === 'http'),
-                TextInput::make('check_config.timeout_seconds')
-                    ->label(__('monitoring.monitored_services.fields.timeout_seconds.label'))
-                    ->integer()->minValue(1)->maxValue(60)->default(10)
-                    ->visible(fn (Get $get): bool => in_array($get('check_type'), ['http', 'api', 'ssl', 'tcp'], true)),
-                Select::make('check_config.method')
-                    ->label(__('monitoring.monitored_services.fields.api_method.label'))
-                    ->options(['GET' => 'GET', 'POST' => 'POST'])->default('GET')->native(false)
-                    ->visible(fn (Get $get): bool => $get('check_type') === 'api'),
-                KeyValue::make('check_config.headers')
-                    ->label(__('monitoring.monitored_services.fields.api_headers.label'))
-                    ->keyLabel(__('monitoring.monitored_services.fields.api_headers.key'))
-                    ->valueLabel(__('monitoring.monitored_services.fields.api_headers.value'))
-                    ->visible(fn (Get $get): bool => $get('check_type') === 'api'),
-                Textarea::make('check_config.body')
-                    ->label(__('monitoring.monitored_services.fields.api_body.label'))
-                    ->visible(fn (Get $get): bool => $get('check_type') === 'api'),
-                TextInput::make('check_config.json_path')
-                    ->label(__('monitoring.monitored_services.fields.json_path.label'))
-                    ->visible(fn (Get $get): bool => $get('check_type') === 'api'),
-                TextInput::make('check_config.json_expected_value')
-                    ->label(__('monitoring.monitored_services.fields.json_expected_value.label'))
-                    ->visible(fn (Get $get): bool => $get('check_type') === 'api'),
-                Select::make('check_config.record_type')
-                    ->label(__('monitoring.monitored_services.fields.dns_record_type.label'))
-                    ->options(['A' => 'A', 'AAAA' => 'AAAA', 'CNAME' => 'CNAME', 'MX' => 'MX', 'TXT' => 'TXT'])->default('A')->native(false)
-                    ->visible(fn (Get $get): bool => $get('check_type') === 'dns'),
-                TextInput::make('check_config.port')
-                    ->label(__('monitoring.monitored_services.fields.port.label'))
-                    ->integer()->minValue(1)->maxValue(65535)
-                    ->visible(fn (Get $get): bool => in_array($get('check_type'), ['ssl', 'tcp'], true)),
-                TextInput::make('check_interval_minutes')
-                    ->label(__('monitoring.monitored_services.fields.check_interval_minutes.label'))
-                    ->placeholder(__('monitoring.monitored_services.fields.check_interval_minutes.placeholder'))
-                    ->helperText(__('monitoring.monitored_services.fields.check_interval_minutes.helper'))
-                    ->required()
-                    ->integer()
-                    ->minValue(1)
-                    ->default(15),
-                TextInput::make('failure_confirmation_count')
-                    ->label(__('monitoring.monitored_services.fields.failure_confirmation_count.label'))
-                    ->integer()->minValue(1)->default(2),
-                TextInput::make('recovery_confirmation_count')
-                    ->label(__('monitoring.monitored_services.fields.recovery_confirmation_count.label'))
-                    ->integer()->minValue(1)->default(2),
-                TextInput::make('warning_response_ms')
-                    ->label(__('monitoring.monitored_services.fields.warning_response_ms.label'))
-                    ->placeholder(__('monitoring.monitored_services.fields.warning_response_ms.placeholder'))
-                    ->helperText(__('monitoring.monitored_services.fields.warning_response_ms.helper'))
-                    ->required()
-                    ->integer()
-                    ->minValue(0)
-                    ->default(1500),
-                TextInput::make('critical_response_ms')
-                    ->label(__('monitoring.monitored_services.fields.critical_response_ms.label'))
-                    ->placeholder(__('monitoring.monitored_services.fields.critical_response_ms.placeholder'))
-                    ->helperText(__('monitoring.monitored_services.fields.critical_response_ms.helper'))
-                    ->required()
-                    ->integer()
-                    ->minValue(0)
-                    ->default(3000),
-                Toggle::make('is_active')
-                    ->label(__('monitoring.monitored_services.fields.is_active.label'))
-                    ->helperText(__('monitoring.monitored_services.fields.is_active.helper'))
-                    ->required()
-                    ->default(true),
-                Toggle::make('sla_enabled')
-                    ->label(__('monitoring.sla.fields.enabled'))
-                    ->live(),
-                TextInput::make('sla_target_percent')
-                    ->label(__('monitoring.sla.fields.target'))
-                    ->numeric()
-                    ->step(0.01)
-                    ->minValue(0.01)
-                    ->maxValue(100)
-                    ->visible(fn (Get $get): bool => (bool) $get('sla_enabled')),
-                Toggle::make('notifications_enabled')
-                    ->label(__('monitoring.notifications.service_enabled'))
-                    ->default(true),
-                Textarea::make('notes')
-                    ->label(__('monitoring.monitored_services.fields.notes.label'))
-                    ->placeholder(__('monitoring.monitored_services.fields.notes.placeholder'))
-                    ->helperText(__('monitoring.monitored_services.fields.notes.helper'))
-                    ->columnSpanFull(),
+                Section::make(__('ux.sections.service'))
+                    ->columns(2)
+                    ->columnSpanFull()
+                    ->schema([
+                        TextInput::make('name')
+                            ->label(__('monitoring.monitored_services.fields.name.label'))
+                            ->placeholder(__('monitoring.monitored_services.fields.name.placeholder'))
+                            ->helperText(__('monitoring.monitored_services.fields.name.helper'))
+                            ->required()
+                            ->maxLength(255),
+                        TextInput::make('category')
+                            ->label(__('monitoring.monitored_services.fields.category.label'))
+                            ->placeholder(__('monitoring.monitored_services.fields.category.placeholder'))
+                            ->helperText(__('monitoring.monitored_services.fields.category.helper'))
+                            ->maxLength(255),
+                        Toggle::make('is_active')
+                            ->label(__('monitoring.monitored_services.fields.is_active.label'))
+                            ->helperText(__('monitoring.monitored_services.fields.is_active.helper'))
+                            ->required()
+                            ->default(true),
+                        Textarea::make('notes')
+                            ->label(__('monitoring.monitored_services.fields.notes.label'))
+                            ->placeholder(__('monitoring.monitored_services.fields.notes.placeholder'))
+                            ->helperText(__('monitoring.monitored_services.fields.notes.helper'))
+                            ->columnSpanFull(),
+                    ]),
+                Section::make(__('ux.sections.check'))
+                    ->columns(2)
+                    ->columnSpanFull()
+                    ->schema([
+                        Select::make('check_type')
+                            ->label(__('monitoring.monitored_services.fields.check_type.label'))
+                            ->options(__('ux.check_types'))
+                            ->default('http')
+                            ->live()
+                            ->required()
+                            ->native(false),
+                        TextInput::make('check_interval_minutes')
+                            ->label(__('monitoring.monitored_services.fields.check_interval_minutes.label'))
+                            ->placeholder(__('monitoring.monitored_services.fields.check_interval_minutes.placeholder'))
+                            ->helperText(__('monitoring.monitored_services.fields.check_interval_minutes.helper'))
+                            ->required()
+                            ->integer()
+                            ->minValue(1)
+                            ->default(15),
+                    ]),
+                Section::make(__('ux.sections.connection'))
+                    ->columns(2)
+                    ->columnSpanFull()
+                    ->schema([
+                        TextInput::make('url')
+                            ->extraInputAttributes(['dir' => 'ltr'])
+                            ->label(fn (Get $get): string => in_array($get('check_type'), ['dns', 'ssl', 'tcp'], true) ? __('monitoring.monitored_services.fields.hostname.label') : __('monitoring.monitored_services.fields.url.label'))
+                            ->placeholder(fn (Get $get): string => in_array($get('check_type'), ['dns', 'ssl', 'tcp'], true) ? 'example.org' : __('monitoring.monitored_services.fields.url.placeholder'))
+                            ->helperText(fn (Get $get): string => in_array($get('check_type'), ['dns', 'ssl', 'tcp'], true) ? __('monitoring.monitored_services.fields.hostname.helper') : __('monitoring.monitored_services.fields.url.helper'))
+                            ->required()
+                            ->maxLength(2048),
+                        Select::make('check_config.record_type')
+                            ->label(__('monitoring.monitored_services.fields.dns_record_type.label'))
+                            ->options(['A' => 'A', 'AAAA' => 'AAAA', 'CNAME' => 'CNAME', 'MX' => 'MX', 'TXT' => 'TXT'])->default('A')->native(false)
+                            ->visible(fn (Get $get): bool => $get('check_type') === 'dns'),
+                        TextInput::make('check_config.port')
+                            ->label(__('monitoring.monitored_services.fields.port.label'))
+                            ->integer()->minValue(1)->maxValue(65535)
+                            ->visible(fn (Get $get): bool => in_array($get('check_type'), ['ssl', 'tcp'], true)),
+                    ]),
+                Section::make(__('ux.sections.technical'))
+                    ->columns(2)
+                    ->columnSpanFull()
+                    ->collapsible()->collapsed()
+                    ->visible(fn (Get $get): bool => $get('check_type') !== 'dns')
+                    ->schema([
+                        TextInput::make('expected_status_code')
+                            ->label(__('monitoring.monitored_services.fields.expected_status_code.label'))
+                            ->placeholder(__('monitoring.monitored_services.fields.expected_status_code.placeholder'))
+                            ->helperText(__('monitoring.monitored_services.fields.expected_status_code.helper'))
+                            ->required()
+                            ->integer()
+                            ->minValue(100)
+                            ->maxValue(599)
+                            ->default(200)
+                            ->visible(fn (Get $get): bool => in_array($get('check_type'), ['http', 'api'], true)),
+                        TextInput::make('expected_keyword')
+                            ->label(__('monitoring.monitored_services.fields.expected_keyword.label'))
+                            ->placeholder(__('monitoring.monitored_services.fields.expected_keyword.placeholder'))
+                            ->helperText(__('monitoring.monitored_services.fields.expected_keyword.helper'))
+                            ->maxLength(255)
+                            ->visible(fn (Get $get): bool => $get('check_type') === 'http'),
+                        TextInput::make('check_config.timeout_seconds')
+                            ->label(__('monitoring.monitored_services.fields.timeout_seconds.label'))
+                            ->integer()->minValue(1)->maxValue(60)->default(10)
+                            ->visible(fn (Get $get): bool => in_array($get('check_type'), ['http', 'api', 'ssl', 'tcp'], true)),
+                        Select::make('check_config.method')
+                            ->label(__('monitoring.monitored_services.fields.api_method.label'))
+                            ->options(['GET' => 'GET', 'POST' => 'POST'])->default('GET')->native(false)
+                            ->visible(fn (Get $get): bool => $get('check_type') === 'api'),
+                        KeyValue::make('check_config.headers')
+                            ->label(__('monitoring.monitored_services.fields.api_headers.label'))
+                            ->keyLabel(__('monitoring.monitored_services.fields.api_headers.key'))
+                            ->valueLabel(__('monitoring.monitored_services.fields.api_headers.value'))
+                            ->visible(fn (Get $get): bool => $get('check_type') === 'api'),
+                        Textarea::make('check_config.body')
+                            ->label(__('monitoring.monitored_services.fields.api_body.label'))
+                            ->visible(fn (Get $get): bool => $get('check_type') === 'api'),
+                        TextInput::make('check_config.json_path')
+                            ->label(__('monitoring.monitored_services.fields.json_path.label'))
+                            ->visible(fn (Get $get): bool => $get('check_type') === 'api'),
+                        TextInput::make('check_config.json_expected_value')
+                            ->label(__('monitoring.monitored_services.fields.json_expected_value.label'))
+                            ->visible(fn (Get $get): bool => $get('check_type') === 'api'),
+                    ]),
+                Section::make(__('ux.sections.response'))
+                    ->columns(2)
+                    ->columnSpanFull()
+                    ->visible(fn (Get $get): bool => in_array($get('check_type'), ['http', 'api'], true))
+                    ->schema([
+                        TextInput::make('warning_response_ms')
+                            ->label(__('monitoring.monitored_services.fields.warning_response_ms.label'))
+                            ->placeholder(__('monitoring.monitored_services.fields.warning_response_ms.placeholder'))
+                            ->helperText(__('monitoring.monitored_services.fields.warning_response_ms.helper'))
+                            ->required()
+                            ->integer()
+                            ->minValue(0)
+                            ->default(1500),
+                        TextInput::make('critical_response_ms')
+                            ->label(__('monitoring.monitored_services.fields.critical_response_ms.label'))
+                            ->placeholder(__('monitoring.monitored_services.fields.critical_response_ms.placeholder'))
+                            ->helperText(__('monitoring.monitored_services.fields.critical_response_ms.helper'))
+                            ->required()
+                            ->integer()
+                            ->minValue(0)
+                            ->default(3000),
+                    ]),
+                Section::make(__('ux.sections.confirmation'))
+                    ->columns(2)
+                    ->columnSpanFull()
+                    ->description(__('ux.help.confirmation'))
+                    ->collapsible()->collapsed()
+                    ->schema([
+                        TextInput::make('failure_confirmation_count')
+                            ->label(__('monitoring.monitored_services.fields.failure_confirmation_count.label'))
+                            ->integer()->minValue(1)->default(2),
+                        TextInput::make('recovery_confirmation_count')
+                            ->label(__('monitoring.monitored_services.fields.recovery_confirmation_count.label'))
+                            ->integer()->minValue(1)->default(2),
+                    ]),
+                Section::make(__('ux.sections.sla'))
+                    ->columns(2)
+                    ->columnSpanFull()
+                    ->description(__('ux.help.sla'))
+                    ->schema([
+                        Toggle::make('sla_enabled')
+                            ->label(__('monitoring.sla.fields.enabled'))
+                            ->live(),
+                        TextInput::make('sla_target_percent')
+                            ->label(__('monitoring.sla.fields.target'))
+                            ->numeric()
+                            ->step(0.01)
+                            ->minValue(0.01)
+                            ->maxValue(100)
+                            ->visible(fn (Get $get): bool => (bool) $get('sla_enabled')),
+                    ]),
+                Section::make(__('ux.sections.notifications'))
+                    ->columns(2)
+                    ->columnSpanFull()
+                    ->schema([
+                        Toggle::make('notifications_enabled')
+                            ->label(__('monitoring.notifications.service_enabled'))
+                            ->default(true),
+                    ]),
             ]);
     }
 
@@ -239,9 +286,13 @@ class MonitoredServiceResource extends Resource
             ->modifyQueryUsing(fn (Builder $query): Builder => $query->with(['latestServiceCheck', 'openIncident', 'latestSlaMetric']))
             ->columns([
                 TextColumn::make('name')
-                    ->label(__('monitoring.monitored_services.table.name'))
+                    ->label(__('monitoring.monitored_services.table.name'))->wrap()->limit(32)->tooltip(fn (MonitoredService $record): string => $record->name)
                     ->searchable()
                     ->sortable(),
+                TextColumn::make('check_type')
+                    ->label(__('monitoring.monitored_services.fields.check_type.label'))
+                    ->tooltip(fn (MonitoredService $record): string => __('ux.check_types.'.$record->check_type->value))
+                    ->formatStateUsing(fn (MonitoringCheckType $state): string => strtoupper($state->value)),
                 TextColumn::make('current_status')
                     ->label(__('monitoring.service_status.labels.current_status'))
                     ->badge()
@@ -249,52 +300,62 @@ class MonitoredServiceResource extends Resource
                     ->getStateUsing(fn (MonitoredService $record): string => $record->current_status_label)
                     ->color(fn (MonitoredService $record): string => $record->current_status_color),
                 TextColumn::make('under_maintenance')
+                    ->toggleable(isToggledHiddenByDefault: true)
                     ->label(__('monitoring.service_status.statuses.maintenance'))
                     ->badge()
                     ->getStateUsing(fn (MonitoredService $record): string => $record->is_under_maintenance ? __('monitoring.booleans.yes') : __('monitoring.booleans.no'))
-                    ->color(fn (MonitoredService $record): string => $record->is_under_maintenance ? 'warning' : 'gray'),
+                    ->color('gray'),
                 TextColumn::make('last_response_time')
                     ->label(__('monitoring.service_status.labels.last_response_time'))
                     ->getStateUsing(fn (MonitoredService $record): string => $record->latestServiceCheck?->response_time_ms === null
                         ? '-'
                         : number_format((int) $record->latestServiceCheck->response_time_ms).' ms'),
                 TextColumn::make('last_status_code')
+                    ->toggleable(isToggledHiddenByDefault: true)
                     ->label(__('monitoring.service_status.labels.last_status_code'))
                     ->getStateUsing(fn (MonitoredService $record): string => $record->latestServiceCheck?->status_code === null
                         ? '-'
                         : (string) $record->latestServiceCheck->status_code),
                 TextColumn::make('last_problem_type')
+                    ->toggleable(isToggledHiddenByDefault: true)
                     ->label(__('monitoring.service_status.labels.last_problem_type'))
                     ->getStateUsing(fn (MonitoredService $record): string => $record->last_problem_type_label),
                 TextColumn::make('has_open_incident')
+                    ->toggleable(isToggledHiddenByDefault: true)
                     ->label(__('monitoring.service_status.labels.open_incident'))
                     ->badge()
                     ->getStateUsing(fn (MonitoredService $record): string => $record->has_open_incident
                         ? __('monitoring.booleans.yes')
                         : __('monitoring.booleans.no'))
                     ->color(fn (MonitoredService $record): string => $record->has_open_incident ? 'danger' : 'gray'),
-                TextColumn::make('latestServiceCheck.checked_at')
+                TextColumn::make('latestServiceCheck.checked_at')->description(fn (MonitoredService $record): ?string => $record->latestServiceCheck?->checked_at?->format('H:i'))
                     ->label(__('monitoring.service_status.labels.last_check_at'))
-                    ->dateTime()
+                    ->dateTime('Y-m-d')
                     ->placeholder(__('monitoring.service_status.labels.not_checked_yet'))
                     ->sortable(),
                 TextColumn::make('url')
+                    ->toggleable(isToggledHiddenByDefault: true)
                     ->label(__('monitoring.monitored_services.table.url'))
                     ->searchable()
                     ->limit(60)
                     ->copyable(),
                 TextColumn::make('category')
+                    ->toggleable(isToggledHiddenByDefault: true)
                     ->label(__('monitoring.monitored_services.table.category'))
                     ->searchable()
                     ->sortable(),
                 TextColumn::make('sla_target_percent')
+                    ->toggleable(isToggledHiddenByDefault: true)
                     ->label(__('monitoring.sla.labels.target'))
                     ->formatStateUsing(fn (MonitoredService $record): string => $record->sla_enabled && $record->sla_target_percent ? number_format((float) $record->sla_target_percent, 2).'%' : '-'),
                 TextColumn::make('latestSlaMetric.availability_percent')
+                    ->toggleable(isToggledHiddenByDefault: true)
                     ->label(__('monitoring.sla.labels.actual'))
                     ->formatStateUsing(fn (MonitoredService $record): string => $record->latestSlaMetric?->availability_percent === null ? '-' : number_format((float) $record->latestSlaMetric->availability_percent, 2).'%'),
                 TextColumn::make('latestSlaMetric.status')
                     ->label(__('monitoring.sla.labels.status'))
+                    ->tooltip(__('ux.help.sla'))
+                    ->placeholder(__('monitoring.sla.statuses.no_data'))
                     ->badge()
                     ->formatStateUsing(fn (?string $state): string => __('monitoring.sla.statuses.'.($state ?? 'not_configured')))
                     ->color(fn (?string $state): string => match ($state) {
@@ -304,9 +365,11 @@ class MonitoredServiceResource extends Resource
                     ->label(__('monitoring.monitored_services.table.expected_status_code'))
                     ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('check_interval_minutes')
+                    ->toggleable(isToggledHiddenByDefault: true)
                     ->label(__('monitoring.monitored_services.table.check_interval_minutes'))
                     ->formatStateUsing(fn (int|string|null $state): string => $state === null ? '-' : trans_choice('monitoring.units.minutes', (int) $state, ['count' => number_format((int) $state)])),
                 IconColumn::make('is_active')
+                    ->toggleable(isToggledHiddenByDefault: true)
                     ->label(__('monitoring.monitored_services.table.is_active'))
                     ->boolean(),
                 TextColumn::make('expected_keyword')
@@ -321,12 +384,13 @@ class MonitoredServiceResource extends Resource
                     ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('updated_at')
                     ->label(__('monitoring.monitored_services.table.updated_at'))
-                    ->dateTime()
+                    ->dateTime('Y-m-d H:i')
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
             ->emptyStateIcon(Heroicon::OutlinedRectangleStack)
-            ->emptyStateHeading(__('monitoring.empty_states.no_data'))
+            ->emptyStateHeading(__('ux.empty.services'))
+            ->emptyStateDescription(__('ux.empty.services_help'))
             ->filters([
                 Filter::make('active_services')
                     ->label(__('monitoring.monitored_services.filters.active'))
@@ -440,9 +504,9 @@ class MonitoredServiceResource extends Resource
             'keyword_missing' => __('monitoring.manual_check.errors.keyword_missing'),
             'timeout' => __('monitoring.manual_check.errors.timeout'),
             'connection_error' => __('monitoring.manual_check.errors.connection_error'),
-            'request_error' => $check->error_message ?: __('monitoring.manual_check.errors.request_error'),
-            'unknown' => $check->error_message ?: __('monitoring.manual_check.errors.unknown'),
-            default => $check->error_message ?: __('monitoring.manual_check.errors.failed'),
+            'request_error' => __('monitoring.manual_check.errors.request_error'),
+            'unknown' => __('monitoring.manual_check.errors.unknown'),
+            default => __('monitoring.manual_check.errors.failed'),
         };
     }
 }

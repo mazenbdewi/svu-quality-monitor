@@ -131,9 +131,9 @@ class ServiceCheckResource extends Resource
                     ->sortable(),
                 TextColumn::make('checked_at')
                     ->label(__('monitoring.service_checks.table.checked_at'))
-                    ->dateTime()
+                    ->dateTime('Y-m-d H:i')
                     ->sortable(),
-                TextColumn::make('status_code')
+                TextColumn::make('status_code')->toggleable(isToggledHiddenByDefault: true)
                     ->label(__('monitoring.service_checks.table.status_code'))
                     ->sortable(),
                 TextColumn::make('response_time_ms')
@@ -152,7 +152,7 @@ class ServiceCheckResource extends Resource
                     ->formatStateUsing(fn (?bool $state): string => $state ? __('monitoring.booleans.yes') : __('monitoring.booleans.no'))
                     ->color(fn (?bool $state): string => $state ? 'warning' : 'success')
                     ->sortable(),
-                TextColumn::make('is_during_maintenance')
+                TextColumn::make('is_during_maintenance')->toggleable(isToggledHiddenByDefault: true)
                     ->label(__('monitoring.report_columns.is_during_maintenance'))
                     ->badge()
                     ->formatStateUsing(fn (?bool $state): string => $state ? __('monitoring.booleans.yes') : __('monitoring.booleans.no'))
@@ -172,7 +172,7 @@ class ServiceCheckResource extends Resource
                     ->searchable()
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
-                TextColumn::make('expected_keyword_found')
+                TextColumn::make('expected_keyword_found')->toggleable(isToggledHiddenByDefault: true)
                     ->label(__('monitoring.service_checks.table.expected_keyword_found'))
                     ->badge()
                     ->formatStateUsing(fn (?bool $state): string => $state === null ? '-' : ($state ? __('monitoring.booleans.yes') : __('monitoring.booleans.no')))
@@ -181,13 +181,14 @@ class ServiceCheckResource extends Resource
                         false => 'danger',
                         default => 'gray',
                     }),
-                TextColumn::make('created_at')
+                TextColumn::make('created_at')->toggleable(isToggledHiddenByDefault: true)
                     ->label(__('monitoring.service_checks.table.created_at'))
-                    ->dateTime()
+                    ->dateTime('Y-m-d H:i')
                     ->sortable(),
             ])
             ->emptyStateIcon(Heroicon::OutlinedClipboardDocumentCheck)
             ->emptyStateHeading(__('monitoring.empty_states.no_checks'))
+            ->emptyStateDescription(__('ux.empty.checks_help'))
             ->filters([
                 Filter::make('successful_checks')
                     ->label(__('monitoring.service_checks.filters.successful'))

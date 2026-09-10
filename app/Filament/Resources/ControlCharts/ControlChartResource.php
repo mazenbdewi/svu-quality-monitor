@@ -164,23 +164,18 @@ class ControlChartResource extends Resource
     {
         return $schema
             ->components([
-                Section::make(__('monitoring.control_charts.graph.title'))
-                    ->schema([
-                        ViewEntry::make('control_chart_graph')
-                            ->hiddenLabel()
-                            ->view('filament.infolists.control-chart-graph')
-                            ->columnSpanFull(),
-                    ])
-                    ->columnSpanFull(),
                 Section::make(__('monitoring.interpretation.sections.control_chart_interpretation'))
                     ->schema([
+                        TextEntry::make('chart_type')->label(__('monitoring.control_charts.table.chart_type'))->formatStateUsing(fn ($state): string => static::chartTypeOptions()[$state] ?? $state)->tooltip(__('ux.help.control_chart')),
+                        TextEntry::make('period_start')->label(__('monitoring.control_charts.table.period_start'))->dateTime('Y-m-d H:i'),
+                        TextEntry::make('period_end')->label(__('monitoring.control_charts.table.period_end'))->dateTime('Y-m-d H:i'),
                         TextEntry::make('control_chart_interpretation_level')
                             ->label(__('monitoring.interpretation.labels.level'))
                             ->state(fn (ControlChart $record): string => app(ResearchInterpretationService::class)->controlChartFinding($record)['level'])
                             ->formatStateUsing(fn (string $state): string => __("monitoring.interpretation.levels.{$state}"))
                             ->badge()
                             ->color(fn (ControlChart $record): string => app(ResearchInterpretationService::class)->controlChartFinding($record)['color']),
-                        TextEntry::make('control_chart_out_of_control_points')
+                        TextEntry::make('control_chart_out_of_control_points')->tooltip(__('ux.help.spc'))
                             ->label(__('monitoring.interpretation.labels.out_of_control_points'))
                             ->state(fn (ControlChart $record): string => number_format((int) $record->out_of_control_count))
                             ->badge()
@@ -195,6 +190,21 @@ class ControlChartResource extends Resource
                             ->weight(FontWeight::SemiBold),
                     ])
                     ->columns(1)
+                    ->columnSpanFull(),
+                Section::make(__('monitoring.control_charts.summary.chart_type'))->collapsible()->collapsed()->columns(3)->columnSpanFull()->schema([
+                    TextEntry::make('center_line')->label(__('monitoring.control_charts.summary.center_line'))->numeric(decimalPlaces: 2),
+                    TextEntry::make('ucl')->label(__('monitoring.control_charts.summary.ucl'))->numeric(decimalPlaces: 2),
+                    TextEntry::make('lcl')->label(__('monitoring.control_charts.summary.lcl'))->numeric(decimalPlaces: 2),
+                    TextEntry::make('points_count')->label(__('monitoring.control_charts.summary.points_count')),
+                    TextEntry::make('calculated_at')->label(__('monitoring.control_charts.summary.calculated_at'))->dateTime('Y-m-d H:i'),
+                ]),
+                Section::make(__('monitoring.control_charts.graph.title'))
+                    ->schema([
+                        ViewEntry::make('control_chart_graph')
+                            ->hiddenLabel()
+                            ->view('filament.infolists.control-chart-graph')
+                            ->columnSpanFull(),
+                    ])
                     ->columnSpanFull(),
             ]);
     }
@@ -220,9 +230,9 @@ class ControlChartResource extends Resource
                     ->badge()
                     ->formatStateUsing(fn (?string $state): string => static::chartTypeOptions()[$state] ?? (string) $state)
                     ->color(fn (?string $state): string => match ($state) {
-                        'i_chart', 'mr_chart' => 'info',
-                        'p_chart', 'u_chart' => 'warning',
-                        'c_chart' => 'success',
+                        'i_chart', 'mr_chart' => 'gray',
+                        'p_chart', 'u_chart' => 'gray',
+                        'c_chart' => 'gray',
                         default => 'gray',
                     }),
                 TextColumn::make('metric_name')
@@ -235,11 +245,11 @@ class ControlChartResource extends Resource
                     ->formatStateUsing(fn (?string $state): string => static::periodTypeOptions()[$state] ?? (string) $state),
                 TextColumn::make('period_start')
                     ->label(__('monitoring.control_charts.table.period_start'))
-                    ->dateTime()
+                    ->dateTime('Y-m-d H:i')
                     ->sortable(),
                 TextColumn::make('period_end')
                     ->label(__('monitoring.control_charts.table.period_end'))
-                    ->dateTime()
+                    ->dateTime('Y-m-d H:i')
                     ->sortable(),
                 TextColumn::make('center_line')
                     ->label(__('monitoring.control_charts.table.center_line'))
@@ -256,21 +266,22 @@ class ControlChartResource extends Resource
                     ->numeric(decimalPlaces: 4)
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
-                TextColumn::make('points_count')
+                TextColumn::make('points_count')->toggleable(isToggledHiddenByDefault: true)
                     ->label(__('monitoring.control_charts.table.points_count'))
                     ->sortable(),
-                TextColumn::make('out_of_control_count')
+                TextColumn::make('out_of_control_count')->tooltip(__('ux.help.spc'))
                     ->label(__('monitoring.control_charts.table.out_of_control_count'))
                     ->badge()
                     ->color(fn (int|string|null $state): string => (int) $state > 0 ? 'danger' : 'success')
                     ->sortable(),
-                TextColumn::make('calculated_at')
+                TextColumn::make('calculated_at')->toggleable(isToggledHiddenByDefault: true)
                     ->label(__('monitoring.control_charts.table.calculated_at'))
-                    ->dateTime()
+                    ->dateTime('Y-m-d H:i')
                     ->sortable(),
             ])
             ->emptyStateIcon(Heroicon::OutlinedPresentationChartLine)
             ->emptyStateHeading(__('monitoring.empty_states.no_control_charts'))
+            ->emptyStateDescription(__('ux.empty.spc_help'))
             ->filters([
                 SelectFilter::make('monitored_service_id')
                     ->label(__('monitoring.control_charts.filters.service'))

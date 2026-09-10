@@ -92,111 +92,129 @@ class ReportsPage extends Page
         return $schema
             ->columns(2)
             ->components([
-                Select::make('report_type')
-                    ->label(__('monitoring.reports.fields.report_type'))
-                    ->helperText(fn (Get $get): string => $get('report_type') === 'minitab_ready'
-                        ? __('monitoring.reports.helpers.minitab_ready')
-                        : __('monitoring.reports.helpers.report_type'))
-                    ->options(static::reportTypeOptions())
-                    ->required()
-                    ->live()
-                    ->native(false)
-                    ->afterStateUpdated(function (): void {
-                        $this->data['status'] = null;
-                        $this->data['slow_status'] = null;
-                        $this->data['severity'] = null;
-                        $this->data['incident_type'] = null;
-                        $this->data['chart_type'] = null;
-                        $this->data['metric_name'] = null;
-                        $this->data['bucket_size'] = $this->data['report_type'] === 'minitab_ready' ? 'hourly' : null;
-                    }),
-                Select::make('export_format')
-                    ->label(__('monitoring.reports.fields.export_format'))
-                    ->helperText(__('monitoring.reports.helpers.export_format'))
-                    ->options(static::exportFormatOptions())
-                    ->required()
-                    ->default('excel')
-                    ->native(false),
-                Select::make('service_id')
-                    ->label(__('monitoring.reports.fields.service_id'))
-                    ->helperText(__('monitoring.reports.helpers.service_id'))
-                    ->options(fn (): array => MonitoredService::query()
-                        ->orderBy('name')
-                        ->pluck('name', 'id')
-                        ->all())
-                    ->searchable()
-                    ->preload()
-                    ->native(false),
-                DatePicker::make('date_from')
-                    ->label(__('monitoring.reports.fields.date_from'))
-                    ->helperText(__('monitoring.reports.helpers.date_from'))
-                    ->beforeOrEqual(fn (Get $get): mixed => $get('date_to')),
-                DatePicker::make('date_to')
-                    ->label(__('monitoring.reports.fields.date_to'))
-                    ->helperText(__('monitoring.reports.helpers.date_to'))
-                    ->afterOrEqual(fn (Get $get): mixed => $get('date_from')),
-                DatePicker::make('report_month')
-                    ->label(__('monitoring.executive.report.month'))
-                    ->displayFormat('Y-m')
-                    ->visible(fn (Get $get): bool => $get('report_type') === 'executive_monthly')
-                    ->required(fn (Get $get): bool => $get('report_type') === 'executive_monthly'),
-                Select::make('status')
-                    ->label(__('monitoring.reports.fields.status'))
-                    ->options(fn (Get $get): array => match ($get('report_type')) {
-                        'service_checks' => [
-                            'success' => __('monitoring.statuses.success'),
-                            'failed' => __('monitoring.statuses.failed'),
-                        ],
-                        'incidents' => [
-                            'open' => __('monitoring.statuses.open'),
-                            'closed' => __('monitoring.statuses.closed'),
-                        ],
-                        default => [],
-                    })
-                    ->hidden(fn (Get $get): bool => ! in_array($get('report_type'), ['service_checks', 'incidents'], true))
-                    ->native(false),
-                Select::make('slow_status')
-                    ->label(__('monitoring.reports.fields.slow_status'))
-                    ->options([
-                        'slow' => __('monitoring.statuses.slow'),
-                        'not_slow' => __('monitoring.statuses.not_slow'),
-                    ])
-                    ->hidden(fn (Get $get): bool => $get('report_type') !== 'service_checks')
-                    ->native(false),
-                Select::make('period_type')
-                    ->label(__('monitoring.reports.fields.period_type'))
-                    ->helperText(__('monitoring.reports.helpers.period_type'))
-                    ->options(static::periodTypeOptions())
-                    ->hidden(fn (Get $get): bool => ! in_array($get('report_type'), ['reliability_metrics', 'control_charts', 'comprehensive'], true))
-                    ->native(false),
-                Select::make('chart_type')
-                    ->label(__('monitoring.reports.fields.chart_type'))
-                    ->helperText(__('monitoring.reports.helpers.chart_type'))
-                    ->options(static::chartTypeOptions())
-                    ->hidden(fn (Get $get): bool => ! in_array($get('report_type'), ['control_charts', 'comprehensive'], true))
-                    ->native(false),
-                Select::make('metric_name')
-                    ->label(__('monitoring.reports.fields.metric_name'))
-                    ->helperText(__('monitoring.reports.helpers.metric_name'))
-                    ->options(static::metricNameOptions())
-                    ->hidden(fn (Get $get): bool => ! in_array($get('report_type'), ['control_charts', 'comprehensive'], true))
-                    ->native(false),
-                Select::make('bucket_size')
-                    ->label(__('monitoring.reports.fields.bucket_size'))
-                    ->options(static::bucketSizeOptions())
-                    ->default('hourly')
-                    ->hidden(fn (Get $get): bool => $get('report_type') !== 'minitab_ready')
-                    ->native(false),
-                Select::make('severity')
-                    ->label(__('monitoring.reports.fields.severity'))
-                    ->options(static::severityOptions())
-                    ->hidden(fn (Get $get): bool => $get('report_type') !== 'incidents')
-                    ->native(false),
-                Select::make('incident_type')
-                    ->label(__('monitoring.reports.fields.incident_type'))
-                    ->options(static::incidentTypeOptions())
-                    ->hidden(fn (Get $get): bool => $get('report_type') !== 'incidents')
-                    ->native(false),
+                Section::make(__('ux.sections.report_type'))
+                    ->columns(2)
+                    ->columnSpanFull()
+                    ->schema([
+                        Select::make('report_type')
+                            ->label(__('monitoring.reports.fields.report_type'))
+                            ->helperText(fn (Get $get): string => __('ux.reports.'.($get('report_type') ?: 'service_checks')))
+                            ->options(static::reportTypeOptions())
+                            ->required()
+                            ->live()
+                            ->native(false)
+                            ->afterStateUpdated(function (): void {
+                                $this->data['status'] = null;
+                                $this->data['slow_status'] = null;
+                                $this->data['severity'] = null;
+                                $this->data['incident_type'] = null;
+                                $this->data['chart_type'] = null;
+                                $this->data['metric_name'] = null;
+                                $this->data['bucket_size'] = $this->data['report_type'] === 'minitab_ready' ? 'hourly' : null;
+                            }),
+                        Select::make('export_format')
+                            ->label(__('monitoring.reports.fields.export_format'))
+                            ->helperText(__('monitoring.reports.helpers.export_format'))
+                            ->options(static::exportFormatOptions())
+                            ->required()
+                            ->default('excel')
+                            ->native(false),
+                    ]),
+                Section::make(__('ux.sections.report_period'))
+                    ->columns(2)
+                    ->columnSpanFull()
+                    ->schema([
+                        DatePicker::make('date_from')
+                            ->hidden(fn (Get $get): bool => $get('report_type') === 'executive_monthly')
+                            ->label(__('monitoring.reports.fields.date_from'))
+                            ->helperText(__('monitoring.reports.helpers.date_from'))
+                            ->beforeOrEqual(fn (Get $get): mixed => $get('date_to')),
+                        DatePicker::make('date_to')
+                            ->hidden(fn (Get $get): bool => $get('report_type') === 'executive_monthly')
+                            ->label(__('monitoring.reports.fields.date_to'))
+                            ->helperText(__('monitoring.reports.helpers.date_to'))
+                            ->afterOrEqual(fn (Get $get): mixed => $get('date_from')),
+                        DatePicker::make('report_month')
+                            ->label(__('monitoring.executive.report.month'))
+                            ->displayFormat('Y-m')
+                            ->visible(fn (Get $get): bool => $get('report_type') === 'executive_monthly')
+                            ->required(fn (Get $get): bool => $get('report_type') === 'executive_monthly'),
+                    ]),
+                Section::make(__('ux.sections.report_filters'))
+                    ->columns(2)
+                    ->columnSpanFull()
+                    ->collapsible()->collapsed()
+                    ->visible(fn (Get $get): bool => $get('report_type') !== 'executive_monthly')
+                    ->schema([
+                        Select::make('service_id')
+                            ->hidden(fn (Get $get): bool => $get('report_type') === 'executive_monthly')
+                            ->label(__('monitoring.reports.fields.service_id'))
+                            ->helperText(__('monitoring.reports.helpers.service_id'))
+                            ->options(fn (): array => MonitoredService::query()
+                                ->orderBy('name')
+                                ->pluck('name', 'id')
+                                ->all())
+                            ->searchable()
+                            ->preload()
+                            ->native(false),
+                        Select::make('status')
+                            ->label(__('monitoring.reports.fields.status'))
+                            ->options(fn (Get $get): array => match ($get('report_type')) {
+                                'service_checks' => [
+                                    'success' => __('monitoring.statuses.success'),
+                                    'failed' => __('monitoring.statuses.failed'),
+                                ],
+                                'incidents' => [
+                                    'open' => __('monitoring.statuses.open'),
+                                    'closed' => __('monitoring.statuses.closed'),
+                                ],
+                                default => [],
+                            })
+                            ->hidden(fn (Get $get): bool => ! in_array($get('report_type'), ['service_checks', 'incidents'], true))
+                            ->native(false),
+                        Select::make('slow_status')
+                            ->label(__('monitoring.reports.fields.slow_status'))
+                            ->options([
+                                'slow' => __('monitoring.statuses.slow'),
+                                'not_slow' => __('monitoring.statuses.not_slow'),
+                            ])
+                            ->hidden(fn (Get $get): bool => $get('report_type') !== 'service_checks')
+                            ->native(false),
+                        Select::make('period_type')
+                            ->label(__('monitoring.reports.fields.period_type'))
+                            ->helperText(__('monitoring.reports.helpers.period_type'))
+                            ->options(static::periodTypeOptions())
+                            ->hidden(fn (Get $get): bool => ! in_array($get('report_type'), ['reliability_metrics', 'control_charts', 'comprehensive'], true))
+                            ->native(false),
+                        Select::make('chart_type')
+                            ->label(__('monitoring.reports.fields.chart_type'))
+                            ->helperText(__('monitoring.reports.helpers.chart_type'))
+                            ->options(static::chartTypeOptions())
+                            ->hidden(fn (Get $get): bool => ! in_array($get('report_type'), ['control_charts', 'comprehensive'], true))
+                            ->native(false),
+                        Select::make('metric_name')
+                            ->label(__('monitoring.reports.fields.metric_name'))
+                            ->helperText(__('monitoring.reports.helpers.metric_name'))
+                            ->options(static::metricNameOptions())
+                            ->hidden(fn (Get $get): bool => ! in_array($get('report_type'), ['control_charts', 'comprehensive'], true))
+                            ->native(false),
+                        Select::make('bucket_size')
+                            ->label(__('monitoring.reports.fields.bucket_size'))
+                            ->options(static::bucketSizeOptions())
+                            ->default('hourly')
+                            ->hidden(fn (Get $get): bool => $get('report_type') !== 'minitab_ready')
+                            ->native(false),
+                        Select::make('severity')
+                            ->label(__('monitoring.reports.fields.severity'))
+                            ->options(static::severityOptions())
+                            ->hidden(fn (Get $get): bool => $get('report_type') !== 'incidents')
+                            ->native(false),
+                        Select::make('incident_type')
+                            ->label(__('monitoring.reports.fields.incident_type'))
+                            ->options(static::incidentTypeOptions())
+                            ->hidden(fn (Get $get): bool => $get('report_type') !== 'incidents')
+                            ->native(false),
+                    ]),
             ]);
     }
 
@@ -204,7 +222,7 @@ class ReportsPage extends Page
     {
         return $schema
             ->components([
-                Section::make(__('monitoring.reports.page.section_title'))
+                Section::make(__('monitoring.reports.page.section_title'))->description(__('ux.help.report_language'))
                     ->schema([
                         Form::make([EmbeddedSchema::make('form')])
                             ->id('form')
@@ -212,7 +230,7 @@ class ReportsPage extends Page
                             ->footer([
                                 Actions::make([
                                     Action::make('export')
-                                        ->label(__('monitoring.reports.actions.export'))
+                                        ->label(__('ux.generate_report'))
                                         ->icon(Heroicon::OutlinedArrowDownTray)
                                         ->submit('export'),
                                 ]),

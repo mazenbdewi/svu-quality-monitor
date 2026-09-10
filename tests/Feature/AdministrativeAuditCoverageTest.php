@@ -191,7 +191,7 @@ class AdministrativeAuditCoverageTest extends TestCase
         $setting = NotificationSetting::current();
         $setting->update(['telegram_enabled' => true, 'telegram_bot_token' => 'synthetic-test-token', 'telegram_chat_id' => '123']);
         foreach (['telegram' => 'testTelegram', 'email' => 'testEmail'] as $channel => $action) {
-            Livewire::test(NotificationSettingsPage::class)->callAction(TestAction::make($action)->schemaComponent(true, 'content'))->assertNotified();
+            Livewire::test(NotificationSettingsPage::class)->callAction(TestAction::make($action)->schemaComponent(true, 'form'))->assertNotified();
             $this->audit('notification.'.$channel.'_test_requested');
         }
         $this->assertNoSecrets(['synthetic-test-token', $setting->getRawOriginal('telegram_bot_token')]);
@@ -253,7 +253,7 @@ class AdministrativeAuditCoverageTest extends TestCase
     {
         Livewire::test(CreateMonitoredService::class)->fillForm(['name' => '', 'url' => ''])->call('create')->assertHasFormErrors(['name', 'url']);
         Livewire::test(NotificationSettingsPage::class)->fillForm(['email_enabled' => true, 'email_recipients' => []])->call('save')->assertHasFormErrors();
-        Livewire::test(NotificationSettingsPage::class)->callAction(TestAction::make('testTelegram')->schemaComponent(true, 'content'))->assertNotified();
+        Livewire::test(NotificationSettingsPage::class)->callAction(TestAction::make('testTelegram')->schemaComponent(true, 'form'))->assertNotified();
         $this->assertDatabaseCount('audit_logs', 0);
     }
 }

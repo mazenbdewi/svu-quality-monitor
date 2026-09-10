@@ -88,6 +88,14 @@ class AuditLogResource extends Resource
         return $events[$event] ?? $event;
     }
 
+    public static function summary(AuditLog $record): string
+    {
+        $name = data_get($record->after, 'name') ?? data_get($record->before, 'name');
+        $target = is_string($name) ? $name : ($record->auditable_id ? '#'.$record->auditable_id : '');
+
+        return static::eventLabel($record->event).' — '.($record->actor?->name ?? __('administration.audit.system')).($target ? ' · '.$target : '');
+    }
+
     public static function safeJson(?array $payload): string
     {
         return $payload === null ? '-' : json_encode(app(AuditLogger::class)->sanitize($payload), JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE);
@@ -98,6 +106,7 @@ class AuditLogResource extends Resource
         return $schema->components([
             TextEntry::make('actor.name')->label(__('administration.audit.actor'))->placeholder(__('administration.audit.system')),
             TextEntry::make('event')->label(__('administration.audit.event'))->formatStateUsing(fn ($state) => static::eventLabel($state)),
+            TextEntry::make('technical_event')->label(__('ux.technical_event'))->state(fn (AuditLog $record): string => $record->event),
             TextEntry::make('description')->label(__('administration.audit.description'))->columnSpanFull(),
             TextEntry::make('auditable_type')->label(__('administration.audit.resource'))->placeholder('-'),
             TextEntry::make('auditable_id')->label(__('administration.audit.resource_id'))->placeholder('-'),
@@ -114,13 +123,13 @@ class AuditLogResource extends Resource
 
     public static function table(Table $table): Table
     {
-        return $table->defaultSort('created_at', 'desc')->columns([
+        return $table->modifyQueryUsing(fn (Builder $query): Builder => $query->with('actor'))->emptyStateHeading(__('ux.empty.audit'))->emptyStateDescription(__('ux.empty.audit_help'))->defaultSort('created_at', 'desc')->columns([
             TextColumn::make('created_at')->label(__('administration.audit.timestamp'))->dateTime(),
             TextColumn::make('actor.name')->label(__('administration.audit.actor'))->placeholder(__('administration.audit.system')),
-            TextColumn::make('event')->label(__('administration.audit.event'))->badge()->formatStateUsing(fn ($state) => static::eventLabel($state)),
-            TextColumn::make('auditable_type')->label(__('administration.audit.resource'))->formatStateUsing(fn ($state) => class_basename($state)),
-            TextColumn::make('description')->label(__('administration.audit.description'))->wrap(),
-            TextColumn::make('ip_address')->label(__('administration.audit.ip')),
+            TextColumn::make('event')->toggleable(isToggledHiddenByDefault: true)->label(__('administration.audit.event'))->badge()->formatStateUsing(fn ($state) => static::eventLabel($state)),
+            TextColumn::make('auditable_type')->toggleable(isToggledHiddenByDefault: true)->label(__('administration.audit.resource'))->formatStateUsing(fn ($state) => class_basename($state)),
+            TextColumn::make('description')->label(__('administration.audit.description'))->getStateUsing(fn (AuditLog $record): string => static::summary($record))->wrap(),
+            TextColumn::make('ip_address')->toggleable(isToggledHiddenByDefault: true)->label(__('administration.audit.ip')),
         ])->filters([
             SelectFilter::make('actor')->label(__('administration.audit.actor'))->relationship('actor', 'name')->searchable()->preload(),
             SelectFilter::make('event')->label(__('administration.audit.event'))->options(fn () => AuditLog::query()->distinct()->pluck('event', 'event')->map(fn ($event) => static::eventLabel($event))->all()),

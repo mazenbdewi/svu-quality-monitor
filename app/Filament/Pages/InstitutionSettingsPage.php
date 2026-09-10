@@ -12,6 +12,7 @@ use Filament\Pages\Page;
 use Filament\Schemas\Components\Actions;
 use Filament\Schemas\Components\EmbeddedSchema;
 use Filament\Schemas\Components\Form;
+use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Illuminate\Support\Facades\DB;
@@ -58,8 +59,10 @@ class InstitutionSettingsPage extends Page
     public function form(Schema $schema): Schema
     {
         return $schema->components([
-            TextInput::make('institution_name')->label(__('monitoring.executive.branding.name'))->required()->maxLength(255),
-            TextInput::make('institution_logo')->label(__('monitoring.executive.branding.logo'))->url()->maxLength(2048)->helperText(__('monitoring.executive.branding.logo_help')),
+            Section::make(__('monitoring.executive.branding.title'))->description(__('ux.help.institution'))->schema([
+                TextInput::make('institution_name')->label(__('monitoring.executive.branding.name'))->required()->maxLength(255),
+                TextInput::make('institution_logo')->label(__('monitoring.executive.branding.logo'))->url()->maxLength(2048)->helperText(__('monitoring.executive.branding.logo_help'))->extraInputAttributes(['dir' => 'ltr']),
+            ]),
         ]);
     }
 

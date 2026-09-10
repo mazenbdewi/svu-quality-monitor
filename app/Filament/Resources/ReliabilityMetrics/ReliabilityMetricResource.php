@@ -181,30 +181,30 @@ class ReliabilityMetricResource extends Resource
                     ->badge()
                     ->formatStateUsing(fn (?string $state): string => static::periodTypeOptions()[$state] ?? (string) $state)
                     ->color(fn (?string $state): string => match ($state) {
-                        'daily' => 'info',
-                        'weekly' => 'warning',
-                        'monthly' => 'success',
+                        'daily' => 'gray',
+                        'weekly' => 'gray',
+                        'monthly' => 'gray',
                         default => 'gray',
                     }),
                 TextColumn::make('period_start')
                     ->label(__('monitoring.reliability_metrics.table.period_start'))
-                    ->dateTime()
+                    ->dateTime('Y-m-d H:i')
                     ->sortable(),
                 TextColumn::make('period_end')
                     ->label(__('monitoring.reliability_metrics.table.period_end'))
-                    ->dateTime()
+                    ->dateTime('Y-m-d H:i')
                     ->sortable(),
-                TextColumn::make('total_checks')
+                TextColumn::make('total_checks')->toggleable(isToggledHiddenByDefault: true)
                     ->label(__('monitoring.reliability_metrics.table.total_checks'))
                     ->sortable(),
-                TextColumn::make('successful_checks')
+                TextColumn::make('successful_checks')->toggleable(isToggledHiddenByDefault: true)
                     ->label(__('monitoring.reliability_metrics.table.successful_checks'))
                     ->sortable(),
                 TextColumn::make('failed_checks')
                     ->label(__('monitoring.reliability_metrics.table.failed_checks'))
                     ->toggleable(isToggledHiddenByDefault: true)
                     ->sortable(),
-                TextColumn::make('incidents_count')
+                TextColumn::make('incidents_count')->toggleable(isToggledHiddenByDefault: true)
                     ->label(__('monitoring.reliability_metrics.table.incidents_count'))
                     ->badge()
                     ->color(fn (int|string|null $state): string => match (true) {
@@ -213,7 +213,7 @@ class ReliabilityMetricResource extends Resource
                         default => 'danger',
                     })
                     ->sortable(),
-                TextColumn::make('availability_percent')
+                TextColumn::make('availability_percent')->tooltip(__('ux.help.availability'))
                     ->label(__('monitoring.reliability_metrics.table.availability_percent'))
                     ->badge()
                     ->formatStateUsing(fn (int|float|string|null $state): string => $state === null ? '' : number_format((float) $state, 4).'%')
@@ -223,7 +223,7 @@ class ReliabilityMetricResource extends Resource
                         default => 'danger',
                     })
                     ->sortable(),
-                TextColumn::make('quality_level')
+                TextColumn::make('quality_level')->toggleable(isToggledHiddenByDefault: true)
                     ->label(__('monitoring.interpretation.labels.quality_level'))
                     ->badge()
                     ->getStateUsing(fn (ReliabilityMetric $record): string => app(ResearchInterpretationService::class)->availabilityLevel(
@@ -233,27 +233,28 @@ class ReliabilityMetricResource extends Resource
                     ->color(fn (ReliabilityMetric $record): string => app(ResearchInterpretationService::class)->availabilityColor(
                         $record->availability_percent === null ? null : (float) $record->availability_percent,
                     )),
-                TextColumn::make('mtbf_minutes')
+                TextColumn::make('mtbf_minutes')->tooltip(__('ux.help.mtbf'))
                     ->label(__('monitoring.reliability_metrics.table.mtbf_minutes'))
                     ->formatStateUsing(fn (int|float|string|null $state): string => $state === null ? __('monitoring.dashboard.empty.value') : trans_choice('monitoring.units.minutes', (int) round((float) $state), ['count' => number_format((float) $state, 2)]))
                     ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
-                TextColumn::make('mttr_minutes')
+                    ->toggleable(),
+                TextColumn::make('mttr_minutes')->tooltip(__('ux.help.mttr'))
                     ->label(__('monitoring.reliability_metrics.table.mttr_minutes'))
                     ->formatStateUsing(fn (int|float|string|null $state): string => $state === null ? __('monitoring.dashboard.empty.value') : trans_choice('monitoring.units.minutes', (int) round((float) $state), ['count' => number_format((float) $state, 2)]))
                     ->sortable(),
-                TextColumn::make('failure_rate')
+                TextColumn::make('failure_rate')->tooltip(__('ux.help.failure_rate'))
                     ->label(__('monitoring.reliability_metrics.table.failure_rate'))
                     ->numeric(decimalPlaces: 8)
                     ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
-                TextColumn::make('calculated_at')
+                    ->toggleable(),
+                TextColumn::make('calculated_at')->toggleable(isToggledHiddenByDefault: true)
                     ->label(__('monitoring.reliability_metrics.table.calculated_at'))
-                    ->dateTime()
+                    ->dateTime('Y-m-d H:i')
                     ->sortable(),
             ])
             ->emptyStateIcon(Heroicon::OutlinedChartBar)
             ->emptyStateHeading(__('monitoring.empty_states.no_reliability_metrics'))
+            ->emptyStateDescription(__('ux.empty.reliability_help'))
             ->filters([
                 SelectFilter::make('monitored_service_id')
                     ->label(__('monitoring.reliability_metrics.filters.service'))
@@ -356,7 +357,7 @@ class ReliabilityMetricResource extends Resource
                                     ->weight(FontWeight::SemiBold)
                                     ->extraAttributes(['class' => $valueClasses])
                                     ->extraEntryWrapperAttributes(['class' => $cardClasses]),
-                                TextEntry::make('availability_percent')
+                                TextEntry::make('availability_percent')->tooltip(__('ux.help.availability'))
                                     ->label(__('monitoring.reliability_metrics.table.availability_percent'))
                                     ->formatStateUsing(fn (mixed $state): string => $state === null ? __('monitoring.dashboard.empty.value') : number_format((float) $state, 4).'%')
                                     ->badge()
@@ -369,12 +370,13 @@ class ReliabilityMetricResource extends Resource
                                     ->badge()
                                     ->color(fn (mixed $state): string => (int) $state === 0 ? 'success' : 'warning'),
                                 TextEntry::make('downtime_minutes')
-                                    ->label(__('monitoring.reliability_metrics.table.downtime_minutes'))
+                                    ->label(__('monitoring.reliability_metrics.fields.downtime_minutes.label'))
                                     ->formatStateUsing(fn (mixed $state): string => $formatNumber($state, 0)),
-                                TextEntry::make('mttr_minutes')
+                                TextEntry::make('mtbf_minutes')->label(__('monitoring.reliability_metrics.table.mtbf_minutes'))->tooltip(__('ux.help.mtbf'))->formatStateUsing(fn (mixed $state): string => $formatNumber($state, 2)),
+                                TextEntry::make('mttr_minutes')->tooltip(__('ux.help.mttr'))
                                     ->label(__('monitoring.reliability_metrics.table.mttr_minutes'))
                                     ->formatStateUsing(fn (mixed $state): string => $formatNumber($state, 2)),
-                                TextEntry::make('failure_rate')
+                                TextEntry::make('failure_rate')->tooltip(__('ux.help.failure_rate'))
                                     ->label(__('monitoring.reliability_metrics.table.failure_rate'))
                                     ->formatStateUsing(fn (mixed $state): string => $formatNumber($state, 8)),
                             ]),

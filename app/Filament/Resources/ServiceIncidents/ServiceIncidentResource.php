@@ -10,6 +10,7 @@ use App\Services\IncidentAcknowledgementService;
 use BackedEnum;
 use Carbon\Carbon;
 use Filament\Actions\Action;
+use Filament\Actions\ActionGroup;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
@@ -18,6 +19,7 @@ use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
+use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
@@ -138,7 +140,7 @@ class ServiceIncidentResource extends Resource
             ->defaultSort('started_at', 'desc')
             ->columns([
                 TextColumn::make('monitoredService.name')
-                    ->label(__('monitoring.service_incidents.table.monitored_service.name'))
+                    ->label(__('monitoring.service_incidents.table.monitored_service.name'))->wrap()->limit(28)
                     ->searchable()
                     ->sortable(),
                 TextColumn::make('status')
@@ -150,48 +152,52 @@ class ServiceIncidentResource extends Resource
                         'closed' => 'success',
                         default => 'gray',
                     }),
-                TextColumn::make('incident_type')
+                TextColumn::make('incident_type')->toggleable(isToggledHiddenByDefault: true)
                     ->label(__('monitoring.service_incidents.table.incident_type'))
                     ->badge()
                     ->formatStateUsing(fn (?string $state): string => static::incidentTypeOptions()[$state] ?? (string) $state)
                     ->color(fn (?string $state): string => match ($state) {
                         'down', 'timeout', 'connection_error' => 'danger',
                         'server_error' => 'warning',
-                        'slow', 'keyword_missing', 'mixed' => 'info',
+                        'slow', 'keyword_missing', 'mixed' => 'warning',
                         default => 'gray',
                     }),
-                TextColumn::make('severity')
+                TextColumn::make('severity')->toggleable(isToggledHiddenByDefault: true)
                     ->label(__('monitoring.service_incidents.table.severity'))
                     ->badge()
                     ->formatStateUsing(fn (?string $state): string => static::severityOptions()[$state] ?? (string) $state)
                     ->color(fn (?string $state): string => match ($state) {
                         'critical' => 'danger',
                         'high' => 'warning',
-                        'medium' => 'info',
+                        'medium' => 'gray',
                         'low' => 'gray',
                         default => 'gray',
                     }),
                 TextColumn::make('started_at')
                     ->label(__('monitoring.service_incidents.table.started_at'))
-                    ->dateTime()
+                    ->dateTime('Y-m-d H:i')
                     ->sortable(),
                 TextColumn::make('ended_at')
                     ->label(__('monitoring.service_incidents.table.ended_at'))
-                    ->dateTime()
+                    ->placeholder(__('ux.not_recovered'))->wrap()
+                    ->dateTime('Y-m-d H:i')
                     ->sortable(),
                 TextColumn::make('duration_minutes')
                     ->label(__('monitoring.service_incidents.table.duration_minutes'))
+                    ->getStateUsing(fn (ServiceIncident $record): ?int => $record->duration_minutes ?? ($record->status === 'open' ? max(0, (int) $record->started_at->diffInMinutes(now())) : null))
+                    ->description(fn (ServiceIncident $record): ?string => $record->status === 'open' ? __('ux.ongoing') : null)
                     ->formatStateUsing(fn (int|string|null $state): string => $state === null ? '-' : trans_choice('monitoring.units.minutes', (int) $state, ['count' => number_format((int) $state)]))
                     ->sortable(),
-                TextColumn::make('updated_at')
+                TextColumn::make('updated_at')->toggleable(isToggledHiddenByDefault: true)
                     ->label(__('monitoring.service_incidents.table.updated_at'))
-                    ->dateTime()
+                    ->dateTime('Y-m-d H:i')
                     ->sortable(),
-                TextColumn::make('acknowledgedBy.name')->label('Acknowledged by'),
-                TextColumn::make('acknowledged_at')->label('Acknowledged at')->dateTime(),
+                TextColumn::make('acknowledgedBy.name')->toggleable(isToggledHiddenByDefault: true)->label(__('ux.acknowledged_by')),
+                TextColumn::make('acknowledged_at')->label(__('ux.acknowledged_at'))->wrap()->dateTime('Y-m-d H:i')->placeholder(__('ux.not_acknowledged')),
             ])
             ->emptyStateIcon(Heroicon::OutlinedExclamationTriangle)
             ->emptyStateHeading(__('monitoring.empty_states.no_incidents'))
+            ->emptyStateDescription(__('ux.empty.incidents_help'))
             ->filters([
                 Filter::make('open_incidents')
                     ->label(__('monitoring.service_incidents.filters.open'))
@@ -247,16 +253,18 @@ class ServiceIncidentResource extends Resource
             ])
             ->recordActions([
                 Action::make('acknowledge')
-                    ->label('Acknowledge incident')
+                    ->label(__('ux.acknowledge'))->color('gray')
                     ->visible(fn (ServiceIncident $record): bool => $record->status === 'open' && $record->acknowledged_at === null && (auth()->user()?->can('incidents.acknowledge') ?? false))
                     ->action(function (ServiceIncident $record): void {
                         abort_unless(auth()->user()?->can('incidents.acknowledge'), 403);
                         app(IncidentAcknowledgementService::class)->acknowledge(auth()->user(), $record);
+                        Notification::make()->success()->title(__('ux.acknowledged'))->send();
                     }),
-                static::markClosedAction(),
-                static::reopenAction(),
-                EditAction::make()
-                    ->label(__('monitoring.actions.edit')),
+                ActionGroup::make([
+                    static::markClosedAction(),
+                    static::reopenAction(),
+                    EditAction::make()->label(__('monitoring.actions.edit')),
+                ])->label(__('monitoring.actions.edit'))->color('gray'),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([

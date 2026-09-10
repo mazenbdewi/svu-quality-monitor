@@ -43,17 +43,16 @@ class NotificationSettingsPage extends Page
         $this->data = $setting->only(['telegram_enabled', 'telegram_chat_id', 'email_enabled', 'email_recipients', 'ssl_expiry_notifications_enabled']);
     }
 
+    public function getTitle(): string
+    {
+        return __('monitoring.notifications.settings');
+    }
+
     public function content(Schema $schema): Schema
     {
         return $schema->components([
-            Section::make(__('monitoring.notifications.settings'))->schema([
-                Form::make([EmbeddedSchema::make('form')])->id('form')->livewireSubmitHandler('save'),
-            ])->footer([
-                Actions::make([
-                    Action::make('save')->label(__('monitoring.notifications.save'))->submit('save'),
-                    Action::make('testTelegram')->label(__('monitoring.notifications.test_telegram'))->action(fn (): Notification => $this->queueTest('telegram')),
-                    Action::make('testEmail')->label(__('monitoring.notifications.test_email'))->action(fn (): Notification => $this->queueTest('email')),
-                ]),
+            Form::make([EmbeddedSchema::make('form')])->id('form')->livewireSubmitHandler('save')->footer([
+                Actions::make([Action::make('save')->label(__('monitoring.notifications.save'))->submit('save')]),
             ]),
         ]);
     }
@@ -61,13 +60,23 @@ class NotificationSettingsPage extends Page
     public function form(Schema $schema): Schema
     {
         return $schema->statePath('data')->components([
-            Toggle::make('telegram_enabled')->label(__('monitoring.notifications.telegram_enabled')),
-            TextInput::make('telegram_bot_token')->password()->revealable(),
-            Toggle::make('remove_telegram_token')->label(__('administration.remove_telegram_token'))->default(false),
-            TextInput::make('telegram_chat_id'),
-            Toggle::make('email_enabled')->label(__('monitoring.notifications.email_enabled')),
-            TagsInput::make('email_recipients')->label(__('monitoring.notifications.email_recipients'))->nestedRecursiveRules(['email']),
-            Toggle::make('ssl_expiry_notifications_enabled')->label(__('monitoring.notifications.ssl_expiry_notifications_enabled')),
+            Section::make(__('ux.telegram'))->description(__('ux.help.saved_channel'))->schema([
+                Toggle::make('telegram_enabled')->label(__('monitoring.notifications.telegram_enabled')),
+                TextInput::make('telegram_bot_token')->label(__('ux.telegram_token'))->password()->revealable()->autocomplete('new-password')->helperText(__('ux.help.token'))->extraInputAttributes(['dir' => 'ltr']),
+                TextInput::make('telegram_chat_id')->label(__('ux.telegram_chat'))->extraInputAttributes(['dir' => 'ltr']),
+                Toggle::make('remove_telegram_token')->label(__('administration.remove_telegram_token'))->default(false),
+            ])->footer([Actions::make([
+                Action::make('testTelegram')->label(__('monitoring.notifications.test_telegram'))->color('gray')->action(fn (): Notification => $this->queueTest('telegram')),
+            ])]),
+            Section::make(__('ux.email'))->description(__('ux.help.saved_channel'))->schema([
+                Toggle::make('email_enabled')->label(__('monitoring.notifications.email_enabled')),
+                TagsInput::make('email_recipients')->label(__('monitoring.notifications.email_recipients'))->nestedRecursiveRules(['email']),
+            ])->footer([Actions::make([
+                Action::make('testEmail')->label(__('monitoring.notifications.test_email'))->color('gray')->action(fn (): Notification => $this->queueTest('email')),
+            ])]),
+            Section::make(__('ux.sections.notifications'))->schema([
+                Toggle::make('ssl_expiry_notifications_enabled')->label(__('monitoring.notifications.ssl_expiry_notifications_enabled')),
+            ]),
         ]);
     }
 
@@ -120,6 +129,11 @@ class NotificationSettingsPage extends Page
         if (($data['email_enabled'] ?? false) && (! is_array($recipients) || $recipients === [] || collect($recipients)->contains(fn (mixed $email): bool => ! is_string($email) || filter_var($email, FILTER_VALIDATE_EMAIL) === false))) {
             throw ValidationException::withMessages(['data.email_recipients' => __('monitoring.notifications.invalid_email')]);
         }
+    }
+
+    public static function getNavigationGroup(): string
+    {
+        return __('monitoring.navigation_groups.system');
     }
 
     public static function getNavigationLabel(): string

@@ -14,6 +14,7 @@ use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
 use Filament\Http\Middleware\DisableBladeIconComponents;
 use Filament\Http\Middleware\DispatchServingFilamentEvent;
+use Filament\Navigation\NavigationGroup;
 use Filament\Panel;
 use Filament\PanelProvider;
 use Filament\Support\Colors\Color;
@@ -34,6 +35,14 @@ class AdminPanelProvider extends PanelProvider
             ->id('admin')
             ->path('admin')
             ->login()
+            ->viteTheme('resources/css/filament/admin/theme.css')
+            ->navigationGroups([
+                NavigationGroup::make()->label(fn (): string => __('monitoring.navigation_groups.monitoring')),
+                NavigationGroup::make()->label(fn (): string => __('monitoring.navigation_groups.analysis_reliability')),
+                NavigationGroup::make()->label(fn (): string => __('monitoring.navigation_groups.reports')),
+                NavigationGroup::make()->label(fn (): string => __('monitoring.navigation_groups.system')),
+                NavigationGroup::make()->label(fn (): string => __('monitoring.navigation_groups.study_methodology')),
+            ])
             ->colors([
                 'primary' => Color::Amber,
             ])

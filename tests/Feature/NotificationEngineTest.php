@@ -54,7 +54,7 @@ class NotificationEngineTest extends TestCase
         $user->assignRole('administrator');
         Livewire::actingAs($user)
             ->test(NotificationSettingsPage::class)
-            ->callAction(TestAction::make('testEmail')->schemaComponent(true, 'content'))
+            ->callAction(TestAction::make('testEmail')->schemaComponent(true, 'form'))
             ->assertNotified();
     }
 

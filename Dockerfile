@@ -81,6 +81,9 @@ RUN if [ -f package-lock.json ]; then \
 
 COPY . .
 
+# Compile the panel theme against the installed Filament version.
+COPY --from=vendor /app/vendor /app/vendor
+
 RUN npm run build
 
 

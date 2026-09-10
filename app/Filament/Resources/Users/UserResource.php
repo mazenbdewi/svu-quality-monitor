@@ -98,13 +98,14 @@ class UserResource extends Resource
     {
         return Action::make($active ? 'activate' : 'deactivate')
             ->label(__('administration.'.($active ? 'activate' : 'deactivate')))
-            ->color($active ? 'success' : 'warning')->requiresConfirmation()
+            ->color($active ? 'success' : 'warning')->requiresConfirmation(! $active)
             ->authorize(fn (User $record): bool => static::canEdit($record))
             ->visible(fn (User $record): bool => $record->is_active !== $active)
             ->action(function (User $record) use ($active): void {
                 try {
                     $service = app(UserAdministrationService::class);
                     $active ? $service->activate(auth()->user(), $record) : $service->deactivate(auth()->user(), $record);
+                    Notification::make()->success()->title(__('administration.audit.events.'.($active ? 'user.activated' : 'user.deactivated')))->send();
                 } catch (\DomainException $exception) {
                     Notification::make()->danger()->title($exception->getMessage())->send();
                 }
@@ -113,15 +114,15 @@ class UserResource extends Resource
 
     public static function table(Table $table): Table
     {
-        return $table->columns([
+        return $table->emptyStateHeading(__('ux.empty.users'))->emptyStateDescription(__('ux.empty.filters'))->columns([
             TextColumn::make('name')->label(__('administration.name'))->searchable(),
             TextColumn::make('email')->label(__('administration.email'))->searchable(),
-            TextColumn::make('roles.name')->label(__('administration.role'))->badge()->formatStateUsing(fn ($state) => __('administration.roles.'.$state)),
+            TextColumn::make('roles.name')->label(__('administration.role'))->badge()->color('gray')->formatStateUsing(fn ($state) => __('administration.roles.'.$state)),
             TextColumn::make('is_active')->label(__('administration.status'))->badge()
                 ->formatStateUsing(fn ($state) => __('administration.'.($state ? 'active' : 'inactive')))
                 ->color(fn ($state) => $state ? 'success' : 'gray'),
             TextColumn::make('last_login_at')->label(__('administration.last_login'))->dateTime()->placeholder(__('administration.never')),
-            TextColumn::make('created_at')->label(__('administration.created_at'))->dateTime(),
+            TextColumn::make('created_at')->toggleable(isToggledHiddenByDefault: true)->label(__('administration.created_at'))->dateTime(),
         ])->filters([
             SelectFilter::make('roles')->label(__('administration.role'))->relationship('roles', 'name')
                 ->getOptionLabelFromRecordUsing(fn ($record) => __('administration.roles.'.$record->name)),

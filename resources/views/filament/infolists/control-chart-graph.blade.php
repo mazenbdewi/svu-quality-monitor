@@ -100,8 +100,12 @@
                         plugins: {
                             legend: {
                                 position: 'bottom',
+                                rtl: @js(app()->getLocale() === 'ar'),
+                                textDirection: @js(app()->getLocale() === 'ar' ? 'rtl' : 'ltr'),
                             },
                             tooltip: {
+                                rtl: @js(app()->getLocale() === 'ar'),
+                                textDirection: @js(app()->getLocale() === 'ar' ? 'rtl' : 'ltr'),
                                 callbacks: {
                                     label: (context) => {
                                         const label = context.dataset.label || '';

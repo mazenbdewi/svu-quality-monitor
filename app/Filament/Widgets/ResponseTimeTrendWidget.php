@@ -8,12 +8,9 @@ use Filament\Widgets\ChartWidget;
 
 class ResponseTimeTrendWidget extends ChartWidget
 {
-    protected static ?int $sort = 6;
+    protected int|string|array $columnSpan = 'full';
 
-    protected int|string|array $columnSpan = [
-        'md' => 1,
-        'xl' => 1,
-    ];
+    protected static ?int $sort = 6;
 
     public ?string $filter = 'all';
 

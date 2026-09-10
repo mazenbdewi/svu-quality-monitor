@@ -182,7 +182,8 @@ class MonitoredService extends Model
             'healthy' => 'success',
             'slow' => 'warning',
             'critical' => 'danger',
-            'pending_failure', 'recovering', 'maintenance' => 'warning',
+            'pending_failure', 'recovering' => 'warning',
+            'maintenance' => 'gray',
             'down' => 'danger',
             default => 'gray',
         };

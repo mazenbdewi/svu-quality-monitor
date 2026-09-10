@@ -135,9 +135,11 @@ class SystemHealthIndicatorTest extends TestCase
             ->assertSee('data-system-health-indicator="queue"', false)
             ->assertSee('aria-label="'.e(__('monitoring.operations.health.indicator.scheduler.down')).'"', false)
             ->assertSee('aria-label="'.e(__('monitoring.operations.health.indicator.queue.down')).'"', false)
-            ->assertDontSee('fi-badge', false)
             ->assertSee(SystemOperationsPage::getUrl())
             ->assertSee('wire:poll.60s="refreshHealth"', false);
+
+        // Status badges elsewhere on the operations page do not change the topbar dots.
+        Livewire::test(SystemHealthIndicator::class)->assertDontSee('fi-badge', false);
     }
 
     public function test_indicator_statuses_are_translated_in_english_and_arabic(): void

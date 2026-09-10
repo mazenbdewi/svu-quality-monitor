@@ -3,7 +3,7 @@
 return [
     'remove_telegram_token' => 'إزالة رمز تيليغرام المحفوظ',
     'users' => 'المستخدمون', 'user' => 'مستخدم', 'name' => 'الاسم', 'email' => 'البريد الإلكتروني', 'password' => 'كلمة المرور', 'role' => 'الدور', 'status' => 'الحالة', 'active' => 'نشط', 'inactive' => 'غير نشط', 'activate' => 'تفعيل', 'deactivate' => 'تعطيل', 'last_login' => 'آخر تسجيل دخول', 'never' => 'لم يسجل الدخول بعد', 'created_at' => 'تاريخ الإنشاء',
-    'roles' => ['viewer' => 'مشاهد', 'operator' => 'مشغّل', 'administrator' => 'مسؤول', 'super_admin' => 'مسؤول أعلى'],
+    'roles' => ['viewer' => 'قارئ / مدقق', 'operator' => 'مشغل النظام', 'administrator' => 'مدير النظام', 'super_admin' => 'المسؤول الأعلى'],
     'errors' => ['super_admin' => 'المسؤول الأعلى فقط يستطيع منح هذا الدور أو تعديل مسؤول أعلى.', 'last_super_admin' => 'لا يمكن تعطيل آخر مسؤول أعلى نشط أو إزالة دوره.'],
     'audit' => ['title' => 'سجل التدقيق', 'entry' => 'سجل تدقيق', 'actor' => 'المنفّذ', 'event' => 'الحدث', 'resource' => 'نوع المورد', 'resource_id' => 'معرّف المورد', 'description' => 'الوصف', 'timestamp' => 'التاريخ والوقت', 'ip' => 'عنوان IP', 'user_agent' => 'وكيل المستخدم', 'before' => 'قبل', 'after' => 'بعد', 'context' => 'البيانات الوصفية', 'from' => 'من تاريخ', 'to' => 'إلى تاريخ', 'dates' => 'الفترة الزمنية', 'system' => 'النظام / غير متاح',
         'events' => [

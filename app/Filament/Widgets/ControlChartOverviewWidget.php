@@ -22,9 +22,9 @@ class ControlChartOverviewWidget extends StatsOverviewWidget
 
     /** @var int | array<string, ?int> | null */
     protected int|array|null $columns = [
-        '@xl' => 5,
-        '@lg' => 3,
-        '!@lg' => 2,
+        'default' => 1,
+        'sm' => 2,
+        'lg' => 4,
     ];
 
     /** @return array<Stat> */
@@ -33,48 +33,17 @@ class ControlChartOverviewWidget extends StatsOverviewWidget
         $status = (int) $this->record->out_of_control_count > 0 ? 'out_of_control' : 'normal';
 
         return [
-            Stat::make(__('monitoring.control_charts.summary.service'), $this->text($this->record->monitoredService?->name ?? __('monitoring.dashboard.empty.value')))
-                ->icon(Heroicon::OutlinedRectangleStack)
-                ->color('info'),
-            Stat::make(__('monitoring.control_charts.summary.chart_type'), $this->text(ControlChartResource::chartTypeOptions()[$this->record->chart_type] ?? $this->record->chart_type))
-                ->icon(Heroicon::OutlinedPresentationChartLine)
-                ->color('info'),
-            Stat::make(__('monitoring.control_charts.summary.metric_name'), $this->text(ControlChartResource::metricNameOptions()[$this->record->metric_name] ?? $this->record->metric_name))
-                ->icon(Heroicon::OutlinedChartBar)
-                ->color('info'),
-            Stat::make(__('monitoring.control_charts.summary.period_from'), $this->ltr($this->formatDate($this->record->period_start), 'cc-card-value'))
-                ->icon(Heroicon::OutlinedCalendarDays)
-                ->color('gray'),
-            Stat::make(__('monitoring.control_charts.summary.period_until'), $this->ltr($this->formatDate($this->record->period_end), 'cc-card-value'))
-                ->icon(Heroicon::OutlinedCalendarDays)
-                ->color('gray'),
-            Stat::make(__('monitoring.control_charts.summary.points_count'), $this->ltr(number_format((int) $this->record->points_count)))
-                ->icon(Heroicon::OutlinedNumberedList)
-                ->color('gray'),
-            Stat::make($this->ltr('CL', 'cc-card-title'), $this->ltr($this->formatNumber($this->record->center_line)))
-                ->description($this->secondary(__('monitoring.control_charts.summary.center_line')))
-                ->icon(Heroicon::OutlinedMinus)
-                ->color('info'),
-            Stat::make($this->ltr('UCL', 'cc-card-title'), $this->ltr($this->formatNumber($this->record->ucl)))
-                ->description($this->secondary(__('monitoring.control_charts.summary.ucl')))
-                ->icon(Heroicon::OutlinedArrowTrendingUp)
-                ->color('danger'),
-            Stat::make($this->ltr('LCL', 'cc-card-title'), $this->ltr($this->formatNumber($this->record->lcl)))
-                ->description($this->secondary(__('monitoring.control_charts.summary.lcl')))
-                ->icon(Heroicon::OutlinedArrowTrendingDown)
-                ->color('warning'),
+            Stat::make(__('monitoring.control_charts.summary.process_status'), $this->text(__("monitoring.control_charts.statuses.{$status}")))
+                ->description(__('ux.help.spc'))
+                ->icon($status === 'normal' ? Heroicon::OutlinedCheckCircle : Heroicon::OutlinedExclamationTriangle)
+                ->color($status === 'normal' ? 'success' : 'danger'),
             Stat::make(__('monitoring.control_charts.summary.out_of_control_points'), $this->ltr(number_format((int) $this->record->out_of_control_count)))
                 ->icon(Heroicon::OutlinedExclamationTriangle)
                 ->color((int) $this->record->out_of_control_count > 0 ? 'danger' : 'success'),
-            Stat::make(__('monitoring.control_charts.summary.process_status'), $this->text(__("monitoring.control_charts.statuses.{$status}")))
-                ->icon($status === 'normal' ? Heroicon::OutlinedCheckCircle : Heroicon::OutlinedExclamationTriangle)
-                ->color($status === 'normal' ? 'success' : 'danger'),
-            Stat::make(__('monitoring.control_charts.summary.calculated_date'), $this->ltr($this->formatDate($this->record->calculated_at), 'cc-card-value'))
-                ->icon(Heroicon::OutlinedClock)
-                ->color('gray'),
-            Stat::make(__('monitoring.control_charts.summary.calculated_at'), $this->ltr($this->formatTime($this->record->calculated_at), 'cc-card-value'))
-                ->icon(Heroicon::OutlinedClock)
-                ->color('gray'),
+            Stat::make(__('monitoring.control_charts.summary.chart_type'), $this->text(ControlChartResource::chartTypeOptions()[$this->record->chart_type] ?? $this->record->chart_type))
+                ->description(__('ux.help.control_chart'))->color('gray'),
+            Stat::make(__('monitoring.control_charts.summary.period'), $this->ltr($this->formatDate($this->record->period_start).' — '.$this->formatDate($this->record->period_end), 'cc-card-value'))
+                ->description($this->formatTime($this->record->calculated_at))->color('gray'),
         ];
     }
 

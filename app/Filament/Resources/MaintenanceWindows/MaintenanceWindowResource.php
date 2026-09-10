@@ -99,21 +99,21 @@ class MaintenanceWindowResource extends Resource
 
     public static function table(Table $table): Table
     {
-        return $table->defaultSort('starts_at', 'desc')->columns([
+        return $table->modifyQueryUsing(fn ($query) => $query->with('monitoredServices:id,name'))->emptyStateIcon(Heroicon::OutlinedWrenchScrewdriver)->emptyStateHeading(__('ux.empty.maintenance'))->emptyStateDescription(__('ux.empty.maintenance_help'))->defaultSort('starts_at', 'desc')->columns([
             TextColumn::make('name')->label(__('monitoring.maintenance.table.name'))->searchable()->sortable(),
             TextColumn::make('services')->label(__('monitoring.maintenance.table.services'))
                 ->getStateUsing(fn (MaintenanceWindow $record): string => $record->applies_to_all_services
                     ? __('monitoring.maintenance.all_services')
                     : $record->monitoredServices->pluck('name')->join(', '))
                 ->wrap(),
-            TextColumn::make('starts_at')->label(__('monitoring.maintenance.table.starts_at'))->dateTime()->sortable(),
-            TextColumn::make('ends_at')->label(__('monitoring.maintenance.table.ends_at'))->dateTime()->sortable(),
+            TextColumn::make('starts_at')->label(__('monitoring.maintenance.table.starts_at'))->dateTime('Y-m-d H:i')->sortable(),
+            TextColumn::make('ends_at')->label(__('monitoring.maintenance.table.ends_at'))->dateTime('Y-m-d H:i')->sortable(),
             TextColumn::make('duration')->label(__('monitoring.maintenance.table.duration'))
                 ->getStateUsing(fn (MaintenanceWindow $record): string => trans_choice('monitoring.units.minutes', $record->durationMinutes(), ['count' => number_format($record->durationMinutes())])),
             TextColumn::make('status')->label(__('monitoring.maintenance.table.status'))->badge()
                 ->getStateUsing(fn (MaintenanceWindow $record): string => __('monitoring.maintenance.statuses.'.$record->statusAt()))
                 ->color(fn (MaintenanceWindow $record): string => match ($record->statusAt()) {
-                    'active' => 'warning', 'scheduled' => 'info', default => 'gray'
+                    'active' => 'gray', 'scheduled' => 'gray', default => 'gray'
                 }),
         ])->recordActions([
             EditAction::make()->label(__('monitoring.actions.edit'))->visible(fn (MaintenanceWindow $record): bool => $record->statusAt() !== 'completed'),
