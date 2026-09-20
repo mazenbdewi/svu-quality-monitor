@@ -53,6 +53,7 @@ class MinitabReliabilityMetricsSheet implements FromQuery, ShouldAutoSize, WithE
             'mtbf_minutes',
             'mttr_minutes',
             'failure_rate',
+            'measurement_context',
         ];
     }
 
@@ -77,6 +78,7 @@ class MinitabReliabilityMetricsSheet implements FromQuery, ShouldAutoSize, WithE
             $row->mtbf_minutes === null ? null : (float) $row->mtbf_minutes,
             $row->mttr_minutes === null ? null : (float) $row->mttr_minutes,
             $row->failure_rate === null ? null : (float) $row->failure_rate,
+            $row->measurement_context === null ? null : json_encode($row->measurement_context, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR),
         ];
     }
 

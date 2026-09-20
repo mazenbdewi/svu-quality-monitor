@@ -9,6 +9,7 @@ use App\Filament\Resources\MonitoredServices\Pages\ListMonitoredServices;
 use App\Filament\Resources\MonitoredServices\RelationManagers\SlaMetricsRelationManager;
 use App\Models\MonitoredService;
 use App\Models\ServiceCheck;
+use App\Monitoring\MeasurementLimits;
 use App\Services\AdministrativeAudit;
 use App\Services\ServiceCheckRunner;
 use BackedEnum;
@@ -197,7 +198,7 @@ class MonitoredServiceResource extends Resource
                             ->visible(fn (Get $get): bool => $get('check_type') === 'http'),
                         TextInput::make('check_config.timeout_seconds')
                             ->label(__('monitoring.monitored_services.fields.timeout_seconds.label'))
-                            ->integer()->minValue(1)->maxValue(60)->default(10)
+                            ->integer()->minValue(1)->maxValue(MeasurementLimits::MAX_SERVICE_TIMEOUT_SECONDS)->default(10)
                             ->visible(fn (Get $get): bool => in_array($get('check_type'), ['http', 'api', 'ssl', 'tcp'], true)),
                         Select::make('check_config.method')
                             ->label(__('monitoring.monitored_services.fields.api_method.label'))

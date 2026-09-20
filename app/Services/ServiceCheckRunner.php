@@ -8,6 +8,7 @@ use App\Models\MonitoredService;
 use App\Models\ServiceCheck;
 use App\Monitoring\CheckResult;
 use App\Monitoring\ServiceCheckerRegistry;
+use App\Services\Spc\SafePhaseTwoDispatch;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 
@@ -46,7 +47,7 @@ class ServiceCheckRunner
                 'status_code' => $result->statusCode,
                 'response_time_ms' => $result->responseTimeMs,
                 'is_success' => $result->isSuccess,
-                'is_slow' => $performance === 'warning' && $result->responseTimeMs !== null,
+                'is_slow' => $result->isSuccess && in_array($performance, ['warning', 'critical'], true) && $result->responseTimeMs !== null,
                 'performance_status' => $performance,
                 'error_type' => $result->errorType,
                 'error_message' => $result->errorMessage,
@@ -61,6 +62,10 @@ class ServiceCheckRunner
                         event(new SslCertificateExpiring($check->id, (int) $threshold));
                     }
                 }
+            }
+
+            if ($source === ServiceCheck::SOURCE_AUTOMATIC) {
+                DB::afterCommit(fn () => app(SafePhaseTwoDispatch::class)->dispatch($service->id));
             }
 
             return $check;

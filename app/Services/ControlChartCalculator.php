@@ -7,10 +7,22 @@ use App\Models\MonitoredService;
 use App\Models\ServiceCheck;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 
 class ControlChartCalculator
 {
+    public const RESEARCH_TYPES = ['i_chart', 'mr_chart', 'p_chart'];
+
+    public function __construct(private SpcResearchData $research, private SpcAnalysisWindow $windows) {}
+
+    public function analyze(MonitoredService $service, string $chartType, string $window = '30', ?string $from = null, ?string $to = null, string $aggregation = 'hourly'): ControlChart
+    {
+        [$start, $end] = $this->windows->resolve($window, $from, $to);
+
+        return $this->calculate($service, $chartType, $start, $end, $window === 'custom' ? 'custom' : $window.'_days', $aggregation);
+    }
+
     public const CHART_TYPES = [
         'i_chart',
         'mr_chart',
@@ -26,6 +38,7 @@ class ControlChartCalculator
         Carbon $end,
         string $periodType = 'daily',
         string $bucket = 'hourly',
+        ?Carbon $dataCutoff = null,
     ): ControlChart {
         if (! in_array($chartType, self::CHART_TYPES, true)) {
             throw new InvalidArgumentException("Unsupported control chart type [{$chartType}].");
@@ -35,48 +48,60 @@ class ControlChartCalculator
             throw new InvalidArgumentException("Unsupported control chart bucket [{$bucket}].");
         }
 
-        $periodStart = $start->copy();
-        $periodEnd = $end->copy();
-        $metricName = $this->metricNameFor($chartType);
+        if ($end->lte($start)) {
+            throw new InvalidArgumentException('SPC requires a positive half-open analysis window.');
+        }
+        $periodStart = $start->copy()->utc();
+        $periodEnd = $end->copy()->utc();
+        $cutoff = $periodEnd->copy()->min(now()->utc());
+        if ($dataCutoff !== null) {
+            $cutoff = $cutoff->min($dataCutoff->copy()->utc());
+        }
+        $timezone = $this->windows->timezone();
+        $aggregation = in_array($chartType, ['i_chart', 'mr_chart'], true) ? 'raw' : $bucket;
+        // Raw I/MR identity must not acquire different coverage semantics from a P bucket option.
+        $bucket = $aggregation === 'raw' ? 'hourly' : $bucket;
+        $core = in_array($chartType, self::RESEARCH_TYPES, true);
+        $mode = $core ? 'exploratory' : 'legacy';
+        $identity = hash('sha256', json_encode([$service->id, $chartType, $periodStart->toIso8601String(), $periodEnd->toIso8601String(), $aggregation, $mode, $timezone]));
 
-        $chart = ControlChart::query()->updateOrCreate(
-            [
-                'monitored_service_id' => $service->id,
-                'chart_type' => $chartType,
-                'metric_name' => $metricName,
-                'period_type' => $periodType,
-                'period_start' => $periodStart,
-                'period_end' => $periodEnd,
-            ],
-            [
+        return DB::transaction(function () use ($service, $chartType, $periodType, $periodStart, $periodEnd, $cutoff, $timezone, $aggregation, $bucket, $core, $mode, $identity) {
+            $result = match ($chartType) {
+                'i_chart' => $this->calculateIChart($service, $periodStart, $cutoff),
+                'mr_chart' => $this->calculateMrChart($service, $periodStart, $cutoff),
+                'p_chart' => $this->calculatePChart($service, $periodStart, $cutoff, $bucket),
+                'c_chart' => $this->calculateCChart($service, $periodStart, $cutoff, $bucket),
+                'u_chart' => $this->calculateUChart($service, $periodStart, $cutoff, $bucket),
+            };
+            $buckets = $core ? $this->research->buckets($service, $periodStart, $cutoff, $bucket, $timezone) : collect();
+            $sample = $core ? $this->research->checks($service, $periodStart, $cutoff, $chartType !== 'p_chart') : collect();
+            $count = count($result['points']);
+            $minimum = max(2, (int) config('monitoring.spc.exploratory_min_points', 20));
+            $sufficiency = $sample->isEmpty() ? 'no_data' : ($count < 2 ? 'insufficient' : ($count < $minimum || $buckets->sum('missing_count') > 0 ? 'preliminary' : 'analyzable'));
+            $expected = $buckets->sum('expected_count');
+            $chart = ControlChart::query()->updateOrCreate(['analysis_identity' => $identity], [
+                'monitored_service_id' => $service->id, 'chart_type' => $chartType,
+                'metric_name' => $this->metricNameFor($chartType), 'period_type' => $periodType,
+                'period_start' => $periodStart, 'period_end' => $periodEnd,
+                'analysis_timezone' => $timezone, 'aggregation_interval' => $aggregation,
+                'analysis_mode' => $mode, 'calculation_version' => 'spc-r3-v1', 'data_cutoff' => $cutoff,
+                'research_context' => [
+                    'sufficiency' => $core ? $sufficiency : 'legacy', 'sample_size' => $sample->count(),
+                    'partial' => $cutoff->lt($periodEnd), 'limits_basis' => 'estimated_from_analysis_window',
+                    'exploratory_min_points_policy' => $minimum,
+                    'coverage' => $expected > 0 ? 100 * $buckets->sum('covered_count') / $expected : null,
+                    'coverage_aggregation' => $bucket, 'expected_count' => $expected, 'observed_count' => $buckets->sum('observed_count'),
+                    'missing_count' => $buckets->sum('missing_count'), 'buckets' => $buckets->all(),
+                ],
+                'center_line' => $result['center_line'], 'ucl' => $result['ucl'], 'lcl' => $result['lcl'],
+                'points_count' => $count, 'out_of_control_count' => collect($result['points'])->where('is_out_of_control', true)->count(),
                 'calculated_at' => now(),
-            ],
-        );
+            ]);
+            $chart->points()->delete();
+            $this->storePoints($chart, $result['points']);
 
-        $chart->points()->delete();
-
-        $result = match ($chartType) {
-            'i_chart' => $this->calculateIChart($service, $periodStart, $periodEnd),
-            'mr_chart' => $this->calculateMrChart($service, $periodStart, $periodEnd),
-            'p_chart' => $this->calculatePChart($service, $periodStart, $periodEnd, $bucket),
-            'c_chart' => $this->calculateCChart($service, $periodStart, $periodEnd, $bucket),
-            'u_chart' => $this->calculateUChart($service, $periodStart, $periodEnd, $bucket),
-        };
-
-        $this->storePoints($chart, $result['points']);
-
-        $chart->update([
-            'center_line' => $result['center_line'],
-            'ucl' => $result['ucl'],
-            'lcl' => $result['lcl'],
-            'points_count' => count($result['points']),
-            'out_of_control_count' => collect($result['points'])
-                ->where('is_out_of_control', true)
-                ->count(),
-            'calculated_at' => now(),
-        ]);
-
-        return $chart->refresh();
+            return $chart->refresh();
+        });
     }
 
     /**
@@ -99,7 +124,7 @@ class ControlChartCalculator
             centerLine: $centerLine,
             ucl: $ucl,
             lcl: $lcl,
-        ))->values()->all();
+        ) + ['research_context' => ['check_id' => $check->id]])->values()->all();
 
         return [
             'center_line' => $this->rounded($centerLine),
@@ -129,7 +154,7 @@ class ControlChartCalculator
                 centerLine: $mrBar,
                 ucl: $ucl,
                 lcl: $lcl,
-            );
+            ) + ['research_context' => ['check_id' => $checks[$index + 1]->id, 'previous_check_id' => $checks[$index]->id]];
         }
 
         return [
@@ -145,38 +170,23 @@ class ControlChartCalculator
      */
     private function calculatePChart(MonitoredService $service, Carbon $start, Carbon $end, string $bucket): array
     {
-        $buckets = $this->checkBuckets($service, $start, $end, $bucket);
-        $totalChecks = $buckets->sum('total_checks');
-        $totalFailed = $buckets->sum('failed_count');
-        $pBar = $totalChecks > 0 ? $totalFailed / $totalChecks : null;
+        $buckets = $this->research->buckets($service, $start, $end, $bucket, $this->windows->timezone());
+        $total = $buckets->sum('observed_count');
+        $pBar = $total > 0 ? $buckets->sum('problematic_count') / $total : null;
         $points = [];
-
-        foreach ($buckets as $bucketData) {
-            $sampleSize = $bucketData['total_checks'];
-            $value = $sampleSize > 0 ? $bucketData['failed_count'] / $sampleSize : 0.0;
-            $variance = $pBar === null || $sampleSize === 0
-                ? null
-                : sqrt(($pBar * (1 - $pBar)) / $sampleSize);
-            $ucl = $variance === null ? null : $pBar + (3 * $variance);
-            $lcl = $variance === null ? null : max($pBar - (3 * $variance), 0);
-
-            $points[] = $this->point(
-                pointTime: $bucketData['point_time'],
-                value: $value,
-                centerLine: $pBar,
-                ucl: $ucl,
-                lcl: $lcl,
-                sampleSize: $sampleSize,
-                failedCount: $bucketData['failed_count'],
-            );
+        foreach ($buckets as $group) {
+            $n = $group['observed_count'];
+            if ($n === 0) {
+                continue; // Unknown subgroup remains in chart metadata, never p=0.
+            }
+            $sigma = sqrt($pBar * (1 - $pBar) / $n);
+            $points[] = $this->point(Carbon::parse($group['bucket_start']), $group['problematic_proportion'], $pBar,
+                min(1, $pBar + 3 * $sigma), max(0, $pBar - 3 * $sigma), $n, $group['failed_count'])
+                + ['research_context' => $group];
         }
 
-        return [
-            'center_line' => $this->rounded($pBar),
-            'ucl' => $this->averagePointLimit($points, 'ucl'),
-            'lcl' => $this->averagePointLimit($points, 'lcl'),
-            'points' => $points,
-        ];
+        // Variable-n limits belong to points; no misleading average chart limits.
+        return ['center_line' => $this->rounded($pBar), 'ucl' => null, 'lcl' => null, 'points' => $points];
     }
 
     /**
@@ -247,7 +257,7 @@ class ControlChartCalculator
     {
         return match ($chartType) {
             'i_chart', 'mr_chart' => 'response_time_ms',
-            'p_chart' => 'failure_proportion',
+            'p_chart' => 'problematic_proportion',
             'c_chart' => 'failed_checks_count',
             'u_chart' => 'failures_per_check',
             default => throw new InvalidArgumentException("Unsupported control chart type [{$chartType}]."),
@@ -259,12 +269,7 @@ class ControlChartCalculator
      */
     private function responseTimeChecks(MonitoredService $service, Carbon $start, Carbon $end): Collection
     {
-        return $service->serviceChecks()
-            ->whereBetween('checked_at', [$start, $end])
-            ->whereIn('check_type', ['http', 'api'])
-            ->whereNotNull('response_time_ms')
-            ->orderBy('checked_at')
-            ->get();
+        return $this->research->checks($service, $start, $end, true);
     }
 
     /**
@@ -288,7 +293,7 @@ class ControlChartCalculator
     private function checkBuckets(MonitoredService $service, Carbon $start, Carbon $end, string $bucket): Collection
     {
         return $service->serviceChecks()
-            ->whereBetween('checked_at', [$start, $end])
+            ->where('checked_at', '>=', $start)->where('checked_at', '<', $end)
             ->whereIn('check_type', ['http', 'api'])
             ->orderBy('checked_at')
             ->get()

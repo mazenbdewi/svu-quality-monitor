@@ -96,6 +96,18 @@ class AdministrativeAuditCoverageTest extends TestCase
         $this->assertDatabaseCount('audit_logs', 1);
     }
 
+    public function test_timeout_form_rejects_values_above_the_job_safe_limit(): void
+    {
+        $service = MonitoredService::factory()->create(['check_type' => 'http']);
+        Livewire::test(EditMonitoredService::class, ['record' => $service->id])
+            ->fillForm(['check_config.timeout_seconds' => 21])
+            ->call('save')->assertHasFormErrors(['check_config.timeout_seconds' => 'max']);
+        Livewire::test(EditMonitoredService::class, ['record' => $service->id])
+            ->fillForm(['check_config.timeout_seconds' => 20])
+            ->call('save')->assertHasNoFormErrors();
+        $this->assertSame(20, $service->fresh()->timeoutSeconds());
+    }
+
     public function test_service_enable_and_delete_are_audited(): void
     {
         $service = MonitoredService::factory()->inactive()->create();

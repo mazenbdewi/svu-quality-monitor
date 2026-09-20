@@ -33,6 +33,7 @@ Schedule::command('sla:calculate')
     ->withoutOverlapping();
 
 Schedule::command('control-charts:calculate --period=daily')
+    ->timezone(config('monitoring.spc.analysis_timezone', 'Asia/Damascus'))
     ->dailyAt('00:25')
     ->withoutOverlapping();
 
@@ -44,3 +45,5 @@ Schedule::command('backup:create --scheduled')
 Schedule::command('backup:cleanup --scheduled')
     ->dailyAt('03:00')
     ->withoutOverlapping(120);
+
+Schedule::command('spc:evaluate')->everyMinute()->withoutOverlapping();

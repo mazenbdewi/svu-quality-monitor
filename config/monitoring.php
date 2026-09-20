@@ -1,6 +1,13 @@
 <?php
 
 return [
+    'spc' => [
+        'episode_gap_minutes' => (int) env('SPC_SIGNAL_EPISODE_GAP_MINUTES', 30),
+        'association_horizon_minutes' => (int) env('SPC_INCIDENT_ASSOCIATION_HORIZON_MINUTES', 60),
+        'analysis_timezone' => env('SPC_ANALYSIS_TIMEZONE', 'Asia/Damascus'),
+        // Exploratory reporting policy, not a universal scientific minimum.
+        'exploratory_min_points' => 20,
+    ],
     /*
     |--------------------------------------------------------------------------
     | Background processing health thresholds

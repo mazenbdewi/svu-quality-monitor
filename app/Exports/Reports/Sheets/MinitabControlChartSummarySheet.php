@@ -4,8 +4,10 @@ namespace App\Exports\Reports\Sheets;
 
 use App\Exports\Reports\Sheets\Concerns\AppliesReportSheetFormatting;
 use App\Models\ControlChart;
+use App\Services\SpcAnalysisWindow;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Arr;
 use Maatwebsite\Excel\Concerns\FromQuery;
 use Maatwebsite\Excel\Concerns\ShouldAutoSize;
 use Maatwebsite\Excel\Concerns\WithEvents;
@@ -25,12 +27,12 @@ class MinitabControlChartSummarySheet implements FromQuery, ShouldAutoSize, With
 
     public function query(): Builder
     {
-        return ControlChart::query()
-            ->with('monitoredService:id,name')
-            ->when($this->filters['service_id'] ?? null, fn (Builder $query, $serviceId): Builder => $query->where('monitored_service_id', $serviceId))
-            ->when($this->filters['date_from'] ?? null, fn (Builder $query, $date): Builder => $query->where('period_start', '>=', Carbon::parse($date)->startOfDay()))
-            ->when($this->filters['date_to'] ?? null, fn (Builder $query, $date): Builder => $query->where('period_start', '<=', Carbon::parse($date)->endOfDay()))
-            ->orderBy('period_start');
+        [$start, $end] = app(SpcAnalysisWindow::class)->exportBounds($this->filters);
+
+        return ControlChart::query()->with('monitoredService:id,name')
+            ->when($this->filters['service_id'] ?? null, fn ($q, $id) => $q->where('monitored_service_id', $id))
+            ->when($this->filters['chart_id'] ?? null, fn ($q, $id) => $q->whereKey($id), fn ($q) => $q->where('period_start', '<', $end)->where('period_end', '>', $start))
+            ->orderBy('period_start')->orderBy('id');
     }
 
     /**
@@ -50,6 +52,7 @@ class MinitabControlChartSummarySheet implements FromQuery, ShouldAutoSize, With
             'lcl',
             'points_count',
             'out_of_control_count',
+            'chart_id', 'analysis_timezone', 'aggregation_interval', 'analysis_mode', 'data_cutoff', 'calculation_version', 'research_context',
         ];
     }
 
@@ -71,6 +74,9 @@ class MinitabControlChartSummarySheet implements FromQuery, ShouldAutoSize, With
             $row->lcl === null ? null : (float) $row->lcl,
             $row->points_count,
             $row->out_of_control_count,
+            $row->id, $row->analysis_timezone, $row->aggregation_interval, $row->analysis_mode ?? 'legacy',
+            $this->dateTime($row->data_cutoff), $row->calculation_version,
+            $row->research_context === null ? null : json_encode(Arr::except($row->research_context, ['buckets']), JSON_THROW_ON_ERROR),
         ];
     }
 

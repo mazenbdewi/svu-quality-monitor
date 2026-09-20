@@ -5,6 +5,8 @@ namespace App\Exports\Reports\Sheets;
 use App\Exports\Reports\Sheets\Concerns\AppliesReportSheetFormatting;
 use App\Models\MonitoredService;
 use App\Models\ServiceCheck;
+use App\Services\SpcAnalysisWindow;
+use App\Services\SpcResearchData;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Maatwebsite\Excel\Concerns\FromQuery;
@@ -26,18 +28,16 @@ class MinitabRawChecksSheet implements FromQuery, ShouldAutoSize, WithEvents, Wi
 
     public function query(): Builder
     {
-        return ServiceCheck::query()
-            ->with('monitoredService:id,name,category')
-            ->when($this->filters['service_id'] ?? null, fn (Builder $query, $serviceId): Builder => $query->where('monitored_service_id', $serviceId))
-            ->when($this->filters['date_from'] ?? null, fn (Builder $query, $date): Builder => $query->where('checked_at', '>=', Carbon::parse($date)->startOfDay()))
-            ->when($this->filters['date_to'] ?? null, fn (Builder $query, $date): Builder => $query->where('checked_at', '<=', Carbon::parse($date)->endOfDay()))
-            ->orderBy(
-                MonitoredService::query()
-                    ->select('name')
-                    ->whereColumn('monitored_services.id', 'service_checks.monitored_service_id')
-                    ->limit(1)
-            )
-            ->orderBy('checked_at');
+        [$start, $end] = app(SpcAnalysisWindow::class)->exportBounds($this->filters);
+        $end = $end->min(now()->utc());
+        if (isset($this->filters['data_cutoff'])) {
+            $end = $end->min(Carbon::parse($this->filters['data_cutoff']));
+        }
+        $ids = MonitoredService::query()->when($this->filters['service_id'] ?? null, fn ($q, $id) => $q->whereKey($id))->get()
+            ->flatMap(fn ($service) => app(SpcResearchData::class)->checks($service, $start, $end)->pluck('id'));
+
+        return ServiceCheck::query()->with('monitoredService:id,name,category')->whereIn('id', $ids)
+            ->orderBy('monitored_service_id')->orderBy('checked_at')->orderBy('id');
     }
 
     /**
@@ -59,6 +59,7 @@ class MinitabRawChecksSheet implements FromQuery, ShouldAutoSize, WithEvents, Wi
             'problematic_flag',
             'keyword_found_flag',
             'error_type',
+            'check_id', 'source', 'check_type', 'performance_status', 'is_during_maintenance', 'research_eligible', 'latency_eligible', 'latency_exclusion_reason',
         ];
     }
 
@@ -87,6 +88,9 @@ class MinitabRawChecksSheet implements FromQuery, ShouldAutoSize, WithEvents, Wi
             ($isFailure || $isSlow) ? 1 : 0,
             $row->expected_keyword_found === null ? null : ($row->expected_keyword_found ? 1 : 0),
             $row->error_type,
+            $row->id, $row->source, $row->check_type, $row->performance_status, (int) $row->is_during_maintenance, 1,
+            (int) ($isSuccess && $row->response_time_ms !== null && $row->response_time_ms >= 0),
+            ! $isSuccess ? 'functional_failure' : ($row->response_time_ms === null || $row->response_time_ms < 0 ? 'invalid_latency' : null),
         ];
     }
 

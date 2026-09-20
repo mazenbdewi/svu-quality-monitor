@@ -1,18 +1,25 @@
 @php
     $points = $record->points()
-        ->orderBy('point_time')
+        ->orderBy('point_time')->orderBy('id')
         ->get();
 
+    if ($record->chart_type === 'p_chart' && $record->analysis_mode === 'exploratory') {
+        $byTime = $points->keyBy(fn ($p) => $p->point_time->toIso8601String());
+        $points = collect(data_get($record->research_context, 'buckets', []))->map(fn ($b) => $byTime->get($b['bucket_start']) ?? (object) [
+            'point_time' => \Carbon\Carbon::parse($b['bucket_start']), 'value' => null,
+            'center_line' => null, 'ucl' => null, 'lcl' => null, 'is_out_of_control' => false,
+        ]);
+    }
     $chartId = 'control-chart-graph-'.$record->getKey();
     $chartData = [
         'labels' => $points
-            ->map(fn ($point): string => $point->point_time->format('Y-m-d H:i'))
+            ->map(fn ($point): string => $point->point_time->copy()->setTimezone($record->analysis_timezone ?? 'UTC')->format('Y-m-d H:i'))
             ->all(),
         'datasets' => [
             [
                 'label' => __('monitoring.control_charts.graph.datasets.actual_value'),
                 'data' => $points
-                    ->map(fn ($point): float => (float) $point->value)
+                    ->map(fn ($point): ?float => $point->value === null ? null : (float) $point->value)
                     ->all(),
                 'borderColor' => '#2563eb',
                 'backgroundColor' => 'rgba(37, 99, 235, 0.12)',
@@ -27,7 +34,8 @@
                     ->map(fn ($point): int => $point->is_out_of_control ? 6 : 4)
                     ->all(),
                 'pointHoverRadius' => 8,
-                'tension' => 0.25,
+                'tension' => 0,
+                'spanGaps' => false,
             ],
             [
                 'label' => __('monitoring.control_charts.graph.datasets.center_line'),

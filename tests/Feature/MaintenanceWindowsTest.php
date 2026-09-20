@@ -96,10 +96,14 @@ class MaintenanceWindowsTest extends TestCase
 
     public function test_reliability_excludes_maintenance_from_unplanned_downtime_and_observation_time(): void
     {
-        $service = MonitoredService::factory()->create();
+        $service = MonitoredService::factory()->create(['created_at' => '2026-08-31 08:00:00', 'check_interval_minutes' => 60]);
+        Carbon::setTestNow('2026-08-31 14:00:00');
+        for ($hour = 8; $hour <= 13; $hour++) {
+            $service->serviceChecks()->create(['checked_at' => sprintf('2026-08-31 %02d:00:00', $hour), 'source' => 'automatic', 'is_success' => true, 'is_slow' => false]);
+        }
         $service->serviceIncidents()->create([
             'started_at' => Carbon::parse('2026-08-31 09:00:00'), 'ended_at' => Carbon::parse('2026-08-31 12:00:00'),
-            'status' => 'closed', 'incident_type' => 'down', 'severity' => 'critical',
+            'confirmed_at' => '2026-08-31 09:00:00', 'status' => 'closed', 'incident_type' => 'down', 'severity' => 'critical',
         ]);
         $this->window($service, '2026-08-31 10:00:00', '2026-08-31 11:00:00');
 

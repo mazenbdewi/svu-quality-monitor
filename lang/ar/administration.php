@@ -7,6 +7,12 @@ return [
     'errors' => ['super_admin' => 'المسؤول الأعلى فقط يستطيع منح هذا الدور أو تعديل مسؤول أعلى.', 'last_super_admin' => 'لا يمكن تعطيل آخر مسؤول أعلى نشط أو إزالة دوره.'],
     'audit' => ['title' => 'سجل التدقيق', 'entry' => 'سجل تدقيق', 'actor' => 'المنفّذ', 'event' => 'الحدث', 'resource' => 'نوع المورد', 'resource_id' => 'معرّف المورد', 'description' => 'الوصف', 'timestamp' => 'التاريخ والوقت', 'ip' => 'عنوان IP', 'user_agent' => 'وكيل المستخدم', 'before' => 'قبل', 'after' => 'بعد', 'context' => 'البيانات الوصفية', 'from' => 'من تاريخ', 'to' => 'إلى تاريخ', 'dates' => 'الفترة الزمنية', 'system' => 'النظام / غير متاح',
         'events' => [
+            'baseline.created' => 'إنشاء Baseline',
+            'baseline.reviewed' => 'مراجعة Baseline',
+            'baseline.approved' => 'اعتماد Baseline',
+            'baseline.retired' => 'إنهاء صلاحية Baseline',
+            'baseline.rejected' => 'رفض Baseline',
+
             'service.created' => 'تم إنشاء خدمة المراقبة',
             'service.updated' => 'تم تعديل خدمة المراقبة',
             'service.enabled' => 'تم تفعيل خدمة المراقبة',

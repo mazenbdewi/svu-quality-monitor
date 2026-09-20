@@ -217,8 +217,8 @@ class BackupTest extends TestCase
         $before = DB::table('role_has_permissions')->orderBy('role_id')->orderBy('permission_id')->get()->toJson();
         $this->seed(RolesAndPermissionsSeeder::class);
         $this->assertDatabaseCount('roles', 4);
-        $this->assertDatabaseCount('permissions', 32);
-        $this->assertDatabaseCount('role_has_permissions', 84);
+        $this->assertDatabaseCount('permissions', 33);
+        $this->assertDatabaseCount('role_has_permissions', 86);
         $this->assertSame($before, DB::table('role_has_permissions')->orderBy('role_id')->orderBy('permission_id')->get()->toJson());
     }
 

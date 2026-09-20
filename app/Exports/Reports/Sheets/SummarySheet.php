@@ -98,12 +98,12 @@ class SummarySheet implements FromCollection, ShouldAutoSize, WithEvents, WithHe
 
     protected function averageAvailability(): string
     {
-        $average = ReliabilityMetric::query()
+        $query = ReliabilityMetric::query()
             ->when($this->filters['service_id'] ?? null, fn (Builder $query, $serviceId): Builder => $query->where('monitored_service_id', $serviceId))
             ->when($this->filters['period_type'] ?? null, fn (Builder $query, $periodType): Builder => $query->where('period_type', $periodType))
             ->when($this->filters['date_from'] ?? null, fn (Builder $query, $date): Builder => $query->whereDate('period_start', '>=', $date))
-            ->when($this->filters['date_to'] ?? null, fn (Builder $query, $date): Builder => $query->whereDate('period_start', '<=', $date))
-            ->avg('availability_percent');
+            ->when($this->filters['date_to'] ?? null, fn (Builder $query, $date): Builder => $query->whereDate('period_start', '<=', $date));
+        $average = ReliabilityMetric::weightedAvailability($query);
 
         return $average === null ? '' : number_format((float) $average, 4).'%';
     }

@@ -11,6 +11,8 @@ class ControlChartPoint extends Model
      * @var list<string>
      */
     protected $fillable = [
+        'research_context',
+
         'control_chart_id',
         'point_time',
         'value',
@@ -30,6 +32,7 @@ class ControlChartPoint extends Model
     protected function casts(): array
     {
         return [
+            'research_context' => 'array',
             'point_time' => 'datetime',
             'value' => 'decimal:4',
             'center_line' => 'decimal:4',

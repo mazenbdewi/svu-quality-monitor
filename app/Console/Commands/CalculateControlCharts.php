@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Models\MonitoredService;
 use App\Services\ControlChartCalculator;
+use App\Services\SpcAnalysisWindow;
 use Carbon\Carbon;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
@@ -81,16 +82,24 @@ class CalculateControlCharts extends Command
     private function resolvePeriod(): array
     {
         $periodType = (string) $this->option('period');
-        $baseDate = $this->option('date')
-            ? Carbon::parse((string) $this->option('date'))
-            : now();
-
-        return match ($periodType) {
-            'daily' => [$periodType, $baseDate->copy()->startOfDay(), $baseDate->copy()->endOfDay()],
-            'weekly' => [$periodType, $baseDate->copy()->startOfWeek(), $baseDate->copy()->endOfWeek()],
-            'monthly' => [$periodType, $baseDate->copy()->startOfMonth(), $baseDate->copy()->endOfMonth()],
+        $timezone = app(SpcAnalysisWindow::class)->timezone();
+        $baseDate = $this->option('date') ? Carbon::parse((string) $this->option('date'), $timezone) : now($timezone);
+        $start = match ($periodType) {
+            'daily' => $baseDate->copy()->startOfDay(),
+            'weekly' => $baseDate->copy()->startOfWeek(),
+            'monthly' => $baseDate->copy()->startOfMonth(),
             default => throw new InvalidArgumentException('Unsupported period type. Use daily, weekly, or monthly.'),
         };
+        if (! $this->option('date')) {
+            $start = match ($periodType) {
+                'daily' => $start->subDay(), 'weekly' => $start->subWeek(), 'monthly' => $start->subMonth(),
+            };
+        }
+        $end = match ($periodType) {
+            'daily' => $start->copy()->addDay(), 'weekly' => $start->copy()->addWeek(), 'monthly' => $start->copy()->addMonth(),
+        };
+
+        return [$periodType, $start->utc(), $end->utc()];
     }
 
     /**

@@ -42,3 +42,5 @@ Service and maintenance create/edit use Filament transactions encompassing recor
 No audit is emitted for automatic checks, heartbeats, scheduled reliability/SLA/control-chart calculations, automatic incident confirmation/recovery, automatic SSL notifications or retry calls without an explicit human actor. Logout remains outside this phase.
 
 The sanitizer is key-based defense in depth, not content-based secret discovery in arbitrary human text. Safe fields such as names and descriptions must not be repurposed as credential storage. Database concurrency/Docker verification remains outside 8F-3.
+
+R1 adds an explicit `endpoint_changed` boolean to service audit context. Endpoint values remain excluded; interval, performance thresholds and check type retain their existing before/after audit coverage.

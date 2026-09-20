@@ -30,13 +30,13 @@ class ControlChartOverviewWidget extends StatsOverviewWidget
     /** @return array<Stat> */
     protected function getStats(): array
     {
-        $status = (int) $this->record->out_of_control_count > 0 ? 'out_of_control' : 'normal';
+        $status = $this->record->analysis_mode === 'exploratory' ? data_get($this->record->research_context, 'sufficiency', 'insufficient') : 'legacy';
 
         return [
-            Stat::make(__('monitoring.control_charts.summary.process_status'), $this->text(__("monitoring.control_charts.statuses.{$status}")))
-                ->description(__('ux.help.spc'))
-                ->icon($status === 'normal' ? Heroicon::OutlinedCheckCircle : Heroicon::OutlinedExclamationTriangle)
-                ->color($status === 'normal' ? 'success' : 'danger'),
+            Stat::make(__('monitoring.control_charts.summary.process_status'), $this->text(__("monitoring.spc_research.{$status}")))
+                ->description(__('monitoring.spc_research.limits'))
+                ->icon(Heroicon::OutlinedInformationCircle)
+                ->color('gray'),
             Stat::make(__('monitoring.control_charts.summary.out_of_control_points'), $this->ltr(number_format((int) $this->record->out_of_control_count)))
                 ->icon(Heroicon::OutlinedExclamationTriangle)
                 ->color((int) $this->record->out_of_control_count > 0 ? 'danger' : 'success'),

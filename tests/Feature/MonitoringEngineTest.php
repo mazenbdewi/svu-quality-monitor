@@ -36,11 +36,12 @@ class MonitoringEngineTest extends TestCase
         $this->assertSame('warning', $warning->performance_status);
         $this->assertTrue($warning->is_slow);
         $this->assertSame('critical', $critical->performance_status);
-        $this->assertFalse($critical->is_slow);
+        $this->assertTrue($critical->is_slow);
         $this->assertDatabaseCount('service_incidents', 0);
 
         $metric = app(ReliabilityMetricCalculator::class)->calculateForService($service, now()->startOfDay(), now()->endOfDay());
-        $this->assertSame(100.0, (float) $metric->availability_percent);
+        $this->assertNull($metric->availability_percent); // Manual-only observations cannot establish research availability.
+        $this->assertSame('no_data', $metric->measurement_context['status']);
     }
 
     public function test_api_checker_supports_get_post_json_expectations_and_does_not_store_headers(): void
@@ -210,8 +211,8 @@ class MonitoringEngineTest extends TestCase
     public function test_control_charts_ignore_non_http_and_non_api_response_metrics(): void
     {
         $service = MonitoredService::factory()->create();
-        $service->serviceChecks()->create(['checked_at' => now(), 'check_type' => 'http', 'response_time_ms' => 100, 'is_success' => true, 'is_slow' => false]);
-        $service->serviceChecks()->create(['checked_at' => now()->addSecond(), 'check_type' => 'tcp', 'response_time_ms' => 9000, 'is_success' => true, 'is_slow' => false]);
+        $service->serviceChecks()->create(['source' => 'automatic', 'checked_at' => now()->subMinute(), 'check_type' => 'http', 'response_time_ms' => 100, 'is_success' => true, 'is_slow' => false]);
+        $service->serviceChecks()->create(['source' => 'automatic', 'checked_at' => now()->subSeconds(30), 'check_type' => 'tcp', 'response_time_ms' => 9000, 'is_success' => true, 'is_slow' => false]);
 
         $chart = app(ControlChartCalculator::class)->calculate($service, 'i_chart', now()->startOfDay(), now()->endOfDay());
 

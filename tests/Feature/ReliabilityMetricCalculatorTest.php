@@ -12,6 +12,19 @@ class ReliabilityMetricCalculatorTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+        Carbon::setTestNow('2026-07-10 00:00:00');
+    }
+
+    private function fullCoverage(MonitoredService $service): void
+    {
+        for ($hour = 0; $hour < 24; $hour++) {
+            $this->createCheck($service, sprintf('2026-07-08 %02d:00:00', $hour), true, false);
+        }
+    }
+
     protected function tearDown(): void
     {
         Carbon::setTestNow();
@@ -21,8 +34,9 @@ class ReliabilityMetricCalculatorTest extends TestCase
 
     public function test_it_calculates_total_and_failed_checks_including_slow_checks(): void
     {
-        $service = MonitoredService::factory()->create();
+        $service = MonitoredService::factory()->create(['created_at' => '2026-07-08 00:00:00', 'check_interval_minutes' => 60]);
         [$start, $end] = $this->dailyPeriod();
+        $this->createCheck($service, '2026-07-09 00:00:00', true, false);
 
         $this->createCheck($service, '2026-07-08 08:00:00', isSuccess: true, isSlow: false);
         $this->createCheck($service, '2026-07-08 09:00:00', isSuccess: false, isSlow: false);
@@ -37,10 +51,14 @@ class ReliabilityMetricCalculatorTest extends TestCase
 
     public function test_it_calculates_downtime_from_closed_incidents(): void
     {
-        $service = MonitoredService::factory()->create();
+        $service = MonitoredService::factory()->create(['created_at' => '2026-07-08 00:00:00', 'check_interval_minutes' => 60]);
         [$start, $end] = $this->dailyPeriod();
+        $this->createCheck($service, '2026-07-09 00:00:00', true, false);
+
+        $this->fullCoverage($service);
 
         $service->serviceIncidents()->create([
+            'confirmed_at' => Carbon::parse('2026-07-08 00:00:00'),
             'started_at' => Carbon::parse('2026-07-08 10:00:00'),
             'ended_at' => Carbon::parse('2026-07-08 10:30:00'),
             'duration_minutes' => 30,
@@ -58,10 +76,14 @@ class ReliabilityMetricCalculatorTest extends TestCase
 
     public function test_it_counts_open_incident_downtime_until_period_end(): void
     {
-        $service = MonitoredService::factory()->create();
+        $service = MonitoredService::factory()->create(['created_at' => '2026-07-08 00:00:00', 'check_interval_minutes' => 60]);
         [$start, $end] = $this->dailyPeriod();
+        $this->createCheck($service, '2026-07-09 00:00:00', true, false);
+
+        $this->fullCoverage($service);
 
         $service->serviceIncidents()->create([
+            'confirmed_at' => Carbon::parse('2026-07-08 00:00:00'),
             'started_at' => Carbon::parse('2026-07-08 23:30:00'),
             'incident_type' => 'down',
             'severity' => 'critical',
@@ -78,8 +100,9 @@ class ReliabilityMetricCalculatorTest extends TestCase
     {
         Carbon::setTestNow('2026-07-09 12:00:00');
 
-        $service = MonitoredService::factory()->create();
+        $service = MonitoredService::factory()->create(['created_at' => '2026-07-08 00:00:00', 'check_interval_minutes' => 60]);
         [$start, $end] = $this->dailyPeriod();
+        $this->createCheck($service, '2026-07-09 00:00:00', true, false);
 
         $calculator = app(ReliabilityMetricCalculator::class);
 
@@ -96,10 +119,14 @@ class ReliabilityMetricCalculatorTest extends TestCase
 
     public function test_it_calculates_availability_mtbf_mttr_and_failure_rate(): void
     {
-        $service = MonitoredService::factory()->create();
+        $service = MonitoredService::factory()->create(['created_at' => '2026-07-08 00:00:00', 'check_interval_minutes' => 60]);
         [$start, $end] = $this->dailyPeriod();
+        $this->createCheck($service, '2026-07-09 00:00:00', true, false);
+
+        $this->fullCoverage($service);
 
         $service->serviceIncidents()->create([
+            'confirmed_at' => Carbon::parse('2026-07-08 00:00:00'),
             'started_at' => Carbon::parse('2026-07-08 02:00:00'),
             'ended_at' => Carbon::parse('2026-07-08 02:30:00'),
             'incident_type' => 'down',
@@ -107,6 +134,7 @@ class ReliabilityMetricCalculatorTest extends TestCase
             'status' => 'closed',
         ]);
         $service->serviceIncidents()->create([
+            'confirmed_at' => Carbon::parse('2026-07-08 00:00:00'),
             'started_at' => Carbon::parse('2026-07-08 14:00:00'),
             'ended_at' => Carbon::parse('2026-07-08 14:30:00'),
             'incident_type' => 'timeout',
@@ -128,8 +156,11 @@ class ReliabilityMetricCalculatorTest extends TestCase
     {
         $service = MonitoredService::factory()->create([
             'is_active' => true,
+            'created_at' => '2026-07-08 00:00:00',
+            'check_interval_minutes' => 60,
         ]);
 
+        $this->createCheck($service, '2026-07-09 00:00:00', true, false);
         $this->createCheck($service, '2026-07-08 08:00:00', isSuccess: true, isSlow: false);
 
         $this->artisan('reliability:calculate --period=daily --date=2026-07-08')
@@ -156,7 +187,7 @@ class ReliabilityMetricCalculatorTest extends TestCase
     {
         return [
             Carbon::parse('2026-07-08 00:00:00'),
-            Carbon::parse('2026-07-08 23:59:59'),
+            Carbon::parse('2026-07-09 00:00:00'),
         ];
     }
 
@@ -167,6 +198,7 @@ class ReliabilityMetricCalculatorTest extends TestCase
         bool $isSlow,
     ): void {
         $service->serviceChecks()->create([
+            'source' => 'automatic',
             'checked_at' => Carbon::parse($checkedAt),
             'status_code' => $isSuccess ? 200 : 500,
             'response_time_ms' => $isSlow ? 2000 : 100,

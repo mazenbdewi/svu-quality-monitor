@@ -1,0 +1,24 @@
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    public function up(): void
+    {
+        Schema::table('reliability_metrics', function (Blueprint $table) {
+            $table->json('measurement_context')->nullable();
+            $table->decimal('availability_percent', 8, 4)->nullable()->default(null)->change();
+        });
+    }
+
+    public function down(): void
+    {
+        // Preserve nullable availability: restoring NOT NULL would invent data for unknown snapshots.
+        Schema::table('reliability_metrics', function (Blueprint $table) {
+            $table->dropColumn('measurement_context');
+        });
+    }
+};

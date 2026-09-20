@@ -2,7 +2,9 @@
 
 namespace App\Exports\Reports;
 
+use App\Exports\Reports\Sheets\MinitabAllChartPointsSheet;
 use App\Exports\Reports\Sheets\MinitabBucketedChecksSheet;
+use App\Exports\Reports\Sheets\MinitabChartBucketsSheet;
 use App\Exports\Reports\Sheets\MinitabControlChartSummarySheet;
 use App\Exports\Reports\Sheets\MinitabOutOfControlPointsSheet;
 use App\Exports\Reports\Sheets\MinitabRawChecksSheet;
@@ -26,6 +28,8 @@ class MinitabReadyExport implements WithMultipleSheets
             new MinitabBucketedChecksSheet($this->filters),
             new MinitabControlChartSummarySheet($this->filters),
             new MinitabOutOfControlPointsSheet($this->filters),
+            new MinitabAllChartPointsSheet($this->filters),
+            new MinitabChartBucketsSheet($this->filters),
             new MinitabReliabilityMetricsSheet($this->filters),
         ];
     }

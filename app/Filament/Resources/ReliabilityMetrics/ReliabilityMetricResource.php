@@ -215,9 +215,11 @@ class ReliabilityMetricResource extends Resource
                     ->sortable(),
                 TextColumn::make('availability_percent')->tooltip(__('ux.help.availability'))
                     ->label(__('monitoring.reliability_metrics.table.availability_percent'))
+                    ->placeholder(__('monitoring.reliability_insufficient_data'))
                     ->badge()
-                    ->formatStateUsing(fn (int|float|string|null $state): string => $state === null ? '' : number_format((float) $state, 4).'%')
+                    ->formatStateUsing(fn (int|float|string|null $state): string => $state === null ? __('monitoring.reliability_insufficient_data') : number_format((float) $state, 4).'%')
                     ->color(fn (int|float|string|null $state): string => match (true) {
+                        $state === null => 'gray',
                         (float) $state >= 99 => 'success',
                         (float) $state >= 95 => 'warning',
                         default => 'danger',
@@ -347,6 +349,10 @@ class ReliabilityMetricResource extends Resource
                                     ->weight(FontWeight::SemiBold)
                                     ->extraAttributes(['class' => $valueClasses])
                                     ->extraEntryWrapperAttributes(['class' => $cardClasses]),
+                                TextEntry::make('measurement_context.status')->label(__('monitoring.reliability_status')),
+                                TextEntry::make('measurement_context.data_cutoff')->label(__('monitoring.reliability_cutoff')),
+                                TextEntry::make('measurement_context.successful_check_ratio')->label(__('monitoring.reliability_success_ratio'))->numeric(decimalPlaces: 4),
+                                TextEntry::make('measurement_context.acceptable_performance_ratio')->label(__('monitoring.reliability_performance_ratio'))->numeric(decimalPlaces: 4),
                                 TextEntry::make('period_type')
                                     ->label(__('monitoring.reliability_metrics.table.period_type'))
                                     ->formatStateUsing(fn (?string $state): string => static::periodTypeOptions()[$state] ?? (string) $state)
@@ -359,7 +365,8 @@ class ReliabilityMetricResource extends Resource
                                     ->extraEntryWrapperAttributes(['class' => $cardClasses]),
                                 TextEntry::make('availability_percent')->tooltip(__('ux.help.availability'))
                                     ->label(__('monitoring.reliability_metrics.table.availability_percent'))
-                                    ->formatStateUsing(fn (mixed $state): string => $state === null ? __('monitoring.dashboard.empty.value') : number_format((float) $state, 4).'%')
+                                    ->placeholder(__('monitoring.reliability_insufficient_data'))
+                                    ->formatStateUsing(fn (mixed $state): string => $state === null ? __('monitoring.reliability_insufficient_data') : number_format((float) $state, 4).'%')
                                     ->badge()
                                     ->color(fn (ReliabilityMetric $record): string => app(ResearchInterpretationService::class)->availabilityColor(
                                         $record->availability_percent === null ? null : (float) $record->availability_percent,
@@ -412,7 +419,7 @@ class ReliabilityMetricResource extends Resource
             ->action(function (): void {
                 $calculator = app(ReliabilityMetricCalculator::class);
                 $start = now()->startOfDay();
-                $end = now()->endOfDay();
+                $end = $start->copy()->addDay();
 
                 MonitoredService::query()
                     ->where('is_active', true)

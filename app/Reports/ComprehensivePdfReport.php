@@ -51,9 +51,9 @@ class ComprehensivePdfReport
             'successful_checks' => (clone $this->checksQuery())->where('is_success', true)->count(),
             'failed_checks' => (clone $this->checksQuery())->where('is_success', false)->count(),
             'slow_checks' => (clone $this->checksQuery())->where('is_slow', true)->count(),
-            'open_incidents' => (clone $this->incidentsQuery())->where('status', 'open')->count(),
-            'closed_incidents' => (clone $this->incidentsQuery())->where('status', 'closed')->count(),
-            'average_availability' => $this->percent($this->reliabilityMetricsQuery()->avg('availability_percent'), 4),
+            'open_incidents' => $this->openInPeriod(clone $this->incidentsQuery())->count(),
+            'closed_incidents' => (clone $this->incidentsQuery())->whereNotNull('ended_at')->where('ended_at', '<', $this->incidentCutoff())->count(),
+            'average_availability' => $this->percent(ReliabilityMetric::weightedAvailability($this->reliabilityMetricsQuery()), 4),
             'average_response_time' => $this->milliseconds($this->checksQuery()->whereNotNull('response_time_ms')->avg('response_time_ms')),
             'total_control_charts' => $this->controlChartsQuery()->count(),
             'out_of_control_points_count' => $this->outOfControlPointsQuery()->count(),
@@ -121,19 +121,22 @@ class ComprehensivePdfReport
      */
     public function incidentsSummary(): Collection
     {
+        $cutoff = $this->incidentCutoff();
+
         return MonitoredService::query()
-            ->when($this->filters['service_id'] ?? null, fn (Builder $query, $serviceId): Builder => $query->whereKey($serviceId))
-            ->whereHas('serviceIncidents', fn (Builder $query): Builder => $this->applyIncidentDateFilters($query))
-            ->withCount([
-                'serviceIncidents as open_incidents' => fn (Builder $query): Builder => $this->applyIncidentDateFilters($query)->where('status', 'open'),
-                'serviceIncidents as closed_incidents' => fn (Builder $query): Builder => $this->applyIncidentDateFilters($query)->where('status', 'closed'),
-                'serviceIncidents as total_incidents' => fn (Builder $query): Builder => $this->applyIncidentDateFilters($query),
-            ])
-            ->withAvg([
-                'serviceIncidents as average_duration_minutes' => fn (Builder $query): Builder => $this->applyIncidentDateFilters($query)->whereNotNull('duration_minutes'),
-            ], 'duration_minutes')
-            ->orderBy('name')
-            ->get();
+            ->when($this->filters['service_id'] ?? null, fn (Builder $query, $id) => $query->whereKey($id))
+            ->whereHas('serviceIncidents', fn (Builder $query) => $this->applyIncidentDateFilters($query))
+            ->with(['serviceIncidents' => fn ($relation) => $this->applyIncidentDateFilters($relation->getQuery())])
+            ->orderBy('name')->get()->map(function ($service) use ($cutoff) {
+                $incidents = $service->serviceIncidents;
+                $open = $incidents->filter(fn ($i) => $i->ended_at === null || $i->ended_at->gte($cutoff))->count();
+                $service->setAttribute('total_incidents', $incidents->count());
+                $service->setAttribute('open_incidents', $open);
+                $service->setAttribute('closed_incidents', $incidents->count() - $open);
+                $service->setAttribute('average_duration_minutes', $incidents->avg(fn ($i) => max(0, $i->started_at->diffInSeconds(($i->ended_at ?? $cutoff)->copy()->min($cutoff))) / 60));
+
+                return $service;
+            });
     }
 
     /**
@@ -141,19 +144,7 @@ class ComprehensivePdfReport
      */
     public function reliabilityMetricsSummary(): Collection
     {
-        return ReliabilityMetric::query()
-            ->with('monitoredService:id,name')
-            ->whereIn('id', function ($query): void {
-                $query->selectRaw('MAX(id)')
-                    ->from('reliability_metrics')
-                    ->when($this->filters['service_id'] ?? null, fn ($query, $serviceId) => $query->where('monitored_service_id', $serviceId))
-                    ->when($this->filters['period_type'] ?? null, fn ($query, $periodType) => $query->where('period_type', $periodType))
-                    ->when($this->filters['date_from'] ?? null, fn ($query, $date) => $query->whereDate('period_start', '>=', $date))
-                    ->when($this->filters['date_to'] ?? null, fn ($query, $date) => $query->whereDate('period_start', '<=', $date))
-                    ->groupBy('monitored_service_id');
-            })
-            ->orderBy('period_start')
-            ->get();
+        return $this->reliabilityMetricsQuery()->with('monitoredService:id,name')->orderBy('period_start')->orderBy('id')->get();
     }
 
     /**
@@ -293,9 +284,19 @@ class ComprehensivePdfReport
             ->when($this->filters['date_to'] ?? null, fn (Builder $query, $date): Builder => $query->whereDate('checked_at', '<=', $date));
     }
 
+    private function incidentCutoff(): Carbon
+    {
+        return isset($this->filters['date_to']) ? Carbon::parse($this->filters['date_to'], 'UTC')->startOfDay()->addDay()->min(now()) : now();
+    }
+
+    private function openInPeriod(Builder $query): Builder
+    {
+        return $query->where(fn ($q) => $q->whereNull('ended_at')->orWhere('ended_at', '>=', $this->incidentCutoff()));
+    }
+
     private function applyIncidentDateFilters(Builder $query): Builder
     {
-        return $query
+        return $query->where('started_at', '<', $this->incidentCutoff())
             ->when($this->filters['date_from'] ?? null, fn (Builder $query, $date): Builder => $query->whereDate('started_at', '>=', $date))
             ->when($this->filters['date_to'] ?? null, fn (Builder $query, $date): Builder => $query->whereDate('started_at', '<=', $date));
     }

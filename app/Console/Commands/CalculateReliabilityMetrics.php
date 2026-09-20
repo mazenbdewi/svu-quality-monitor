@@ -79,9 +79,9 @@ class CalculateReliabilityMetrics extends Command
             : now()->subDay();
 
         return match ($periodType) {
-            'daily' => [$periodType, $baseDate->copy()->startOfDay(), $baseDate->copy()->endOfDay()],
-            'weekly' => [$periodType, $baseDate->copy()->startOfWeek(), $baseDate->copy()->endOfWeek()],
-            'monthly' => [$periodType, $baseDate->copy()->startOfMonth(), $baseDate->copy()->endOfMonth()],
+            'daily' => [$periodType, $baseDate->copy()->startOfDay(), $baseDate->copy()->startOfDay()->addDay()],
+            'weekly' => [$periodType, $baseDate->copy()->startOfWeek(), $baseDate->copy()->startOfWeek()->addWeek()],
+            'monthly' => [$periodType, $baseDate->copy()->startOfMonth(), $baseDate->copy()->startOfMonth()->addMonth()],
             default => throw new InvalidArgumentException('Unsupported period type. Use daily, weekly, or monthly.'),
         };
     }

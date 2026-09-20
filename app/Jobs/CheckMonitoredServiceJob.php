@@ -4,6 +4,7 @@ namespace App\Jobs;
 
 use App\Models\MonitoredService;
 use App\Models\ServiceCheck;
+use App\Monitoring\MeasurementLimits;
 use App\Services\ServiceCheckRunner;
 use App\Services\SystemHealthService;
 use Illuminate\Bus\Queueable;
@@ -22,7 +23,7 @@ class CheckMonitoredServiceJob implements ShouldBeUnique, ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
-    public int $timeout = 30;
+    public int $timeout = MeasurementLimits::JOB_TIMEOUT_SECONDS;
 
     public int $tries = 3;
 

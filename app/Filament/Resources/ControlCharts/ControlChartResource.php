@@ -10,6 +10,7 @@ use App\Models\ControlChart;
 use App\Models\MonitoredService;
 use App\Services\ControlChartCalculator;
 use App\Services\ResearchInterpretationService;
+use App\Services\SpcAnalysisWindow;
 use BackedEnum;
 use Carbon\Carbon;
 use Filament\Actions\Action;
@@ -166,13 +167,21 @@ class ControlChartResource extends Resource
             ->components([
                 Section::make(__('monitoring.interpretation.sections.control_chart_interpretation'))
                     ->schema([
+                        TextEntry::make('analysis_timezone')->label(__('monitoring.spc_research.timezone'))->placeholder(__('monitoring.spc_research.legacy')),
+                        TextEntry::make('aggregation_interval')->label(__('monitoring.spc_research.aggregation'))->placeholder(__('monitoring.spc_research.legacy')),
+                        TextEntry::make('analysis_mode')->label(__('monitoring.spc_research.mode'))->placeholder(__('monitoring.spc_research.legacy')),
+                        TextEntry::make('data_cutoff')->label(__('monitoring.spc_research.cutoff'))->placeholder(__('monitoring.spc_research.legacy')),
+                        TextEntry::make('research_context.sample_size')->label(__('monitoring.spc_research.sample'))->placeholder(__('monitoring.spc_research.legacy')),
+                        TextEntry::make('research_context.coverage')->label(__('monitoring.spc_research.coverage'))->placeholder(__('monitoring.spc_research.legacy')),
+                        TextEntry::make('research_context.sufficiency')->label(__('monitoring.spc_research.sufficiency'))->placeholder(__('monitoring.spc_research.legacy')),
+                        TextEntry::make('research_context.partial')->label(__('monitoring.spc_research.partial'))->placeholder(__('monitoring.spc_research.legacy')),
                         TextEntry::make('chart_type')->label(__('monitoring.control_charts.table.chart_type'))->formatStateUsing(fn ($state): string => static::chartTypeOptions()[$state] ?? $state)->tooltip(__('ux.help.control_chart')),
-                        TextEntry::make('period_start')->label(__('monitoring.control_charts.table.period_start'))->dateTime('Y-m-d H:i'),
-                        TextEntry::make('period_end')->label(__('monitoring.control_charts.table.period_end'))->dateTime('Y-m-d H:i'),
+                        TextEntry::make('period_start')->label(__('monitoring.control_charts.table.period_start'))->dateTime('Y-m-d H:i')->timezone(fn (ControlChart $record) => $record->analysis_timezone ?? 'UTC'),
+                        TextEntry::make('period_end')->label(__('monitoring.control_charts.table.period_end'))->dateTime('Y-m-d H:i')->timezone(fn (ControlChart $record) => $record->analysis_timezone ?? 'UTC'),
                         TextEntry::make('control_chart_interpretation_level')
                             ->label(__('monitoring.interpretation.labels.level'))
                             ->state(fn (ControlChart $record): string => app(ResearchInterpretationService::class)->controlChartFinding($record)['level'])
-                            ->formatStateUsing(fn (string $state): string => __("monitoring.interpretation.levels.{$state}"))
+                            ->formatStateUsing(fn (string $state): string => __("monitoring.spc_research.{$state}"))
                             ->badge()
                             ->color(fn (ControlChart $record): string => app(ResearchInterpretationService::class)->controlChartFinding($record)['color']),
                         TextEntry::make('control_chart_out_of_control_points')->tooltip(__('ux.help.spc'))
@@ -266,6 +275,8 @@ class ControlChartResource extends Resource
                     ->numeric(decimalPlaces: 4)
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('analysis_mode')->label(__('monitoring.spc_research.mode'))->placeholder(__('monitoring.spc_research.legacy')),
+                TextColumn::make('research_context.sufficiency')->label(__('monitoring.spc_research.sufficiency'))->formatStateUsing(fn ($state) => __('monitoring.spc_research.'.$state))->placeholder(__('monitoring.spc_research.legacy')),
                 TextColumn::make('points_count')->toggleable(isToggledHiddenByDefault: true)
                     ->label(__('monitoring.control_charts.table.points_count'))
                     ->sortable(),
@@ -360,9 +371,10 @@ class ControlChartResource extends Resource
                     ->label(__('monitoring.control_charts.actions.chart_type'))
                     ->options(static::chartTypeOptions())
                     ->native(false),
-                DatePicker::make('date')
-                    ->label(__('monitoring.control_charts.actions.date'))
-                    ->default(now()),
+                Select::make('window')->label(__('monitoring.spc_research.window'))
+                    ->options(['7' => '7 days', '30' => '30 days', '90' => '90 days', 'custom' => __('monitoring.spc_research.custom')])->default('30')->required()->live(),
+                DatePicker::make('analysis_start')->label(__('monitoring.spc_research.start'))->visible(fn ($get) => $get('window') === 'custom')->required(fn ($get) => $get('window') === 'custom'),
+                DatePicker::make('analysis_end')->label(__('monitoring.spc_research.end'))->visible(fn ($get) => $get('window') === 'custom')->required(fn ($get) => $get('window') === 'custom')->after('analysis_start'),
                 Select::make('bucket')
                     ->label(__('monitoring.control_charts.actions.bucket'))
                     ->options(static::bucketOptions())
@@ -372,14 +384,10 @@ class ControlChartResource extends Resource
             ])
             ->action(function (array $data): void {
                 $calculator = app(ControlChartCalculator::class);
-                $date = isset($data['date']) && $data['date']
-                    ? Carbon::parse($data['date'])
-                    : now();
-                $start = $date->copy()->startOfDay();
-                $end = $date->copy()->endOfDay();
-                $chartTypes = $data['chart_type']
+                [$start, $end] = app(SpcAnalysisWindow::class)->resolve((string) ($data['window'] ?? '30'), $data['analysis_start'] ?? null, $data['analysis_end'] ?? null);
+                $chartTypes = ($data['chart_type'] ?? null)
                     ? [(string) $data['chart_type']]
-                    : ControlChartCalculator::CHART_TYPES;
+                    : ControlChartCalculator::RESEARCH_TYPES;
 
                 $query = MonitoredService::query();
 
@@ -396,7 +404,7 @@ class ControlChartResource extends Resource
                             $chartType,
                             $start->copy(),
                             $end->copy(),
-                            'daily',
+                            ($data['window'] ?? '30') === 'custom' ? 'custom' : ($data['window'] ?? '30').'_days',
                             (string) ($data['bucket'] ?? 'hourly'),
                         );
                     }
@@ -427,8 +435,8 @@ class ControlChartResource extends Resource
             'i_chart' => __('monitoring.control_charts.chart_types.i_chart'),
             'mr_chart' => __('monitoring.control_charts.chart_types.mr_chart'),
             'p_chart' => __('monitoring.control_charts.chart_types.p_chart'),
-            'c_chart' => __('monitoring.control_charts.chart_types.c_chart'),
-            'u_chart' => __('monitoring.control_charts.chart_types.u_chart'),
+            'c_chart' => __('monitoring.control_charts.chart_types.c_chart').' — '.__('monitoring.spc_research.legacy'),
+            'u_chart' => __('monitoring.control_charts.chart_types.u_chart').' — '.__('monitoring.spc_research.legacy'),
         ];
     }
 
@@ -451,6 +459,7 @@ class ControlChartResource extends Resource
     {
         return [
             'response_time_ms' => __('monitoring.metrics.response_time_ms'),
+            'problematic_proportion' => 'Problematic proportion',
             'failure_proportion' => __('monitoring.metrics.failure_proportion'),
             'failed_checks_count' => __('monitoring.metrics.failed_checks_count'),
             'failures_per_check' => __('monitoring.metrics.failures_per_check'),

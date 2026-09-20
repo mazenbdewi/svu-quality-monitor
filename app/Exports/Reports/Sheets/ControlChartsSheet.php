@@ -58,6 +58,7 @@ class ControlChartsSheet implements FromQuery, ShouldAutoSize, WithEvents, WithH
             __('monitoring.report_columns.points_count'),
             __('monitoring.report_columns.out_of_control_count'),
             __('monitoring.report_columns.calculated_at'),
+            'analysis_timezone', 'aggregation_interval', 'analysis_mode', 'data_cutoff', 'calculation_version', 'sufficiency',
         ];
     }
 
@@ -80,6 +81,8 @@ class ControlChartsSheet implements FromQuery, ShouldAutoSize, WithEvents, WithH
             $row->points_count,
             $row->out_of_control_count,
             $this->dateTime($row->calculated_at),
+            $row->analysis_timezone, $row->aggregation_interval, $row->analysis_mode ?? 'legacy',
+            $this->dateTime($row->data_cutoff), $row->calculation_version, data_get($row->research_context, 'sufficiency', 'legacy'),
         ];
     }
 

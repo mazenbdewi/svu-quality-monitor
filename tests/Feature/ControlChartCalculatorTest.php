@@ -12,6 +12,12 @@ class ControlChartCalculatorTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->travelTo(Carbon::parse('2026-07-10'));
+    }
+
     public function test_i_chart_calculates_center_line_and_limits(): void
     {
         $service = MonitoredService::factory()->create();
@@ -55,7 +61,7 @@ class ControlChartCalculatorTest extends TestCase
 
         $chart = $this->calculate($service, 'p_chart');
 
-        $this->assertSame('failure_proportion', $chart->metric_name);
+        $this->assertSame('problematic_proportion', $chart->metric_name);
         $this->assertSame('0.5000', $chart->center_line);
         $this->assertSame(2, $chart->points_count);
         $this->assertSame(['0.3333', '1.0000'], $chart->points()->orderBy('point_time')->pluck('value')->all());
@@ -174,6 +180,7 @@ class ControlChartCalculatorTest extends TestCase
     ): void {
         $service->serviceChecks()->create([
             'checked_at' => Carbon::parse($checkedAt),
+            'source' => 'automatic', 'check_type' => 'http',
             'status_code' => $isSuccess ? 200 : 500,
             'response_time_ms' => $responseTimeMs,
             'is_success' => $isSuccess,

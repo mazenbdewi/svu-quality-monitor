@@ -20,9 +20,10 @@ class ExecutiveDashboardService
         $start = $now->copy()->startOfMonth();
         $end = $now->copy()->endOfMonth();
         $metrics = $this->periodMetrics($start, $end);
-        $services = $this->services($now, $metrics);
+        $asOf = $now->copy()->min(now());
+        $services = $this->services($asOf, $metrics, $date !== null);
         $activeMaintenance = MaintenanceWindow::query()
-            ->where('starts_at', '<=', $now)->where('ends_at', '>', $now)
+            ->where('starts_at', '<=', $asOf)->where('ends_at', '>', $asOf)
             ->with('monitoredServices:id')->get();
         $maintenanceIds = $activeMaintenance->contains('applies_to_all_services', true)
             ? $services->pluck('id')->all()
@@ -34,7 +35,7 @@ class ExecutiveDashboardService
             return $service;
         });
         $sla = $this->slaSummary($metrics);
-        $incidents = $this->incidentSummary($start, $end);
+        $incidents = $this->incidentSummary($start, $end->copy()->min($asOf));
 
         return [
             'period_start' => $start,
@@ -46,17 +47,17 @@ class ExecutiveDashboardService
                 'healthy' => $services->filter(fn (MonitoredService $service) => $this->status($service) === 'healthy')->count(),
                 'down' => $services->filter(fn (MonitoredService $service) => $this->status($service) === 'down')->count(),
                 'maintenance' => count($maintenanceIds),
-                'open_incidents' => ServiceIncident::query()->where('status', 'open')->count(),
+                'open_incidents' => ServiceIncident::query()->whereNotNull('confirmed_at')->where('confirmed_at', '<=', $asOf)->where('started_at', '<=', $asOf)->where(fn ($q) => $q->whereNull('ended_at')->orWhere('ended_at', '>', $asOf))->count(),
             ],
             'sla' => $sla,
             'incidents' => $incidents,
-            'ssl' => $this->sslSummary($now),
-            'spc' => $this->spcSummary($start, $end),
+            'ssl' => $this->sslSummary($asOf),
+            'spc' => $this->spcSummary($start, $end->copy()->min($asOf)),
             'maintenance' => [
                 'active' => $activeMaintenance,
                 'upcoming' => MaintenanceWindow::query()->where('starts_at', '>', $now)->orderBy('starts_at')->limit(5)->get(),
             ],
-            'response_time' => $this->responseTimeSummary($now),
+            'response_time' => $this->responseTimeSummary($asOf),
             'system_health' => app(SystemHealthService::class)->snapshot(),
         ];
     }
@@ -69,13 +70,20 @@ class ExecutiveDashboardService
     }
 
     /** @return Collection<int, MonitoredService> */
-    private function services(Carbon $now, Collection $metrics): Collection
+    private function services(Carbon $now, Collection $metrics, bool $historical = false): Collection
     {
         $byService = $metrics->keyBy('monitored_service_id');
 
-        return MonitoredService::query()->where('is_active', true)
+        return MonitoredService::query()->when(! $historical, fn ($q) => $q->where('is_active', true))
+            ->when($historical, fn ($q) => $q->where(fn ($q) => $q->where('created_at', '<=', $now)->orWhereIn('id', $metrics->pluck('monitored_service_id'))->orWhereHas('serviceChecks', fn ($q) => $q->where('checked_at', '<=', $now))->orWhereHas('serviceIncidents', fn ($q) => $q->where('started_at', '<=', $now))))
             ->with(['latestServiceCheck', 'openIncident'])->orderBy('name')->get()
-            ->map(function (MonitoredService $service) use ($byService): MonitoredService {
+            ->map(function (MonitoredService $service) use ($byService, $historical, $now): MonitoredService {
+                if ($historical) {
+                    $service->setRelation('latestServiceCheck', $service->serviceChecks()->where('checked_at', '<=', $now)->orderByDesc('checked_at')->orderByDesc('id')->first());
+                    $incident = $service->serviceIncidents()->whereNotNull('confirmed_at')->where('confirmed_at', '<=', $now)->where('started_at', '<=', $now)->where(fn ($q) => $q->whereNull('ended_at')->orWhere('ended_at', '>', $now))->first();
+                    $service->setRelation('openIncident', $incident);
+                    $service->setAttribute('operational_state', $incident ? 'down' : 'healthy');
+                }
                 $service->setRelation('executiveSlaMetric', $byService->get($service->id));
 
                 return $service;
@@ -105,7 +113,7 @@ class ExecutiveDashboardService
     private function incidentSummary(Carbon $start, Carbon $end): array
     {
         $incidents = ServiceIncident::query()->with('monitoredService:id,name')->whereNotNull('confirmed_at')
-            ->where('started_at', '<', $end)->where(fn ($q) => $q->whereNull('ended_at')->orWhere('ended_at', '>', $start))->get();
+            ->where('confirmed_at', '<=', $end)->where('started_at', '<', $end)->where(fn ($q) => $q->whereNull('ended_at')->orWhere('ended_at', '>', $start))->get();
         $durations = $incidents->map(function (ServiceIncident $incident) use ($start, $end): int {
             $from = $incident->started_at->max($start);
             $to = ($incident->ended_at ?? $end)->min($end);
@@ -124,7 +132,7 @@ class ExecutiveDashboardService
     private function sslSummary(Carbon $now): array
     {
         $checks = ServiceCheck::query()->with('monitoredService:id,name')->where('check_type', 'ssl')->whereNotNull('metadata')
-            ->latest('checked_at')->limit(500)->get()->unique('monitored_service_id')->filter(fn (ServiceCheck $check) => filled(data_get($check->metadata, 'days_remaining')));
+            ->where('checked_at', '<=', $now)->latest('checked_at')->limit(500)->get()->unique('monitored_service_id')->filter(fn (ServiceCheck $check) => filled(data_get($check->metadata, 'days_remaining')));
 
         return [
             'within_30' => $checks->filter(fn (ServiceCheck $check) => (int) data_get($check->metadata, 'days_remaining') <= 30)->count(),

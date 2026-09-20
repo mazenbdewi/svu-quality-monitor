@@ -61,6 +61,7 @@ class ReliabilityMetricsSheet implements FromQuery, ShouldAutoSize, WithEvents, 
             __('monitoring.report_columns.mttr_minutes'),
             __('monitoring.report_columns.failure_rate'),
             __('monitoring.report_columns.calculated_at'),
+            'measurement_context',
         ];
     }
 
@@ -88,6 +89,7 @@ class ReliabilityMetricsSheet implements FromQuery, ShouldAutoSize, WithEvents, 
             $row->mttr_minutes,
             $row->failure_rate,
             $this->dateTime($row->calculated_at),
+            $row->measurement_context === null ? null : json_encode($row->measurement_context, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR),
         ];
     }
 

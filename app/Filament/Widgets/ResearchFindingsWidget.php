@@ -26,7 +26,7 @@ class ResearchFindingsWidget extends Widget
         $end = now()->endOfDay();
         $todayChecks = ServiceCheck::query()->whereBetween('checked_at', [$start, $end])->count();
         $slowChecks = ServiceCheck::query()->whereBetween('checked_at', [$start, $end])->where('is_slow', true)->count();
-        $availability = ReliabilityMetric::query()->where('period_type', 'daily')->whereDate('period_start', today())->avg('availability_percent');
+        $availability = ReliabilityMetric::weightedAvailability(ReliabilityMetric::query()->where('period_type', 'daily')->whereDate('period_start', today()));
         $hasSpcData = ControlChart::query()->where('points_count', '>', 0)->exists();
         $outOfControlPoints = ControlChartPoint::query()->where('is_out_of_control', true)->whereBetween('point_time', [$start, $end])->count();
         $performance = $this->performanceState($slowChecks, $todayChecks);

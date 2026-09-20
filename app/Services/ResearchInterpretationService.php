@@ -83,32 +83,14 @@ class ResearchInterpretationService
      */
     public function controlChartFinding(ControlChart $chart): array
     {
-        $pointsCount = (int) $chart->points_count;
-        $outOfControlCount = (int) $chart->out_of_control_count;
+        $state = $chart->analysis_mode === 'exploratory' ? data_get($chart->research_context, 'sufficiency', 'insufficient') : 'legacy';
 
-        $level = match (true) {
-            $pointsCount === 0 => 'no_data',
-            $outOfControlCount === 0 => 'stable',
-            $outOfControlCount <= 2 => 'warning',
-            default => 'needs_investigation',
-        };
-
-        return $this->finding(
-            $level,
-            __("monitoring.interpretation.control_charts.titles.{$level}"),
-            __("monitoring.interpretation.control_charts.messages.{$level}", [
-                'points' => number_format($pointsCount),
-                'out_of_control' => number_format($outOfControlCount),
-                'chart_type' => __("monitoring.chart_types.{$chart->chart_type}"),
-                'metric_name' => __("monitoring.metrics.{$chart->metric_name}"),
-            ]),
-            match ($level) {
-                'stable' => __('monitoring.interpretation.recommendations.continue_monitoring'),
-                'no_data' => __('monitoring.interpretation.recommendations.continue_monitoring'),
-                'warning' => __('monitoring.interpretation.recommendations.review_service_performance'),
-                default => __('monitoring.interpretation.recommendations.investigate_out_of_control_points'),
-            },
-        );
+        return [
+            'level' => $state, 'color' => $chart->out_of_control_count > 0 ? 'warning' : 'gray',
+            'title' => __('monitoring.spc_research.'.$state),
+            'message' => __('monitoring.spc_research.'.$state).' — '.__('monitoring.spc_research.limits'),
+            'recommendation' => __('monitoring.spc_research.missing'),
+        ];
     }
 
     /**
@@ -228,7 +210,7 @@ class ResearchInterpretationService
         $failedChecks = (clone $this->checksQuery($filters))->where('is_success', false)->count();
         $slowChecks = (clone $this->checksQuery($filters))->where('is_slow', true)->count();
         $openIncidents = (clone $this->incidentsQuery($filters))->where('status', 'open')->count();
-        $averageAvailability = $this->metricsQuery($filters)->avg('availability_percent');
+        $averageAvailability = ReliabilityMetric::weightedAvailability($this->metricsQuery($filters));
         $outOfControlPoints = $this->outOfControlPointsQuery($filters)->count();
 
         $findings = [];
@@ -351,13 +333,13 @@ class ResearchInterpretationService
 
     private function averageLatestDailyAvailability(): ?float
     {
-        $todayAverage = ReliabilityMetric::query()
+        $todayQuery = ReliabilityMetric::query()
             ->where('period_type', 'daily')
-            ->whereDate('period_start', today())
-            ->avg('availability_percent');
+            ->whereDate('period_start', today());
+        $todayAverage = ReliabilityMetric::weightedAvailability($todayQuery);
 
-        if ($todayAverage !== null) {
-            return (float) $todayAverage;
+        if ($todayQuery->exists()) {
+            return $todayAverage;
         }
 
         $activeServiceIds = MonitoredService::query()
@@ -376,10 +358,9 @@ class ResearchInterpretationService
                     ->where('period_type', 'daily')
                     ->whereIn('monitored_service_id', $activeServiceIds)
                     ->groupBy('monitored_service_id');
-            })
-            ->pluck('availability_percent');
+            });
 
-        return $metrics->isEmpty() ? null : (float) $metrics->avg();
+        return ReliabilityMetric::weightedAvailability($metrics);
     }
 
     /**

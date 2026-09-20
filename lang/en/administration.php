@@ -7,6 +7,12 @@ return [
     'errors' => ['super_admin' => 'Only a Super Admin may grant this role or modify a Super Admin.', 'last_super_admin' => 'The last active Super Admin cannot be deactivated or lose their role.'],
     'audit' => ['title' => 'Audit log', 'entry' => 'Audit entry', 'actor' => 'Actor', 'event' => 'Event', 'resource' => 'Resource', 'resource_id' => 'Resource ID', 'description' => 'Description', 'timestamp' => 'Date/time', 'ip' => 'IP address', 'user_agent' => 'User agent', 'before' => 'Before', 'after' => 'After', 'context' => 'Metadata', 'from' => 'Date from', 'to' => 'Date to', 'dates' => 'Date range', 'system' => 'System / unavailable',
         'events' => [
+            'baseline.created' => 'Baseline created',
+            'baseline.reviewed' => 'Baseline reviewed',
+            'baseline.approved' => 'Baseline approved',
+            'baseline.retired' => 'Baseline retired',
+            'baseline.rejected' => 'Baseline rejected',
+
             'service.created' => 'Monitoring service created',
             'service.updated' => 'Monitoring service updated',
             'service.enabled' => 'Monitoring service enabled',

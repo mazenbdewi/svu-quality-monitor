@@ -24,7 +24,7 @@ class ResearchInterpretationServiceTest extends TestCase
         $this->assertSame('critical', $service->availabilityLevel(89.99));
     }
 
-    public function test_control_chart_finding_returns_stable_without_out_of_control_points(): void
+    public function test_legacy_chart_is_not_certified_stable_without_signals(): void
     {
         $chart = new ControlChart([
             'chart_type' => 'i_chart',
@@ -35,8 +35,8 @@ class ResearchInterpretationServiceTest extends TestCase
 
         $finding = app(ResearchInterpretationService::class)->controlChartFinding($chart);
 
-        $this->assertSame('stable', $finding['level']);
-        $this->assertSame('success', $finding['color']);
+        $this->assertSame('legacy', $finding['level']);
+        $this->assertSame('gray', $finding['color']);
     }
 
     public function test_control_chart_finding_returns_needs_investigation_for_repeated_signals(): void
@@ -50,8 +50,8 @@ class ResearchInterpretationServiceTest extends TestCase
 
         $finding = app(ResearchInterpretationService::class)->controlChartFinding($chart);
 
-        $this->assertSame('needs_investigation', $finding['level']);
-        $this->assertSame('danger', $finding['color']);
+        $this->assertSame('legacy', $finding['level']);
+        $this->assertSame('warning', $finding['color']);
     }
 
     public function test_service_status_finding_handles_unknown_healthy_slow_and_down(): void

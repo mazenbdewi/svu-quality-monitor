@@ -12,6 +12,14 @@ class ControlChart extends Model
      * @var list<string>
      */
     protected $fillable = [
+        'analysis_identity',
+        'analysis_timezone',
+        'aggregation_interval',
+        'analysis_mode',
+        'calculation_version',
+        'data_cutoff',
+        'research_context',
+
         'monitored_service_id',
         'chart_type',
         'metric_name',
@@ -33,6 +41,8 @@ class ControlChart extends Model
     protected function casts(): array
     {
         return [
+            'research_context' => 'array',
+            'data_cutoff' => 'datetime',
             'period_start' => 'datetime',
             'period_end' => 'datetime',
             'calculated_at' => 'datetime',

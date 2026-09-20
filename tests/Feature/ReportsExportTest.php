@@ -135,6 +135,7 @@ class ReportsExportTest extends TestCase
 
         ServiceCheck::query()->create([
             'monitored_service_id' => $service->id,
+            'source' => 'automatic', 'check_type' => 'http',
             'checked_at' => Carbon::parse('2026-07-20 09:15:00'),
             'status_code' => 500,
             'response_time_ms' => 2500,
@@ -144,7 +145,7 @@ class ReportsExportTest extends TestCase
             'expected_keyword_found' => false,
         ]);
 
-        $sheet = new MinitabRawChecksSheet;
+        $sheet = new MinitabRawChecksSheet(['date_from' => '2026-07-20', 'date_to' => '2026-07-20']);
         $row = $sheet->map($sheet->query()->first());
 
         $this->assertSame('service_name', $sheet->headings()[0]);
@@ -169,18 +170,15 @@ class ReportsExportTest extends TestCase
         $this->createMinitabCheck($service, '2026-07-20 09:45:00', isSuccess: true, isSlow: true, responseTime: 2500);
 
         $row = (new MinitabBucketedChecksSheet([
-            'bucket_size' => 'hourly',
-        ]))->collection()->first();
+            'bucket_size' => 'hourly', 'date_from' => '2026-07-20', 'date_to' => '2026-07-20',
+        ]))->collection()->first(fn ($row) => $row[4] > 0);
 
         $this->assertSame('SVU Portal', $row[0]);
-        $this->assertSame('2026-07-20 09:00:00', $row[1]);
-        $this->assertSame(9, $row[3]);
+        $this->assertSame('2026-07-20T09:00:00+00:00', $row[1]);
         $this->assertSame(3, $row[4]);
-        $this->assertSame(1, $row[6]);
-        $this->assertSame(1, $row[7]);
-        $this->assertSame(2, $row[8]);
-        $this->assertEqualsWithDelta(1 / 3, $row[9], 0.000001);
-        $this->assertEqualsWithDelta(2 / 3, $row[11], 0.000001);
+        $this->assertSame(2, $row[7]);
+        $this->assertSame(1, $row[9]);
+        $this->assertEqualsWithDelta(2 / 3, $row[8], 0.000001);
     }
 
     public function test_comprehensive_report_generates_pdf_content(): void
@@ -319,6 +317,7 @@ class ReportsExportTest extends TestCase
     {
         ServiceCheck::query()->create([
             'monitored_service_id' => $service->id,
+            'source' => 'automatic', 'check_type' => 'http',
             'checked_at' => Carbon::parse($checkedAt),
             'status_code' => $isSuccess ? 200 : 500,
             'response_time_ms' => $responseTime,

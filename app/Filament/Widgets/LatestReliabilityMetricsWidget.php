@@ -38,9 +38,11 @@ class LatestReliabilityMetricsWidget extends TableWidget
                     ->label(__('monitoring.dashboard.columns.service_name')),
                 TextColumn::make('availability_percent')
                     ->label(__('monitoring.dashboard.columns.availability_percent'))
+                    ->placeholder(__('monitoring.reliability_insufficient_data'))
                     ->badge()
-                    ->formatStateUsing(fn ($state): string => number_format((float) $state, 4).'%')
+                    ->formatStateUsing(fn ($state): string => $state === null ? __('monitoring.reliability_insufficient_data') : number_format((float) $state, 4).'%')
                     ->color(fn ($state): string => match (true) {
+                        $state === null => 'gray',
                         (float) $state >= 99 => 'success',
                         (float) $state >= 95 => 'warning',
                         default => 'danger',

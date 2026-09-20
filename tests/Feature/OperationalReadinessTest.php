@@ -48,7 +48,8 @@ class OperationalReadinessTest extends TestCase
         $this->assertStringContainsString("Schedule::command('sla:calculate')", $console);
         $this->assertStringContainsString("->dailyAt('00:20')", $console);
         $this->assertStringContainsString("->dailyAt('00:25')", $console);
-        $this->assertSame(6, substr_count($console, '->withoutOverlapping()'));
+        $this->assertSame(7, substr_count($console, '->withoutOverlapping()'));
+        $this->assertStringContainsString("Schedule::command('spc:evaluate')->everyMinute()->withoutOverlapping()", $console);
         $this->assertSame(2, substr_count($console, '->withoutOverlapping(120)'));
         $this->assertStringContainsString('system-health:scheduler-heartbeat', $console);
     }

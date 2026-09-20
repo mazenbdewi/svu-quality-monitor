@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\MonitoringCheckType;
+use App\Monitoring\MeasurementLimits;
 use App\Services\MaintenanceWindowService;
 use Database\Factories\MonitoredServiceFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -245,7 +246,7 @@ class MonitoredService extends Model
 
     public function timeoutSeconds(): int
     {
-        return max(1, min((int) (($this->check_config ?? [])['timeout_seconds'] ?? 10), 60));
+        return max(1, min((int) (($this->check_config ?? [])['timeout_seconds'] ?? 10), MeasurementLimits::MAX_SERVICE_TIMEOUT_SECONDS));
     }
 
     public function targetHost(): string

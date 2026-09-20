@@ -1,0 +1,68 @@
+# Disposable R5 verification only. No production env file, database, port or volume.
+x-app: &app
+  image: svu-r5-app:local
+  build:
+    context: ..
+    dockerfile: Dockerfile
+    target: app
+  environment: &environment
+    APP_ENV: production
+    APP_DEBUG: 'false'
+    APP_KEY: 'base64:QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUE='
+    APP_URL: http://localhost:18085
+    APP_NAME: R5-isolated-test
+    DB_CONNECTION: mysql
+    DB_HOST: db
+    DB_DATABASE: r5_fresh
+    DB_USERNAME: r5
+    DB_PASSWORD: isolated-test-only
+    DB_QUEUE_RETRY_AFTER: 90
+    CACHE_STORE: database
+    SESSION_DRIVER: database
+    QUEUE_CONNECTION: database
+    MAIL_MAILER: log
+    LOG_CHANNEL: stderr
+    SPC_ANALYSIS_TIMEZONE: Asia/Damascus
+    RESEARCH_ISOLATED_TEST: 'true'
+  volumes:
+    - research_storage:/var/www/html/storage
+  depends_on:
+    db:
+      condition: service_healthy
+services:
+  app:
+    <<: *app
+  web:
+    image: svu-r5-web:local
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      target: web
+    ports: ['127.0.0.1:18085:80']
+    volumes: ['research_storage:/var/www/html/storage:ro']
+    depends_on: [app]
+  db:
+    image: mysql:8.4
+    environment:
+      MYSQL_ROOT_PASSWORD: isolated-root-only
+      MYSQL_DATABASE: r5_fresh
+      MYSQL_USER: r5
+      MYSQL_PASSWORD: isolated-test-only
+    volumes: ['research_database:/var/lib/mysql']
+    healthcheck:
+      test: ['CMD-SHELL', 'mysqladmin ping -h 127.0.0.1 -uroot -p$$MYSQL_ROOT_PASSWORD --silent']
+      interval: 5s
+      timeout: 5s
+      retries: 30
+  scheduler:
+    <<: *app
+    command: ['php', 'artisan', 'schedule:work']
+  queue:
+    <<: *app
+    command: ['php', 'artisan', 'queue:work', '--sleep=1', '--tries=3', '--timeout=60', '--max-time=3600']
+volumes:
+  research_storage:
+  research_database:
+networks:
+  default:
+    internal: true

@@ -17,10 +17,14 @@ Each monitored service has a `check_type` and an encrypted `check_config`. Exist
 - **Critical:** a functional HTTP/API check is at or above `critical_response_ms`. It is a performance condition, not downtime.
 - **Down:** a functional check fails, for example DNS failure, TCP connection failure, TLS failure, expired certificate, HTTP status mismatch, content mismatch, or JSON assertion failure.
 
-Only functional failures are passed to the existing incident detector. Performance warning/critical checks and near-expiry certificates do not open outage incidents or create downtime. HTTP/API response times remain available to existing control charts; DNS, SSL, and TCP response metrics are not added to those charts automatically.
+All check results are passed to the existing incident detector; only functional failures advance failure confirmation. Performance warning/critical checks and near-expiry certificates do not open outage incidents or create downtime. HTTP/API response times remain available to existing control charts; DNS, SSL, and TCP response metrics are not added to those charts automatically.
 
 ## Secrets and stored metadata
 
 `check_config` uses Laravel's `encrypted:array` cast. API headers and tokens are encrypted at rest, omitted from check-result metadata, logs, and exports. Store only the required header values and avoid putting secrets in service names, URLs, or notes.
 
 Check-result metadata is intentionally bounded: no response body, cookies, Authorization header, or large payload is stored. Errors use stable categories such as `timeout`, `dns_failure`, `connection_refused`, `http_status_mismatch`, `keyword_missing`, `json_expectation_failed`, `tls_failure`, and `certificate_expired`.
+
+## R1 research contract
+
+Successful warning and critical timed responses both set `is_slow=true`; critical remains functionally successful. Research scopes, coverage, timeout limits (1–20 seconds), and start-of-attempt HTTP/API timestamps are specified in [Research Measurement Protocol](research-measurement-protocol.md). Legacy chart/export populations are intentionally unchanged until R3.

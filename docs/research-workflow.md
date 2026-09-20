@@ -18,3 +18,9 @@ SVU Quality Monitor supports the applied part of the research workflow by collec
 The system remains the main applied tool for data collection, processing, reporting, and interpretation. Minitab-ready export can be used when the researcher needs external validation of selected control chart results or grouped statistical behavior.
 
 The generated reports can support thesis documentation, supervisor review, and comparison between system-generated outputs and external statistical analysis.
+
+## R1 eligibility and limitations
+
+Final research samples use automatic observations under [the measurement protocol](research-measurement-protocol.md). Manual observations remain operational; Reliability follows [the R2 methodology](reliability-methodology.md); SPC exploratory calculations and exports follow [the R3 methodology](spc-research-methodology.md); Phase I Baseline approval follows R4A; Phase II remains deferred. R1 adds shared eligibility and coverage foundations, not a Baseline or validated Phase II workflow.
+
+Phase I research references now follow [the R4A Baseline methodology](spc-phase1-baseline-methodology.md). Creation, review and approval are separate actions; Phase II monitoring remains unimplemented.

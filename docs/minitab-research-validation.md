@@ -1,0 +1,16 @@
+# Manual Minitab validation — R5
+
+No Minitab execution is claimed. Use a frozen research package and verify every file against manifest.sha256 first. Preserve the package and application source/image identity with the Minitab project.
+
+1. Read configuration.json, baselines.json and manifest.json. Select one service/chart/baseline/version and mode. Use its frozen timezone, eligibility and parameters; do not substitute current settings.
+2. Import minitab_baseline_<id>_members.csv. Keep `included=1`; sort by sequence (checked_at, ID is the underlying deterministic order). Compare IDs/counts to baseline_<id>_membership.json and the membership digest. Retain exclusions, including missing/failed latency, outside the analysis sample.
+3. For I, use included successful response_time_ms. Calculate mean, adjacent moving ranges of size 2, MR-bar and sigma=MR-bar/1.128. Compare CL and three-sigma limits to the exported Phase I points/parameters. Match the application's nonnegative physical LCL policy. Do not let a software default choose different subgroup/order rules.
+4. For MR, compare the exported source check/previous-check pairs and absolute differences. Use MR CL=MR-bar, UCL=3.267*MR-bar, LCL=0. Confirm every point, including signals, not merely rounded summary values.
+5. For Phase I P, use the exact baseline coverage_context buckets and membership. Compute d_i/n_i, pooled p0=sum(d_i)/sum(n_i), and per-group clamped limits p0±3*sqrt(p0*(1-p0)/n_i). Empty groups are missing, never zero-success observations. Keep the baseline's subgroup definitions; do not regroup by a workstation's local timezone.
+6. For Phase II import minitab_live_phase_two.csv or minitab_retrospective_phase_two.csv separately. Filter baseline_id, chart_type and eligible status. I/MR compare with frozen baseline limits, without re-estimation from Phase II. P uses frozen p0 and each subgroup n_i; ignore missing/insufficient groups as final signals.
+7. For MR Phase II the first eligible observation has no range; the pairing policy does not borrow Phase I. Out-of-order late arrivals and inactive-boundary resets must be matched to recorded context. Do not infer a new pair chain from subsequently edited raw history.
+8. Compare strict >UCL / <LCL with raw signals. Check observed_at separately from detected_at; P cannot be detected before group close. A one-sigma/run-rule default in external software is not the R4B v1 rule.
+9. Reproduce run-specific links from first detection, incident start, the stored horizon, exposure inclusion/exclusion and mode. Use earliest eligible episode for primary lead seconds. Account for censored follow-up before precision, and deduplicate incidents for recall. Use saved run datasets, not current incident statuses.
+10. Record differences with full precision, then explain display rounding. Investigate serial correlation, skewness, small P samples, overdispersion and p0=0/1 separately; numerical agreement does not validate distributional assumptions.
+
+The package uses JSON for nested membership/coverage/context and CSV for direct numeric import. Empty CSV files represent empty populations. Operational checks include fixed performance status and source creation/update time; compare threshold availability with SPC detection only after verifying provenance and retention. Neither timestamp proves notification delivery.

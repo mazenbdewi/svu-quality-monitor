@@ -109,13 +109,13 @@ class OverviewStatsWidget extends StatsOverviewWidget
 
     private function averageLatestDailyAvailability(): ?float
     {
-        $todayAverage = ReliabilityMetric::query()
+        $todayQuery = ReliabilityMetric::query()
             ->where('period_type', 'daily')
-            ->whereDate('period_start', today())
-            ->avg('availability_percent');
+            ->whereDate('period_start', today());
+        $todayAverage = ReliabilityMetric::weightedAvailability($todayQuery);
 
-        if ($todayAverage !== null) {
-            return (float) $todayAverage;
+        if ($todayQuery->exists()) {
+            return $todayAverage;
         }
 
         $activeServiceIds = MonitoredService::query()
@@ -133,9 +133,8 @@ class OverviewStatsWidget extends StatsOverviewWidget
                     ->where('period_type', 'daily')
                     ->whereIn('monitored_service_id', $activeServiceIds)
                     ->groupBy('monitored_service_id');
-            })
-            ->pluck('availability_percent');
+            });
 
-        return $metrics->isEmpty() ? null : (float) $metrics->avg();
+        return ReliabilityMetric::weightedAvailability($metrics);
     }
 }

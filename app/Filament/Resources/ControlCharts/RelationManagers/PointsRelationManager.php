@@ -28,6 +28,12 @@ class PointsRelationManager extends RelationManager
                     ->alignCenter()
                     ->extraAttributes(['dir' => 'ltr', 'class' => '[unicode-bidi:isolate] text-center', 'style' => 'text-align: center; unicode-bidi: isolate;'])
                     ->sortable(),
+                TextColumn::make('sample_size')->label('nᵢ'),
+                TextColumn::make('research_context.problematic_count')->label('dᵢ'),
+                TextColumn::make('research_context.expected_count')->label(__('monitoring.spc_research.expected')),
+                TextColumn::make('research_context.coverage')->label(__('monitoring.spc_research.coverage'))->numeric(decimalPlaces: 2),
+                TextColumn::make('ucl')->label('UCLᵢ')->numeric(decimalPlaces: 4),
+                TextColumn::make('lcl')->label('LCLᵢ')->numeric(decimalPlaces: 4),
                 TextColumn::make('value')
                     ->label(__('monitoring.control_charts.points.table.value'))
                     ->numeric(decimalPlaces: 2)
@@ -44,14 +50,14 @@ class PointsRelationManager extends RelationManager
                     ->extraAttributes(['dir' => 'ltr', 'class' => '[unicode-bidi:isolate] text-center', 'style' => 'text-align: center; unicode-bidi: isolate;']),
                 TextColumn::make('status')
                     ->label(__('monitoring.control_charts.points.table.status'))
-                    ->state(fn ($record): string => $record->is_out_of_control ? 'out_of_control' : ($record->signal_type ? 'warning' : 'normal'))
-                    ->formatStateUsing(fn (string $state): string => __("monitoring.control_charts.points.statuses.{$state}"))
+                    ->state(fn ($record): string => $record->is_out_of_control ? 'out_of_control' : ($record->signal_type ? 'warning' : 'no_exceedance'))
+                    ->formatStateUsing(fn (string $state): string => $state === 'no_exceedance' ? __('monitoring.spc_research.no_exceedance') : __("monitoring.control_charts.points.statuses.{$state}"))
                     ->badge()
                     ->alignCenter()
                     ->color(fn (string $state): string => match ($state) {
                         'out_of_control' => 'danger',
                         'warning' => 'warning',
-                        default => 'success',
+                        default => 'gray',
                     }),
                 TextColumn::make('signal_type')
                     ->label(__('monitoring.control_charts.points.table.signal_type'))

@@ -39,7 +39,7 @@ class AdministrativeAudit
             $fields['roles'] = $model->roles()->orderBy('name')->pluck('name')->all();
         }
         $secrets = match ($model::class) {
-            MonitoredService::class => ['monitoring' => $model->check_config, 'other_configuration' => $model->only(['url', 'expected_keyword', 'notes', 'category'])],
+            MonitoredService::class => ['endpoint' => $model->url, 'monitoring' => $model->check_config, 'other_configuration' => $model->only(['url', 'expected_keyword', 'notes', 'category'])],
             MaintenanceWindow::class => ['description' => $model->description],
             NotificationSetting::class => ['telegram' => $model->telegram_bot_token, 'recipients' => $model->email_recipients, 'chat' => $model->telegram_chat_id],
             User::class => ['password' => $model->password],
@@ -80,7 +80,7 @@ class AdministrativeAudit
         };
         $context = [];
         if ($model instanceof MonitoredService) {
-            $context = ['sla_changed' => (bool) array_intersect($changed, ['sla_enabled', 'sla_target_percent']), 'sensitive_monitoring_configuration_changed' => isset($markers['monitoring']), 'other_configuration_changed' => isset($markers['other_configuration'])];
+            $context = ['endpoint_changed' => isset($markers['endpoint']), 'sla_changed' => (bool) array_intersect($changed, ['sla_enabled', 'sla_target_percent']), 'sensitive_monitoring_configuration_changed' => isset($markers['monitoring']), 'other_configuration_changed' => isset($markers['other_configuration'])];
             if ($operation === 'updated') {
                 $operation = match (true) {
                     $changed === ['is_active'] && $markers === [] => $model->is_active ? 'enabled' : 'disabled',
