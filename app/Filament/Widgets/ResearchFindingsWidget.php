@@ -6,6 +6,7 @@ use App\Models\ControlChart;
 use App\Models\ControlChartPoint;
 use App\Models\ReliabilityMetric;
 use App\Models\ServiceCheck;
+use App\Services\InstitutionTimezone;
 use App\Services\ResearchInterpretationService;
 use Filament\Widgets\Widget;
 
@@ -22,11 +23,11 @@ class ResearchFindingsWidget extends Widget
     /** @return array{cards: array<int, array{title: string, value: string, indicator: string, status: string, color: string, message: string}>} */
     protected function getViewData(): array
     {
-        $start = now()->startOfDay();
-        $end = now()->endOfDay();
+        $start = now(app(InstitutionTimezone::class)->name())->startOfDay()->utc();
+        $end = now(app(InstitutionTimezone::class)->name())->endOfDay()->utc();
         $todayChecks = ServiceCheck::query()->whereBetween('checked_at', [$start, $end])->count();
         $slowChecks = ServiceCheck::query()->whereBetween('checked_at', [$start, $end])->where('is_slow', true)->count();
-        $availability = ReliabilityMetric::weightedAvailability(ReliabilityMetric::query()->where('period_type', 'daily')->whereDate('period_start', today()));
+        $availability = ReliabilityMetric::weightedAvailability(ReliabilityMetric::query()->where('period_type', 'daily')->where('period_start', '>=', app(InstitutionTimezone::class)->dayStart(now(app(InstitutionTimezone::class)->name())->toDateString()))->where('period_start', '<', app(InstitutionTimezone::class)->dayEnd(now(app(InstitutionTimezone::class)->name())->toDateString())));
         $hasSpcData = ControlChart::query()->where('points_count', '>', 0)->exists();
         $outOfControlPoints = ControlChartPoint::query()->where('is_out_of_control', true)->whereBetween('point_time', [$start, $end])->count();
         $performance = $this->performanceState($slowChecks, $todayChecks);

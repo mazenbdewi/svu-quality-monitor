@@ -5,6 +5,7 @@ namespace App\Exports\Reports\Sheets;
 use App\Exports\Reports\Sheets\Concerns\AppliesReportSheetFormatting;
 use App\Exports\Reports\Sheets\Concerns\FormatsReportValues;
 use App\Models\ServiceCheck;
+use App\Services\InstitutionTimezone;
 use Illuminate\Database\Eloquent\Builder;
 use Maatwebsite\Excel\Concerns\FromQuery;
 use Maatwebsite\Excel\Concerns\ShouldAutoSize;
@@ -32,8 +33,8 @@ class ServiceChecksSheet implements FromQuery, ShouldAutoSize, WithEvents, WithH
         return ServiceCheck::query()
             ->with('monitoredService:id,name')
             ->when($this->filters['service_id'] ?? null, fn (Builder $query, $serviceId): Builder => $query->where('monitored_service_id', $serviceId))
-            ->when($this->filters['date_from'] ?? null, fn (Builder $query, $date): Builder => $query->whereDate('checked_at', '>=', $date))
-            ->when($this->filters['date_to'] ?? null, fn (Builder $query, $date): Builder => $query->whereDate('checked_at', '<=', $date))
+            ->when($this->filters['date_from'] ?? null, fn (Builder $query, $date): Builder => $query->where('checked_at', '>=', app(InstitutionTimezone::class)->dayStart($date)))
+            ->when($this->filters['date_to'] ?? null, fn (Builder $query, $date): Builder => $query->where('checked_at', '<', app(InstitutionTimezone::class)->dayEnd($date)))
             ->when(($this->filters['status'] ?? null) === 'success', fn (Builder $query): Builder => $query->where('is_success', true))
             ->when(($this->filters['status'] ?? null) === 'failed', fn (Builder $query): Builder => $query->where('is_success', false))
             ->when(($this->filters['slow_status'] ?? null) === 'slow', fn (Builder $query): Builder => $query->where('is_slow', true))

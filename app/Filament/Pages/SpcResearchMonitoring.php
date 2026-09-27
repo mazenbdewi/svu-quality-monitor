@@ -10,10 +10,12 @@ use App\Models\SpcResearchRun;
 use App\Models\SpcSignal;
 use App\Models\SpcSignalEpisode;
 use App\Services\Baselines\PhaseOneBaselineService;
+use App\Services\InstitutionTimezone;
 use App\Services\Spc\SpcResearchEvaluation;
 use Carbon\Carbon;
 use Filament\Pages\Page;
 use Illuminate\Support\Facades\Gate;
+use Livewire\Attributes\Locked;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class SpcResearchMonitoring extends Page
@@ -25,6 +27,9 @@ class SpcResearchMonitoring extends Page
     public ?int $baselineId = null;
 
     public string $mode = 'live';
+
+    #[Locked]
+    public string $reportTimezone = 'Asia/Damascus';
 
     public string $periodStart = '';
 
@@ -51,8 +56,9 @@ class SpcResearchMonitoring extends Page
     {
         abort_unless(static::canAccess(), 403);
         $this->baselineId = ControlChartBaseline::where('status', 'approved')->latest('id')->value('id');
-        $this->periodStart = now()->utc()->subDays(7)->format('Y-m-d\TH:i');
-        $this->periodEnd = now()->utc()->format('Y-m-d\TH:i');
+        $this->reportTimezone = app(InstitutionTimezone::class)->name();
+        $this->periodStart = now($this->reportTimezone)->subDays(7)->format('Y-m-d\TH:i');
+        $this->periodEnd = now($this->reportTimezone)->format('Y-m-d\TH:i');
     }
 
     public function updatedMode(): void
@@ -72,7 +78,7 @@ class SpcResearchMonitoring extends Page
         Gate::forUser($actor)->authorize(PhaseOneBaselineService::PERMISSION);
         $this->validate(['baselineId' => 'required|integer|exists:control_chart_baselines,id', 'mode' => 'required|in:live,retrospective', 'periodStart' => 'required|date_format:Y-m-d\TH:i', 'periodEnd' => 'required|date_format:Y-m-d\TH:i|after:periodStart']);
         $baseline = ControlChartBaseline::findOrFail($this->baselineId);
-        $run = app(SpcResearchEvaluation::class)->run(Carbon::parse($this->periodStart, 'UTC'), Carbon::parse($this->periodEnd, 'UTC'), $this->mode, serviceId: $baseline->monitored_service_id, chartType: $baseline->chart_type);
+        $run = app(SpcResearchEvaluation::class)->run(Carbon::parse($this->periodStart, $this->reportTimezone)->utc(), Carbon::parse($this->periodEnd, $this->reportTimezone)->utc(), $this->mode, serviceId: $baseline->monitored_service_id, chartType: $baseline->chart_type);
         $this->runId = $run->id;
     }
 
@@ -97,6 +103,7 @@ class SpcResearchMonitoring extends Page
         return compact('baseline', 'points', 'signals', 'episodeRows', 'run') + [
             'runs' => SpcResearchRun::where('mode', $this->mode)->latest('id')->limit(30)->get()->filter(fn ($r) => collect($r->baseline_versions)->contains('id', $baseline?->id)),
             'baselines' => ControlChartBaseline::with('monitoredService')->whereNotNull('approved_at')->latest('id')->get(),
+            'displayTimezone' => $baseline?->analysis_timezone ?? app(InstitutionTimezone::class)->name(),
             'compatible' => $baseline ? app(PhaseOneBaselineService::class)->compatible($baseline) : false,
             'latestEvaluation' => $baseline ? SpcMonitoringEvaluation::where('service_id', $baseline->monitored_service_id)->where('chart_type', $baseline->chart_type)->where('mode', $this->mode)->latest('id')->first() : null,
             'links' => $run ? SpcIncidentLink::where('research_run_id', $run->id)->get() : collect(),

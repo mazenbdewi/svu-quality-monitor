@@ -255,8 +255,8 @@
                             <td>{{ $report->number($row->mtbf_minutes, 2) }}</td>
                             <td>{{ $report->number($row->mttr_minutes, 2) }}</td>
                             <td>{{ $report->number($row->failure_rate, 8) }}</td>
-                            <td>{{ $report->date($row->period_start) }}</td>
-                            <td>{{ $report->date($row->period_end) }}</td>
+                            <td>{{ $report->date($row->period_start, $row->analysis_timezone ?? 'UTC') }}</td>
+                            <td>{{ $report->date($row->period_end, $row->analysis_timezone ?? 'UTC') }}</td>
                         </tr>
                     @endforeach
                 </tbody>
@@ -289,8 +289,8 @@
                             <td>{{ $report->metricNameLabel($row->metric_name) }}</td>
                             <td>{{ number_format((int) $row->points_count) }}</td>
                             <td>{{ number_format((int) $row->out_of_control_count) }}</td>
-                            <td>{{ $report->date($row->period_start) }}</td>
-                            <td>{{ $report->date($row->period_end) }}</td>
+                            <td>{{ $report->date($row->period_start, $row->analysis_timezone ?? 'UTC') }}</td>
+                            <td>{{ $report->date($row->period_end, $row->analysis_timezone ?? 'UTC') }}</td>
                         </tr>
                     @endforeach
                 </tbody>

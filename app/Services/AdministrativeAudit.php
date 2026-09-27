@@ -17,7 +17,7 @@ class AdministrativeAudit
         MaintenanceWindow::class => ['name', 'starts_at', 'ends_at', 'applies_to_all_services'],
         User::class => ['name', 'email', 'is_active'],
         NotificationSetting::class => ['telegram_enabled', 'email_enabled', 'ssl_expiry_notifications_enabled'],
-        InstitutionSetting::class => ['institution_name'],
+        InstitutionSetting::class => ['institution_name', 'timezone'],
     ];
 
     // Fingerprints are transient comparison data only, never audit payloads.
@@ -100,6 +100,13 @@ class AdministrativeAudit
         }
         if ($model instanceof InstitutionSetting) {
             $context['logo_changed'] = isset($markers['logo']);
+            if (in_array('timezone', $changed, true)) {
+                $this->write('institution.timezone_changed', $model, ['timezone' => $old['timezone'] ?? null], ['timezone' => $new['timezone']], ['measurement_configuration_changed' => true], $actor);
+                $changed = array_values(array_diff($changed, ['timezone']));
+                if ($changed === [] && $markers === []) {
+                    return;
+                }
+            }
         }
         if ($model instanceof MaintenanceWindow) {
             $context['description_changed'] = isset($markers['description']);

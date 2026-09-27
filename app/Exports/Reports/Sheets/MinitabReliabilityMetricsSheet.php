@@ -4,6 +4,7 @@ namespace App\Exports\Reports\Sheets;
 
 use App\Exports\Reports\Sheets\Concerns\AppliesReportSheetFormatting;
 use App\Models\ReliabilityMetric;
+use App\Services\InstitutionTimezone;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Maatwebsite\Excel\Concerns\FromQuery;
@@ -28,8 +29,8 @@ class MinitabReliabilityMetricsSheet implements FromQuery, ShouldAutoSize, WithE
         return ReliabilityMetric::query()
             ->with('monitoredService:id,name')
             ->when($this->filters['service_id'] ?? null, fn (Builder $query, $serviceId): Builder => $query->where('monitored_service_id', $serviceId))
-            ->when($this->filters['date_from'] ?? null, fn (Builder $query, $date): Builder => $query->where('period_start', '>=', Carbon::parse($date)->startOfDay()))
-            ->when($this->filters['date_to'] ?? null, fn (Builder $query, $date): Builder => $query->where('period_start', '<=', Carbon::parse($date)->endOfDay()))
+            ->when($this->filters['date_from'] ?? null, fn (Builder $query, $date): Builder => $query->where('period_start', '>=', app(InstitutionTimezone::class)->dayStart($date)))
+            ->when($this->filters['date_to'] ?? null, fn (Builder $query, $date): Builder => $query->where('period_start', '<', app(InstitutionTimezone::class)->dayEnd($date)))
             ->orderBy('period_start');
     }
 
@@ -53,7 +54,7 @@ class MinitabReliabilityMetricsSheet implements FromQuery, ShouldAutoSize, WithE
             'mtbf_minutes',
             'mttr_minutes',
             'failure_rate',
-            'measurement_context',
+            'measurement_context', 'analysis_timezone',
         ];
     }
 
@@ -78,7 +79,7 @@ class MinitabReliabilityMetricsSheet implements FromQuery, ShouldAutoSize, WithE
             $row->mtbf_minutes === null ? null : (float) $row->mtbf_minutes,
             $row->mttr_minutes === null ? null : (float) $row->mttr_minutes,
             $row->failure_rate === null ? null : (float) $row->failure_rate,
-            $row->measurement_context === null ? null : json_encode($row->measurement_context, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR),
+            $row->measurement_context === null ? null : json_encode($row->measurement_context, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR), $row->analysis_timezone,
         ];
     }
 

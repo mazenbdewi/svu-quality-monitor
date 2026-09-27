@@ -27,6 +27,7 @@ return [
             'notification.telegram_test_requested' => 'Telegram test requested',
             'notification.email_test_requested' => 'Email test requested',
             'notification.retry_requested' => 'Notification retry requested',
+            'institution.timezone_changed' => 'Institution time zone changed',
             'institution.updated' => 'Institution settings updated',
             'user.created' => 'User created',
             'user.updated' => 'User updated',

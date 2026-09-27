@@ -5,6 +5,7 @@ namespace App\Exports\Reports\Sheets;
 use App\Exports\Reports\Sheets\Concerns\AppliesReportSheetFormatting;
 use App\Exports\Reports\Sheets\Concerns\FormatsReportValues;
 use App\Models\ControlChartPoint;
+use App\Services\InstitutionTimezone;
 use Illuminate\Database\Eloquent\Builder;
 use Maatwebsite\Excel\Concerns\FromQuery;
 use Maatwebsite\Excel\Concerns\ShouldAutoSize;
@@ -35,8 +36,8 @@ class OutOfControlPointsSheet implements FromQuery, ShouldAutoSize, WithEvents, 
                     ->when($this->filters['chart_type'] ?? null, fn (Builder $query, $chartType): Builder => $query->where('chart_type', $chartType))
                     ->when($this->filters['metric_name'] ?? null, fn (Builder $query, $metricName): Builder => $query->where('metric_name', $metricName))
                     ->when($this->filters['period_type'] ?? null, fn (Builder $query, $periodType): Builder => $query->where('period_type', $periodType))
-                    ->when($this->filters['date_from'] ?? null, fn (Builder $query, $date): Builder => $query->whereDate('period_start', '>=', $date))
-                    ->when($this->filters['date_to'] ?? null, fn (Builder $query, $date): Builder => $query->whereDate('period_start', '<=', $date));
+                    ->when($this->filters['date_from'] ?? null, fn (Builder $query, $date): Builder => $query->where('period_start', '>=', app(InstitutionTimezone::class)->dayStart($date)))
+                    ->when($this->filters['date_to'] ?? null, fn (Builder $query, $date): Builder => $query->where('period_start', '<', app(InstitutionTimezone::class)->dayEnd($date)));
             })
             ->orderBy('point_time');
     }

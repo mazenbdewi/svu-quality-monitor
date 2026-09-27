@@ -4,6 +4,7 @@ namespace App\Exports\Reports\Sheets;
 
 use App\Exports\Reports\Sheets\Concerns\AppliesReportSheetFormatting;
 use App\Models\ControlChartPoint;
+use App\Services\InstitutionTimezone;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Maatwebsite\Excel\Concerns\FromQuery;
@@ -28,8 +29,8 @@ class MinitabOutOfControlPointsSheet implements FromQuery, ShouldAutoSize, WithE
         return ControlChartPoint::query()
             ->with('controlChart.monitoredService:id,name')
             ->where('is_out_of_control', true)
-            ->when($this->filters['date_from'] ?? null, fn (Builder $query, $date): Builder => $query->where('point_time', '>=', Carbon::parse($date)->startOfDay()))
-            ->when($this->filters['date_to'] ?? null, fn (Builder $query, $date): Builder => $query->where('point_time', '<=', Carbon::parse($date)->endOfDay()))
+            ->when($this->filters['date_from'] ?? null, fn (Builder $query, $date): Builder => $query->where('point_time', '>=', app(InstitutionTimezone::class)->dayStart($date)))
+            ->when($this->filters['date_to'] ?? null, fn (Builder $query, $date): Builder => $query->where('point_time', '<', app(InstitutionTimezone::class)->dayEnd($date)))
             ->whereHas('controlChart', function (Builder $query): void {
                 $query->when($this->filters['service_id'] ?? null, fn (Builder $query, $serviceId): Builder => $query->where('monitored_service_id', $serviceId));
             })

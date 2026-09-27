@@ -9,6 +9,7 @@ use App\Exports\Reports\Sheets\MinitabRawChecksSheet;
 use App\Filament\Resources\ControlCharts\ControlChartResource;
 use App\Models\ControlChart;
 use App\Models\ControlChartPoint;
+use App\Models\InstitutionSetting;
 use App\Models\MaintenanceWindow;
 use App\Models\MonitoredService;
 use App\Models\ServiceCheck;
@@ -338,7 +339,7 @@ class SpcResearchFoundationTest extends TestCase
     {
         $service = $this->service();
         $damascus = $this->chart($service);
-        config(['monitoring.spc.analysis_timezone' => 'UTC']);
+        InstitutionSetting::current()->update(['timezone' => 'UTC']);
         $utc = $this->chart($service);
         $this->assertNotSame($damascus->id, $utc->id);
         $this->assertTrue($damascus->period_start->eq($utc->period_start));

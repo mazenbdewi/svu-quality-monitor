@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Filament\Pages\SpcResearchMonitoring;
 use App\Models\ControlChartBaseline;
+use App\Models\InstitutionSetting;
 use App\Models\MaintenanceWindow;
 use App\Models\MonitoredService;
 use App\Models\ServiceCheck;
@@ -281,6 +282,7 @@ class SpcResearchEvaluationTest extends TestCase
 
     public function test_ui_renders_chart_modes_report_timeline_and_export(): void
     {
+        InstitutionSetting::current()->update(['timezone' => 'UTC']);
         $b = $this->baseline();
         $this->continuous();
         $this->incident(20);

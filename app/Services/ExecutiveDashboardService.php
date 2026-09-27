@@ -14,13 +14,13 @@ use Illuminate\Support\Collection;
 class ExecutiveDashboardService
 {
     /** @return array<string, mixed> */
-    public function snapshot(?Carbon $date = null): array
+    public function snapshot(?Carbon $date = null, ?string $timezone = null): array
     {
-        $now = ($date ?? now())->copy();
-        $start = $now->copy()->startOfMonth();
-        $end = $now->copy()->endOfMonth();
+        $now = app(InstitutionTimezone::class)->local($date ?? now(), $timezone);
+        $start = $now->copy()->startOfMonth()->utc();
+        $end = $now->copy()->endOfMonth()->utc();
         $metrics = $this->periodMetrics($start, $end);
-        $asOf = $now->copy()->min(now());
+        $asOf = $now->copy()->utc()->min(now());
         $services = $this->services($asOf, $metrics, $date !== null);
         $activeMaintenance = MaintenanceWindow::query()
             ->where('starts_at', '<=', $asOf)->where('ends_at', '>', $asOf)
@@ -55,7 +55,7 @@ class ExecutiveDashboardService
             'spc' => $this->spcSummary($start, $end->copy()->min($asOf)),
             'maintenance' => [
                 'active' => $activeMaintenance,
-                'upcoming' => MaintenanceWindow::query()->where('starts_at', '>', $now)->orderBy('starts_at')->limit(5)->get(),
+                'upcoming' => MaintenanceWindow::query()->where('starts_at', '>', $now->copy()->utc())->orderBy('starts_at')->limit(5)->get(),
             ],
             'response_time' => $this->responseTimeSummary($asOf),
             'system_health' => app(SystemHealthService::class)->snapshot(),

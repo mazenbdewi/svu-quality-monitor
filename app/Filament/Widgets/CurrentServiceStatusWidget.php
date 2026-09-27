@@ -5,6 +5,7 @@ namespace App\Filament\Widgets;
 use App\Models\MonitoredService;
 use App\Models\ReliabilityMetric;
 use App\Models\ServiceCheck;
+use App\Services\InstitutionTimezone;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
@@ -76,7 +77,7 @@ class CurrentServiceStatusWidget extends TableWidget
                     ->select('availability_percent')
                     ->whereColumn('reliability_metrics.monitored_service_id', 'monitored_services.id')
                     ->where('period_type', 'daily')
-                    ->whereDate('period_start', today())
+                    ->where('period_start', '>=', app(InstitutionTimezone::class)->dayStart(now(app(InstitutionTimezone::class)->name())->toDateString()))->where('period_start', '<', app(InstitutionTimezone::class)->dayEnd(now(app(InstitutionTimezone::class)->name())->toDateString()))
                     ->latest('calculated_at')
                     ->limit(1),
             ])

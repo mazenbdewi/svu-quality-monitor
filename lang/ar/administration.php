@@ -27,6 +27,7 @@ return [
             'notification.telegram_test_requested' => 'تم طلب اختبار تيليغرام',
             'notification.email_test_requested' => 'تم طلب اختبار البريد الإلكتروني',
             'notification.retry_requested' => 'تم طلب إعادة إرسال الإشعار',
+            'institution.timezone_changed' => 'تم تغيير المنطقة الزمنية للمؤسسة',
             'institution.updated' => 'تم تعديل إعدادات المؤسسة',
             'user.created' => 'تم إنشاء المستخدم',
             'user.updated' => 'تم تعديل المستخدم',

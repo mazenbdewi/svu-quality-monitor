@@ -326,8 +326,8 @@ class ResearchInterpretationService
     private function todayRange(): array
     {
         return [
-            now()->startOfDay(),
-            now()->endOfDay(),
+            now(app(InstitutionTimezone::class)->name())->startOfDay()->utc(),
+            now(app(InstitutionTimezone::class)->name())->endOfDay()->utc(),
         ];
     }
 
@@ -335,7 +335,7 @@ class ResearchInterpretationService
     {
         $todayQuery = ReliabilityMetric::query()
             ->where('period_type', 'daily')
-            ->whereDate('period_start', today());
+            ->where('period_start', '>=', now(app(InstitutionTimezone::class)->name())->startOfDay()->utc())->where('period_start', '<', now(app(InstitutionTimezone::class)->name())->startOfDay()->addDay()->utc());
         $todayAverage = ReliabilityMetric::weightedAvailability($todayQuery);
 
         if ($todayQuery->exists()) {
@@ -370,8 +370,8 @@ class ResearchInterpretationService
     {
         return ServiceCheck::query()
             ->when($filters['service_id'] ?? null, fn (Builder $query, $serviceId): Builder => $query->where('monitored_service_id', $serviceId))
-            ->when($filters['date_from'] ?? null, fn (Builder $query, $date): Builder => $query->whereDate('checked_at', '>=', $date))
-            ->when($filters['date_to'] ?? null, fn (Builder $query, $date): Builder => $query->whereDate('checked_at', '<=', $date));
+            ->when($filters['date_from'] ?? null, fn (Builder $query, $date): Builder => $query->where('checked_at', '>=', app(InstitutionTimezone::class)->dayStart($date)))
+            ->when($filters['date_to'] ?? null, fn (Builder $query, $date): Builder => $query->where('checked_at', '<', app(InstitutionTimezone::class)->dayEnd($date)));
     }
 
     /**
@@ -381,8 +381,8 @@ class ResearchInterpretationService
     {
         return ServiceIncident::query()
             ->when($filters['service_id'] ?? null, fn (Builder $query, $serviceId): Builder => $query->where('monitored_service_id', $serviceId))
-            ->when($filters['date_from'] ?? null, fn (Builder $query, $date): Builder => $query->whereDate('started_at', '>=', $date))
-            ->when($filters['date_to'] ?? null, fn (Builder $query, $date): Builder => $query->whereDate('started_at', '<=', $date));
+            ->when($filters['date_from'] ?? null, fn (Builder $query, $date): Builder => $query->where('started_at', '>=', app(InstitutionTimezone::class)->dayStart($date)))
+            ->when($filters['date_to'] ?? null, fn (Builder $query, $date): Builder => $query->where('started_at', '<', app(InstitutionTimezone::class)->dayEnd($date)));
     }
 
     /**
@@ -393,8 +393,8 @@ class ResearchInterpretationService
         return ReliabilityMetric::query()
             ->when($filters['service_id'] ?? null, fn (Builder $query, $serviceId): Builder => $query->where('monitored_service_id', $serviceId))
             ->when($filters['period_type'] ?? null, fn (Builder $query, $periodType): Builder => $query->where('period_type', $periodType))
-            ->when($filters['date_from'] ?? null, fn (Builder $query, $date): Builder => $query->whereDate('period_start', '>=', $date))
-            ->when($filters['date_to'] ?? null, fn (Builder $query, $date): Builder => $query->whereDate('period_start', '<=', $date));
+            ->when($filters['date_from'] ?? null, fn (Builder $query, $date): Builder => $query->where('period_start', '>=', app(InstitutionTimezone::class)->dayStart($date)))
+            ->when($filters['date_to'] ?? null, fn (Builder $query, $date): Builder => $query->where('period_start', '<', app(InstitutionTimezone::class)->dayEnd($date)));
     }
 
     /**
@@ -404,8 +404,8 @@ class ResearchInterpretationService
     {
         return ControlChartPoint::query()
             ->where('is_out_of_control', true)
-            ->when($filters['date_from'] ?? null, fn (Builder $query, $date): Builder => $query->whereDate('point_time', '>=', $date))
-            ->when($filters['date_to'] ?? null, fn (Builder $query, $date): Builder => $query->whereDate('point_time', '<=', $date))
+            ->when($filters['date_from'] ?? null, fn (Builder $query, $date): Builder => $query->where('point_time', '>=', app(InstitutionTimezone::class)->dayStart($date)))
+            ->when($filters['date_to'] ?? null, fn (Builder $query, $date): Builder => $query->where('point_time', '<', app(InstitutionTimezone::class)->dayEnd($date)))
             ->whereHas('controlChart', function (Builder $query) use ($filters): void {
                 $query
                     ->when($filters['service_id'] ?? null, fn (Builder $query, $serviceId): Builder => $query->where('monitored_service_id', $serviceId))

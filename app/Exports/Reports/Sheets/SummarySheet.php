@@ -10,6 +10,7 @@ use App\Models\MonitoredService;
 use App\Models\ReliabilityMetric;
 use App\Models\ServiceCheck;
 use App\Models\ServiceIncident;
+use App\Services\InstitutionTimezone;
 use App\Services\ResearchInterpretationService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
@@ -101,8 +102,8 @@ class SummarySheet implements FromCollection, ShouldAutoSize, WithEvents, WithHe
         $query = ReliabilityMetric::query()
             ->when($this->filters['service_id'] ?? null, fn (Builder $query, $serviceId): Builder => $query->where('monitored_service_id', $serviceId))
             ->when($this->filters['period_type'] ?? null, fn (Builder $query, $periodType): Builder => $query->where('period_type', $periodType))
-            ->when($this->filters['date_from'] ?? null, fn (Builder $query, $date): Builder => $query->whereDate('period_start', '>=', $date))
-            ->when($this->filters['date_to'] ?? null, fn (Builder $query, $date): Builder => $query->whereDate('period_start', '<=', $date));
+            ->when($this->filters['date_from'] ?? null, fn (Builder $query, $date): Builder => $query->where('period_start', '>=', app(InstitutionTimezone::class)->dayStart($date)))
+            ->when($this->filters['date_to'] ?? null, fn (Builder $query, $date): Builder => $query->where('period_start', '<', app(InstitutionTimezone::class)->dayEnd($date)));
         $average = ReliabilityMetric::weightedAvailability($query);
 
         return $average === null ? '' : number_format((float) $average, 4).'%';
@@ -119,16 +120,16 @@ class SummarySheet implements FromCollection, ShouldAutoSize, WithEvents, WithHe
     {
         return ServiceCheck::query()
             ->when($this->filters['service_id'] ?? null, fn (Builder $query, $serviceId): Builder => $query->where('monitored_service_id', $serviceId))
-            ->when($this->filters['date_from'] ?? null, fn (Builder $query, $date): Builder => $query->whereDate('checked_at', '>=', $date))
-            ->when($this->filters['date_to'] ?? null, fn (Builder $query, $date): Builder => $query->whereDate('checked_at', '<=', $date));
+            ->when($this->filters['date_from'] ?? null, fn (Builder $query, $date): Builder => $query->where('checked_at', '>=', app(InstitutionTimezone::class)->dayStart($date)))
+            ->when($this->filters['date_to'] ?? null, fn (Builder $query, $date): Builder => $query->where('checked_at', '<', app(InstitutionTimezone::class)->dayEnd($date)));
     }
 
     protected function incidentsQuery(): Builder
     {
         return ServiceIncident::query()
             ->when($this->filters['service_id'] ?? null, fn (Builder $query, $serviceId): Builder => $query->where('monitored_service_id', $serviceId))
-            ->when($this->filters['date_from'] ?? null, fn (Builder $query, $date): Builder => $query->whereDate('started_at', '>=', $date))
-            ->when($this->filters['date_to'] ?? null, fn (Builder $query, $date): Builder => $query->whereDate('started_at', '<=', $date));
+            ->when($this->filters['date_from'] ?? null, fn (Builder $query, $date): Builder => $query->where('started_at', '>=', app(InstitutionTimezone::class)->dayStart($date)))
+            ->when($this->filters['date_to'] ?? null, fn (Builder $query, $date): Builder => $query->where('started_at', '<', app(InstitutionTimezone::class)->dayEnd($date)));
     }
 
     protected function outOfControlPointsQuery(): Builder
@@ -141,8 +142,8 @@ class SummarySheet implements FromCollection, ShouldAutoSize, WithEvents, WithHe
                     ->when($this->filters['chart_type'] ?? null, fn (Builder $query, $chartType): Builder => $query->where('chart_type', $chartType))
                     ->when($this->filters['metric_name'] ?? null, fn (Builder $query, $metricName): Builder => $query->where('metric_name', $metricName))
                     ->when($this->filters['period_type'] ?? null, fn (Builder $query, $periodType): Builder => $query->where('period_type', $periodType))
-                    ->when($this->filters['date_from'] ?? null, fn (Builder $query, $date): Builder => $query->whereDate('period_start', '>=', $date))
-                    ->when($this->filters['date_to'] ?? null, fn (Builder $query, $date): Builder => $query->whereDate('period_start', '<=', $date));
+                    ->when($this->filters['date_from'] ?? null, fn (Builder $query, $date): Builder => $query->where('period_start', '>=', app(InstitutionTimezone::class)->dayStart($date)))
+                    ->when($this->filters['date_to'] ?? null, fn (Builder $query, $date): Builder => $query->where('period_start', '<', app(InstitutionTimezone::class)->dayEnd($date)));
             });
     }
 
@@ -153,7 +154,7 @@ class SummarySheet implements FromCollection, ShouldAutoSize, WithEvents, WithHe
             ->when($this->filters['chart_type'] ?? null, fn (Builder $query, $chartType): Builder => $query->where('chart_type', $chartType))
             ->when($this->filters['metric_name'] ?? null, fn (Builder $query, $metricName): Builder => $query->where('metric_name', $metricName))
             ->when($this->filters['period_type'] ?? null, fn (Builder $query, $periodType): Builder => $query->where('period_type', $periodType))
-            ->when($this->filters['date_from'] ?? null, fn (Builder $query, $date): Builder => $query->whereDate('period_start', '>=', $date))
-            ->when($this->filters['date_to'] ?? null, fn (Builder $query, $date): Builder => $query->whereDate('period_start', '<=', $date));
+            ->when($this->filters['date_from'] ?? null, fn (Builder $query, $date): Builder => $query->where('period_start', '>=', app(InstitutionTimezone::class)->dayStart($date)))
+            ->when($this->filters['date_to'] ?? null, fn (Builder $query, $date): Builder => $query->where('period_start', '<', app(InstitutionTimezone::class)->dayEnd($date)));
     }
 }

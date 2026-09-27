@@ -17,6 +17,13 @@ class ExecutiveDashboardAndReportTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+        // These regression fixtures describe historical UTC calendar periods explicitly.
+        InstitutionSetting::current()->update(['timezone' => 'UTC']);
+    }
+
     protected function tearDown(): void
     {
         Carbon::setTestNow();

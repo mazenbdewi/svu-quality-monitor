@@ -1,4 +1,12 @@
-# Research Pilot release freeze — research-pilot-v1
+# Research Pilot release freezes — research-pilot-v1 and research-pilot-v1.1
+
+## Pilot release selected for collection
+
+- `research-pilot-v1` is the initial R1–R5 freeze. Its tag and commit remain unchanged.
+- `research-pilot-v1.1` is the release approved for the actual Pilot start. Resolve its immutable commit with `git rev-parse 'research-pilot-v1.1^{commit}'` after the annotated tag is created.
+- Reason for v1.1: Institution Timezone is now a central Institution Setting used by display, calendar boundaries, reports and daily schedules.
+- Database timestamps and `app.timezone` remain UTC. The default Institution Timezone is `Asia/Damascus`, stored as an IANA identifier in `institution_settings.timezone`.
+- The Pilot did not start before v1.1. Creating this freeze does not deploy code, apply migrations or start the Pilot.
 
 ## Release identity
 
@@ -60,14 +68,15 @@ The approved protocol document is authoritative for study decisions. The unchang
 
 ## Migrations awaiting deployment
 
-These are the four pending research migrations, in the unchanged order verified by R5 fresh MySQL 8.4 installation, legacy upgrade, rollback and reapplication:
+The first four research migrations retain their verified R5 order. The additive Institution Timezone migration follows them and is also awaiting deployment:
 
 1. `2026_09_16_000001_add_reliability_measurement_context.php`
 2. `2026_09_17_000001_add_spc_research_context.php`
 3. `2026_09_18_000001_create_control_chart_baselines.php`
 4. `2026_09_19_000001_create_spc_phase_two_research.php`
+5. `2026_09_27_000001_add_institution_timezone.php`
 
-R5's recorded operating-image ledger had the preceding 19 migrations. The fresh test applied 23; the upgrade test preserved original data in 12 tables through all three transitions. This freeze does not query or mutate the operating database. Recheck its actual ledger during authorized deployment. No migration file is renamed or edited here.
+R5's recorded operating-image ledger had the preceding 19 migrations. Its fresh test applied the first 23 and its upgrade test preserved original data in 12 tables through all three transitions. The v1.1 test suite additionally verifies the additive timezone migration's rollback/reapply path and preservation of legacy rows without inventing historical calculation timezones. This freeze does not query or mutate the operating database. Recheck its actual ledger during authorized deployment. No existing migration file is renamed or edited here.
 
 **Pilot has NOT started. Production research migrations have NOT been applied by this work.** No Docker deployment, migration command, database seed command or production backup was executed in this freeze task. The requested full test suite uses its isolated test database and its existing test fixtures.
 
@@ -76,7 +85,7 @@ R5's recorded operating-image ledger had the preceding 19 migrations. The fresh 
 Follow `pilot-deployment-runbook.md` in order under separate deployment authorization:
 
 1. Complete the service roster/permissions/settings, actual UTC dates, preliminary Phase II reference decision, custodian/archive and operating review details listed in `Research Decisions To Confirm`. Approved policy values above remain resolved.
-2. Check out and verify `research-pilot-v1`, record its final commit SHA, build release app/web images from that commit and record their digests; do not substitute a previous pre-freeze dirty image.
+2. Check out and verify `research-pilot-v1.1`, record its final commit SHA, build release app/web images from that commit and record their digests; do not deploy `research-pilot-v1` or a previous dirty image for the Pilot.
 3. Perform the runbook's image checks and inventory the server migration ledger and role customizations.
 4. Create and verify the required production backup, including an isolated restore check, before any production migration.
 5. Execute the controlled deployment sequence: pause workers/collection, apply authorized forward migrations, required permissions, cache clear and matching container recreation; verify health, clocks, pages and exports.

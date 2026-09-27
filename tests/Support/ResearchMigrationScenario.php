@@ -15,7 +15,7 @@ class ResearchMigrationScenario
         if (Schema::hasTable('users')) {
             throw new \RuntimeException('Upgrade scenario requires an EMPTY isolated database.');
         }
-        $all = glob(database_path('migrations/*.php'));
+        $all = array_values(array_filter(glob(database_path('migrations/*.php')), fn ($path) => basename($path) < '2026_09_20'));
         sort($all);
         $new = array_values(array_filter($all, fn ($p) => preg_match('/2026_09_(16|17|18|19)_000001_/', basename($p))));
         $old = array_values(array_diff($all, $new));

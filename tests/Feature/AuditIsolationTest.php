@@ -100,6 +100,7 @@ class AuditIsolationTest extends TestCase
 
     public function test_executive_monthly_pdf_is_audited_after_rendering_without_content(): void
     {
+        InstitutionSetting::current()->update(['timezone' => 'UTC']);
         $actor = User::factory()->create();
         $actor->assignRole('operator');
         $this->actingAs($actor);

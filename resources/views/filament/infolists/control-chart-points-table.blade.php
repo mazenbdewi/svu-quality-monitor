@@ -10,12 +10,12 @@
         ? __('monitoring.dashboard.empty.value')
         : number_format((float) $value, 4);
 
-    $formatDateTime = static function (mixed $value): string {
+    $formatDateTime = static function (mixed $value) use ($record): string {
         if (! $value) {
             return __('monitoring.dashboard.empty.value');
         }
 
-        $date = $value instanceof Carbon ? $value : Carbon::parse($value);
+        $date = app(\App\Services\InstitutionTimezone::class)->local($value, $record->analysis_timezone ?? 'UTC');
         $format = app()->getLocale() === 'ar' ? 'd-m-Y H:i' : 'Y-m-d H:i';
 
         return $date->format($format);

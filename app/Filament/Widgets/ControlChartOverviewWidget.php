@@ -4,7 +4,7 @@ namespace App\Filament\Widgets;
 
 use App\Filament\Resources\ControlCharts\ControlChartResource;
 use App\Models\ControlChart;
-use Carbon\Carbon;
+use App\Services\InstitutionTimezone;
 use Filament\Support\Icons\Heroicon;
 use Filament\Widgets\StatsOverviewWidget;
 use Filament\Widgets\StatsOverviewWidget\Stat;
@@ -58,7 +58,7 @@ class ControlChartOverviewWidget extends StatsOverviewWidget
             return __('monitoring.dashboard.empty.value');
         }
 
-        return ($value instanceof Carbon ? $value : Carbon::parse($value))->format('d/m/Y');
+        return app(InstitutionTimezone::class)->local($value, $this->record->analysis_timezone ?? 'UTC')->format('d/m/Y');
     }
 
     private function formatTime(mixed $value): string
@@ -67,7 +67,7 @@ class ControlChartOverviewWidget extends StatsOverviewWidget
             return __('monitoring.dashboard.empty.value');
         }
 
-        return ($value instanceof Carbon ? $value : Carbon::parse($value))->format('H:i');
+        return app(InstitutionTimezone::class)->local($value, $this->record->analysis_timezone ?? 'UTC')->format('H:i');
     }
 
     private function ltr(string $value, string $classes = 'cc-card-value-number'): HtmlString

@@ -1,5 +1,5 @@
 @php
-    $formatTime = fn ($time): string => $time?->format('Y-m-d H:i:s') ?? __('monitoring.operations.health.never');
+    $formatTime = fn ($time): string => ($time ? app(\App\Services\InstitutionTimezone::class)->local($time) : null)?->format('Y-m-d H:i:s') ?? __('monitoring.operations.health.never');
     $formatCount = fn ($count): string => $count === null ? __('monitoring.operations.health.unavailable') : number_format($count);
     $commands = [
         'scheduler' => 'php artisan schedule:work',

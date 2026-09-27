@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\InstitutionSetting;
 use App\Models\MonitoredService;
 use App\Models\ReliabilityMetric;
 use App\Reports\ComprehensivePdfReport;
@@ -14,6 +15,13 @@ use Tests\TestCase;
 class ResearchHistoricalReportTest extends TestCase
 {
     use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        // These regression fixtures describe historical UTC calendar periods explicitly.
+        InstitutionSetting::current()->update(['timezone' => 'UTC']);
+    }
 
     public function test_historical_report_does_not_use_future_checks_or_current_incident_status(): void
     {

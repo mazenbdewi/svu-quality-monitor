@@ -10,6 +10,7 @@ use App\Models\AuditLog;
 use App\Models\ControlChart;
 use App\Models\ControlChartBaseline;
 use App\Models\ControlChartBaselineSample;
+use App\Models\InstitutionSetting;
 use App\Models\MonitoredService;
 use App\Models\ServiceCheck;
 use App\Models\User;
@@ -398,6 +399,7 @@ class PhaseOneBaselineTest extends TestCase
 
     public function test_admin_can_generate_review_and_approve_through_ui(): void
     {
+        InstitutionSetting::current()->update(['timezone' => 'UTC']);
         $this->fixture();
         Livewire::actingAs($this->admin)->test(ListControlChartBaselines::class)
             ->callAction('create_phase_one_baseline', data: [

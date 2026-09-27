@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Models\MonitoredService;
+use App\Services\InstitutionTimezone;
 use App\Services\ReliabilityMetricCalculator;
 use Carbon\Carbon;
 use Illuminate\Console\Command;
@@ -14,7 +15,7 @@ class CalculateReliabilityMetrics extends Command
 {
     protected $signature = 'reliability:calculate
         {--period=daily : Period type: daily, weekly, or monthly}
-        {--date= : Date inside the target period}
+        {--date= : Date inside the target period in the institution timezone}
         {--service= : Monitored service ID to calculate only one service}';
 
     protected $description = 'Calculate reliability metrics for monitored services.';
@@ -22,7 +23,7 @@ class CalculateReliabilityMetrics extends Command
     public function handle(ReliabilityMetricCalculator $calculator): int
     {
         try {
-            [$periodType, $periodStart, $periodEnd] = $this->resolvePeriod();
+            [$periodType, $periodStart, $periodEnd, $timezone] = $this->resolvePeriod();
         } catch (InvalidArgumentException $exception) {
             $this->error($exception->getMessage());
 
@@ -35,7 +36,7 @@ class CalculateReliabilityMetrics extends Command
 
         foreach ($services as $service) {
             try {
-                $calculator->calculateForService($service, $periodStart, $periodEnd, $periodType);
+                $calculator->calculateForService($service, $periodStart, $periodEnd, $periodType, analysisTimezone: $timezone);
                 $calculated++;
             } catch (Throwable $exception) {
                 $errors++;
@@ -69,21 +70,24 @@ class CalculateReliabilityMetrics extends Command
     }
 
     /**
-     * @return array{0: string, 1: Carbon, 2: Carbon}
+     * @return array{0: string, 1: Carbon, 2: Carbon, 3: string}
      */
     private function resolvePeriod(): array
     {
         $periodType = (string) $this->option('period');
+        $timezone = app(InstitutionTimezone::class)->name();
         $baseDate = $this->option('date')
-            ? Carbon::parse((string) $this->option('date'))
-            : now()->subDay();
+            ? Carbon::parse((string) $this->option('date'), $timezone)->setTimezone($timezone)
+            : now($timezone)->subDay();
 
-        return match ($periodType) {
+        [$periodType, $start, $end] = match ($periodType) {
             'daily' => [$periodType, $baseDate->copy()->startOfDay(), $baseDate->copy()->startOfDay()->addDay()],
             'weekly' => [$periodType, $baseDate->copy()->startOfWeek(), $baseDate->copy()->startOfWeek()->addWeek()],
             'monthly' => [$periodType, $baseDate->copy()->startOfMonth(), $baseDate->copy()->startOfMonth()->addMonth()],
             default => throw new InvalidArgumentException('Unsupported period type. Use daily, weekly, or monthly.'),
         };
+
+        return [$periodType, $start->utc(), $end->utc(), $timezone];
     }
 
     private function servicesQuery()

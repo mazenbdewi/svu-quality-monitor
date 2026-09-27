@@ -4,8 +4,10 @@ namespace App\Filament\Pages;
 
 use App\Models\InstitutionSetting;
 use App\Services\AdministrativeAudit;
+use App\Services\InstitutionTimezone;
 use BackedEnum;
 use Filament\Actions\Action;
+use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
@@ -13,9 +15,12 @@ use Filament\Schemas\Components\Actions;
 use Filament\Schemas\Components\EmbeddedSchema;
 use Filament\Schemas\Components\Form;
 use Filament\Schemas\Components\Section;
+use Filament\Schemas\Components\Text;
+use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 use UnitEnum;
 
 class InstitutionSettingsPage extends Page
@@ -48,7 +53,7 @@ class InstitutionSettingsPage extends Page
 
     public function mount(): void
     {
-        $this->form->fill(InstitutionSetting::current()->only(['institution_name', 'institution_logo']));
+        $this->form->fill(InstitutionSetting::current()->only(['institution_name', 'institution_logo', 'timezone']));
     }
 
     public function defaultForm(Schema $schema): Schema
@@ -61,6 +66,14 @@ class InstitutionSettingsPage extends Page
         return $schema->components([
             Section::make(__('monitoring.executive.branding.title'))->description(__('ux.help.institution'))->schema([
                 TextInput::make('institution_name')->label(__('monitoring.executive.branding.name'))->required()->maxLength(255),
+                Select::make('timezone')->label(__('institution_timezone.label'))
+                    ->options(array_combine(InstitutionTimezone::identifiers(), InstitutionTimezone::identifiers()))
+                    ->searchable()->required()->rules([Rule::in(InstitutionTimezone::identifiers())])
+                    ->live()->disabled(fn () => ! auth()->user()?->can('institution.manage'))
+                    ->helperText(__('institution_timezone.help')),
+                Text::make(__('institution_timezone.warning'))->color('warning'),
+                Text::make(fn (Get $get): string => __('institution_timezone.current', ['time' => in_array($get('timezone'), InstitutionTimezone::identifiers(), true) ? now($get('timezone'))->format('Y-m-d H:i:s P') : '—'])),
+                Text::make(__('institution_timezone.scheduler')),
                 TextInput::make('institution_logo')->label(__('monitoring.executive.branding.logo'))->url()->maxLength(2048)->helperText(__('monitoring.executive.branding.logo_help'))->extraInputAttributes(['dir' => 'ltr']),
             ]),
         ]);
@@ -78,7 +91,7 @@ class InstitutionSettingsPage extends Page
         abort_unless(auth()->user()?->can('institution.manage'), 403);
         $data = $this->form->getState();
         DB::transaction(function () use ($data): void {
-            $setting = InstitutionSetting::current();
+            $setting = InstitutionSetting::query()->lockForUpdate()->findOrFail(InstitutionSetting::current()->id);
             $audit = app(AdministrativeAudit::class);
             $before = $audit->snapshot($setting);
             $setting->update($data);

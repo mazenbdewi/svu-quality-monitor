@@ -5,6 +5,7 @@ namespace App\Exports\Reports\Sheets;
 use App\Exports\Reports\Sheets\Concerns\AppliesReportSheetFormatting;
 use App\Exports\Reports\Sheets\Concerns\FormatsReportValues;
 use App\Models\ControlChart;
+use App\Services\InstitutionTimezone;
 use Illuminate\Database\Eloquent\Builder;
 use Maatwebsite\Excel\Concerns\FromQuery;
 use Maatwebsite\Excel\Concerns\ShouldAutoSize;
@@ -35,8 +36,8 @@ class ControlChartsSheet implements FromQuery, ShouldAutoSize, WithEvents, WithH
             ->when($this->filters['chart_type'] ?? null, fn (Builder $query, $chartType): Builder => $query->where('chart_type', $chartType))
             ->when($this->filters['metric_name'] ?? null, fn (Builder $query, $metricName): Builder => $query->where('metric_name', $metricName))
             ->when($this->filters['period_type'] ?? null, fn (Builder $query, $periodType): Builder => $query->where('period_type', $periodType))
-            ->when($this->filters['date_from'] ?? null, fn (Builder $query, $date): Builder => $query->whereDate('period_start', '>=', $date))
-            ->when($this->filters['date_to'] ?? null, fn (Builder $query, $date): Builder => $query->whereDate('period_start', '<=', $date))
+            ->when($this->filters['date_from'] ?? null, fn (Builder $query, $date): Builder => $query->where('period_start', '>=', app(InstitutionTimezone::class)->dayStart($date)))
+            ->when($this->filters['date_to'] ?? null, fn (Builder $query, $date): Builder => $query->where('period_start', '<', app(InstitutionTimezone::class)->dayEnd($date)))
             ->orderBy('period_start');
     }
 
@@ -73,8 +74,8 @@ class ControlChartsSheet implements FromQuery, ShouldAutoSize, WithEvents, WithH
             $this->chartTypeLabel($row->chart_type),
             $this->metricNameLabel($row->metric_name),
             $this->periodTypeLabel($row->period_type),
-            $this->dateTime($row->period_start),
-            $this->dateTime($row->period_end),
+            $this->dateTime($row->period_start, $row->analysis_timezone ?? 'UTC'),
+            $this->dateTime($row->period_end, $row->analysis_timezone ?? 'UTC'),
             $row->center_line,
             $row->ucl,
             $row->lcl,

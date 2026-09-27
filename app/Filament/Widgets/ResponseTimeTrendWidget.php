@@ -4,6 +4,7 @@ namespace App\Filament\Widgets;
 
 use App\Models\MonitoredService;
 use App\Models\ServiceCheck;
+use App\Services\InstitutionTimezone;
 use Filament\Widgets\ChartWidget;
 
 class ResponseTimeTrendWidget extends ChartWidget
@@ -47,7 +48,7 @@ class ResponseTimeTrendWidget extends ChartWidget
             ->when($this->filter && $this->filter !== 'all', fn ($query) => $query->where('monitored_service_id', $this->filter))
             ->orderBy('checked_at')
             ->get(['checked_at', 'response_time_ms'])
-            ->groupBy(fn (ServiceCheck $check): int => (int) $check->checked_at->format('G'));
+            ->groupBy(fn (ServiceCheck $check): int => (int) app(InstitutionTimezone::class)->local($check->checked_at)->format('G'));
 
         $labels = [];
         $data = [];

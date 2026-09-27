@@ -40,16 +40,16 @@ class OperationalReadinessTest extends TestCase
     {
         $console = file_get_contents(base_path('routes/console.php'));
 
-        $this->assertSame(1, substr_count($console, "Schedule::command('services:check-due')"));
-        $this->assertSame(1, substr_count($console, "Schedule::command('reliability:calculate --period=daily')"));
-        $this->assertSame(1, substr_count($console, "Schedule::command('control-charts:calculate --period=daily')"));
+        $this->assertSame(1, substr_count($console, "\$schedule->command('services:check-due')"));
+        $this->assertSame(1, substr_count($console, "\$schedule->command('reliability:calculate --period=daily')"));
+        $this->assertSame(1, substr_count($console, "\$schedule->command('control-charts:calculate --period=daily')"));
         $this->assertStringContainsString('->everyMinute()', $console);
         $this->assertStringContainsString("->dailyAt('00:10')", $console);
-        $this->assertStringContainsString("Schedule::command('sla:calculate')", $console);
+        $this->assertStringContainsString("\$schedule->command('sla:calculate')", $console);
         $this->assertStringContainsString("->dailyAt('00:20')", $console);
         $this->assertStringContainsString("->dailyAt('00:25')", $console);
         $this->assertSame(7, substr_count($console, '->withoutOverlapping()'));
-        $this->assertStringContainsString("Schedule::command('spc:evaluate')->everyMinute()->withoutOverlapping()", $console);
+        $this->assertStringContainsString("\$schedule->command('spc:evaluate')->everyMinute()->withoutOverlapping()", $console);
         $this->assertSame(2, substr_count($console, '->withoutOverlapping(120)'));
         $this->assertStringContainsString('system-health:scheduler-heartbeat', $console);
     }

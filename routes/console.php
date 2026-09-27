@@ -1,49 +1,58 @@
 <?php
 
+use App\Services\InstitutionTimezone;
 use App\Services\SystemHealthService;
+use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Schedule;
 
 Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
 })->purpose('Display an inspiring quote');
 
-Schedule::command('services:check-due')
-    ->everyMinute()
-    ->withoutOverlapping();
+// Resolve database settings only when the scheduler is requested, not during artisan bootstrap.
+app()->afterResolving(Schedule::class, function ($schedule): void {
+    $timezone = app(InstitutionTimezone::class)->name();
+    $schedule->command('services:check-due')
+        ->everyMinute()
+        ->withoutOverlapping();
 
-Schedule::call(fn (): mixed => app(SystemHealthService::class)->recordSchedulerHeartbeat())
-    ->name('system-health:scheduler-heartbeat')
-    ->everyMinute()
-    ->evenInMaintenanceMode()
-    ->withoutOverlapping();
+    $schedule->call(fn (): mixed => app(SystemHealthService::class)->recordSchedulerHeartbeat())
+        ->name('system-health:scheduler-heartbeat')
+        ->everyMinute()
+        ->evenInMaintenanceMode()
+        ->withoutOverlapping();
 
-Schedule::command('system:check-background-health')
-    ->everyFiveMinutes()
-    ->withoutOverlapping();
+    $schedule->command('system:check-background-health')
+        ->everyFiveMinutes()
+        ->withoutOverlapping();
 
-Schedule::command('reliability:calculate --period=daily')
-    ->dailyAt('00:10')
-    ->withoutOverlapping();
+    $schedule->command('reliability:calculate --period=daily')
+        ->timezone($timezone)
+        ->dailyAt('00:10')
+        ->withoutOverlapping();
 
-Schedule::command('sla:calculate')
-    ->dailyAt('00:20')
-    ->withoutOverlapping();
+    $schedule->command('sla:calculate')
+        ->timezone($timezone)
+        ->dailyAt('00:20')
+        ->withoutOverlapping();
 
-Schedule::command('control-charts:calculate --period=daily')
-    ->timezone(config('monitoring.spc.analysis_timezone', 'Asia/Damascus'))
-    ->dailyAt('00:25')
-    ->withoutOverlapping();
+    $schedule->command('control-charts:calculate --period=daily')
+        ->timezone($timezone)
+        ->dailyAt('00:25')
+        ->withoutOverlapping();
 
-Schedule::command('backup:create --scheduled')
-    ->dailyAt('02:00')
-    ->withoutOverlapping(120)
-    ->onFailure(fn () => Log::error('Scheduled backup command failed.'));
+    $schedule->command('backup:create --scheduled')
+        ->timezone($timezone)
+        ->dailyAt('02:00')
+        ->withoutOverlapping(120)
+        ->onFailure(fn () => Log::error('Scheduled backup command failed.'));
 
-Schedule::command('backup:cleanup --scheduled')
-    ->dailyAt('03:00')
-    ->withoutOverlapping(120);
+    $schedule->command('backup:cleanup --scheduled')
+        ->timezone($timezone)
+        ->dailyAt('03:00')
+        ->withoutOverlapping(120);
 
-Schedule::command('spc:evaluate')->everyMinute()->withoutOverlapping();
+    $schedule->command('spc:evaluate')->everyMinute()->withoutOverlapping();
+});

@@ -8,6 +8,7 @@ use App\Models\MonitoredService;
 use App\Models\ReliabilityMetric;
 use App\Models\ServiceCheck;
 use App\Models\SlaMetric;
+use App\Services\InstitutionTimezone;
 use Carbon\Carbon;
 use Filament\Support\Icons\Heroicon;
 use Filament\Widgets\StatsOverviewWidget;
@@ -102,8 +103,8 @@ class OverviewStatsWidget extends StatsOverviewWidget
     private function todayRange(): array
     {
         return [
-            now()->startOfDay(),
-            now()->endOfDay(),
+            now(app(InstitutionTimezone::class)->name())->startOfDay()->utc(),
+            now(app(InstitutionTimezone::class)->name())->endOfDay()->utc(),
         ];
     }
 
@@ -111,7 +112,7 @@ class OverviewStatsWidget extends StatsOverviewWidget
     {
         $todayQuery = ReliabilityMetric::query()
             ->where('period_type', 'daily')
-            ->whereDate('period_start', today());
+            ->where('period_start', '>=', app(InstitutionTimezone::class)->dayStart(now(app(InstitutionTimezone::class)->name())->toDateString()))->where('period_start', '<', app(InstitutionTimezone::class)->dayEnd(now(app(InstitutionTimezone::class)->name())->toDateString()));
         $todayAverage = ReliabilityMetric::weightedAvailability($todayQuery);
 
         if ($todayQuery->exists()) {

@@ -12,6 +12,7 @@ class ReliabilityMetric extends Model
      * @var list<string>
      */
     protected $fillable = [
+        'analysis_timezone',
         'monitored_service_id',
         'period_type',
         'period_start',

@@ -9,6 +9,7 @@ use App\Models\SpcMonitoringPoint;
 use App\Models\SpcSignal;
 use App\Models\User;
 use App\Services\Baselines\PhaseOneBaselineService;
+use App\Services\InstitutionTimezone;
 use App\Services\Research\ResearchPackage;
 use App\Services\Spc\PhaseTwoEvaluator;
 use App\Services\Spc\SpcResearchEvaluation;
@@ -38,7 +39,7 @@ if ($mode === 'upgrade') {
     exit;
 }
 if ($mode === 'clock') {
-    echo json_encode(['php_timezone' => date_default_timezone_get(), 'utc' => now()->utc()->toIso8601String(), 'local' => now()->setTimezone('Asia/Damascus')->toIso8601String(), 'analysis_timezone' => config('monitoring.spc.analysis_timezone'), 'db' => DB::selectOne('select UTC_TIMESTAMP() as utc_now, NOW() as session_now, @@session.time_zone as session_timezone'), 'health' => app(SystemHealthService::class)->snapshot()], JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR)."\n";
+    echo json_encode(['php_timezone' => date_default_timezone_get(), 'utc' => now()->utc()->toIso8601String(), 'local' => now()->setTimezone('Asia/Damascus')->toIso8601String(), 'analysis_timezone' => app(InstitutionTimezone::class)->name(), 'db' => DB::selectOne('select UTC_TIMESTAMP() as utc_now, NOW() as session_now, @@session.time_zone as session_timezone'), 'health' => app(SystemHealthService::class)->snapshot()], JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR)."\n";
     exit;
 }
 if ($mode === 'delays') {

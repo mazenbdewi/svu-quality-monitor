@@ -3,6 +3,7 @@
 namespace App\Filament\Widgets;
 
 use App\Models\ServiceCheck;
+use App\Services\InstitutionTimezone;
 use Filament\Widgets\ChartWidget;
 
 class ChecksStatusDistributionWidget extends ChartWidget
@@ -30,7 +31,7 @@ class ChecksStatusDistributionWidget extends ChartWidget
     protected function getData(): array
     {
         $query = ServiceCheck::query()
-            ->whereBetween('checked_at', [now()->startOfDay(), now()->endOfDay()]);
+            ->whereBetween('checked_at', [now(app(InstitutionTimezone::class)->name())->startOfDay()->utc(), now(app(InstitutionTimezone::class)->name())->endOfDay()->utc()]);
 
         $successful = (clone $query)
             ->where('is_success', true)

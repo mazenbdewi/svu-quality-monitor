@@ -5,6 +5,7 @@ namespace App\Exports\Reports\Sheets;
 use App\Exports\Reports\Sheets\Concerns\AppliesReportSheetFormatting;
 use App\Exports\Reports\Sheets\Concerns\FormatsReportValues;
 use App\Models\ReliabilityMetric;
+use App\Services\InstitutionTimezone;
 use Illuminate\Database\Eloquent\Builder;
 use Maatwebsite\Excel\Concerns\FromQuery;
 use Maatwebsite\Excel\Concerns\ShouldAutoSize;
@@ -33,8 +34,8 @@ class ReliabilityMetricsSheet implements FromQuery, ShouldAutoSize, WithEvents, 
             ->with('monitoredService:id,name')
             ->when($this->filters['service_id'] ?? null, fn (Builder $query, $serviceId): Builder => $query->where('monitored_service_id', $serviceId))
             ->when($this->filters['period_type'] ?? null, fn (Builder $query, $periodType): Builder => $query->where('period_type', $periodType))
-            ->when($this->filters['date_from'] ?? null, fn (Builder $query, $date): Builder => $query->whereDate('period_start', '>=', $date))
-            ->when($this->filters['date_to'] ?? null, fn (Builder $query, $date): Builder => $query->whereDate('period_start', '<=', $date))
+            ->when($this->filters['date_from'] ?? null, fn (Builder $query, $date): Builder => $query->where('period_start', '>=', app(InstitutionTimezone::class)->dayStart($date)))
+            ->when($this->filters['date_to'] ?? null, fn (Builder $query, $date): Builder => $query->where('period_start', '<', app(InstitutionTimezone::class)->dayEnd($date)))
             ->orderBy('period_start');
     }
 
@@ -61,7 +62,7 @@ class ReliabilityMetricsSheet implements FromQuery, ShouldAutoSize, WithEvents, 
             __('monitoring.report_columns.mttr_minutes'),
             __('monitoring.report_columns.failure_rate'),
             __('monitoring.report_columns.calculated_at'),
-            'measurement_context',
+            'measurement_context', 'analysis_timezone',
         ];
     }
 
@@ -74,8 +75,8 @@ class ReliabilityMetricsSheet implements FromQuery, ShouldAutoSize, WithEvents, 
         return [
             $row->monitoredService?->name,
             $this->periodTypeLabel($row->period_type),
-            $this->dateTime($row->period_start),
-            $this->dateTime($row->period_end),
+            $this->dateTime($row->period_start, $row->analysis_timezone ?? 'UTC'),
+            $this->dateTime($row->period_end, $row->analysis_timezone ?? 'UTC'),
             $row->total_checks,
             $row->successful_checks,
             $row->failed_checks,
@@ -89,7 +90,7 @@ class ReliabilityMetricsSheet implements FromQuery, ShouldAutoSize, WithEvents, 
             $row->mttr_minutes,
             $row->failure_rate,
             $this->dateTime($row->calculated_at),
-            $row->measurement_context === null ? null : json_encode($row->measurement_context, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR),
+            $row->measurement_context === null ? null : json_encode($row->measurement_context, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR), $row->analysis_timezone,
         ];
     }
 

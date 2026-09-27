@@ -3,6 +3,7 @@
 namespace App\Filament\Widgets;
 
 use App\Models\MonitoredService;
+use App\Services\InstitutionTimezone;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
@@ -59,25 +60,25 @@ class WorstServicesTodayWidget extends TableWidget
     {
         return MonitoredService::query()
             ->whereHas('serviceChecks', fn (Builder $query): Builder => $query
-                ->whereBetween('checked_at', [now()->startOfDay(), now()->endOfDay()]))
+                ->whereBetween('checked_at', [now(app(InstitutionTimezone::class)->name())->startOfDay()->utc(), now(app(InstitutionTimezone::class)->name())->endOfDay()->utc()]))
             ->withCount([
                 'serviceChecks as today_checks_count' => fn (Builder $query): Builder => $query
-                    ->whereBetween('checked_at', [now()->startOfDay(), now()->endOfDay()]),
+                    ->whereBetween('checked_at', [now(app(InstitutionTimezone::class)->name())->startOfDay()->utc(), now(app(InstitutionTimezone::class)->name())->endOfDay()->utc()]),
                 'serviceChecks as failed_checks_count' => fn (Builder $query): Builder => $query
-                    ->whereBetween('checked_at', [now()->startOfDay(), now()->endOfDay()])
+                    ->whereBetween('checked_at', [now(app(InstitutionTimezone::class)->name())->startOfDay()->utc(), now(app(InstitutionTimezone::class)->name())->endOfDay()->utc()])
                     ->where('is_success', false),
                 'serviceChecks as slow_checks_count' => fn (Builder $query): Builder => $query
-                    ->whereBetween('checked_at', [now()->startOfDay(), now()->endOfDay()])
+                    ->whereBetween('checked_at', [now(app(InstitutionTimezone::class)->name())->startOfDay()->utc(), now(app(InstitutionTimezone::class)->name())->endOfDay()->utc()])
                     ->where('is_slow', true),
                 'serviceChecks as problematic_checks_count' => fn (Builder $query): Builder => $query
-                    ->whereBetween('checked_at', [now()->startOfDay(), now()->endOfDay()])
+                    ->whereBetween('checked_at', [now(app(InstitutionTimezone::class)->name())->startOfDay()->utc(), now(app(InstitutionTimezone::class)->name())->endOfDay()->utc()])
                     ->where(fn (Builder $query): Builder => $query
                         ->where('is_success', false)
                         ->orWhere('is_slow', true)),
             ])
             ->withAvg([
                 'serviceChecks as average_response_time_today' => fn (Builder $query): Builder => $query
-                    ->whereBetween('checked_at', [now()->startOfDay(), now()->endOfDay()])
+                    ->whereBetween('checked_at', [now(app(InstitutionTimezone::class)->name())->startOfDay()->utc(), now(app(InstitutionTimezone::class)->name())->endOfDay()->utc()])
                     ->whereNotNull('response_time_ms'),
             ], 'response_time_ms')
             ->orderByDesc('problematic_checks_count')

@@ -16,6 +16,7 @@ use App\Models\MonitoredService;
 use App\Reports\ComprehensivePdfReport;
 use App\Reports\ExecutiveMonthlyPdfReport;
 use App\Services\AuditLogger;
+use App\Services\InstitutionTimezone;
 use BackedEnum;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
@@ -78,7 +79,7 @@ class ReportsPage extends Page
         $this->form->fill([
             'report_type' => 'service_checks',
             'export_format' => 'excel',
-            'report_month' => now()->startOfMonth()->toDateString(),
+            'report_month' => now(app(InstitutionTimezone::class)->name())->startOfMonth()->toDateString(),
         ]);
     }
 

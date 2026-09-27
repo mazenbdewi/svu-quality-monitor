@@ -17,8 +17,12 @@ use App\Monitoring\Support\NativeDnsResolver;
 use App\Monitoring\Support\NativeSocketProbe;
 use App\Monitoring\Support\NativeSslCertificateProbe;
 use App\Services\AuditLogger;
+use App\Services\InstitutionTimezone;
 use App\Services\NotificationDispatcher;
 use App\Services\SystemHealthService;
+use Filament\Infolists\Components\TextEntry;
+use Filament\Support\Facades\FilamentTimezone;
+use Filament\Tables\Columns\TextColumn;
 use Illuminate\Auth\Events\Login;
 use Illuminate\Queue\Events\JobFailed;
 use Illuminate\Queue\Events\JobProcessed;
@@ -44,6 +48,10 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        FilamentTimezone::set(fn (): string => app(InstitutionTimezone::class)->name());
+        foreach ([TextColumn::class, TextEntry::class] as $component) {
+            $component::configureUsing(fn ($entry) => $entry->timezone(fn ($record = null): string => app(InstitutionTimezone::class)->forRecord($record)));
+        }
         Gate::before(fn (User $user): ?bool => $user->hasRole('super_admin') ? true : null);
         Event::listen(Login::class, function (Login $event): void {
             if ($event->user instanceof User) {

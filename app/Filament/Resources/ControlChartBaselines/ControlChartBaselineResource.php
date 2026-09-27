@@ -8,7 +8,9 @@ use App\Filament\Resources\ControlChartBaselines\Pages\ViewControlChartBaseline;
 use App\Models\ControlChartBaseline;
 use App\Models\MonitoredService;
 use App\Services\Baselines\PhaseOneBaselineService;
+use App\Services\InstitutionTimezone;
 use BackedEnum;
+use Carbon\Carbon;
 use Filament\Actions\Action;
 use Filament\Actions\ViewAction;
 use Filament\Forms\Components\DateTimePicker;
@@ -110,10 +112,10 @@ class ControlChartBaselineResource extends Resource
                 Select::make('chart_type')->label(__('baselines.chart'))->options(['i_chart' => 'I', 'mr_chart' => 'MR', 'p_chart' => 'P'])->required()->default('i_chart'),
                 DateTimePicker::make('baseline_start')->label(__('baselines.start'))->required()->seconds(false),
                 DateTimePicker::make('baseline_end')->label(__('baselines.end'))->required()->after('baseline_start')->seconds(false),
-                Select::make('analysis_timezone')->label(__('baselines.timezone'))->options(array_combine(\DateTimeZone::listIdentifiers(), \DateTimeZone::listIdentifiers()))->searchable()->default(config('monitoring.spc.analysis_timezone'))->required(),
+                Select::make('analysis_timezone')->label(__('baselines.timezone'))->options(array_combine(\DateTimeZone::listIdentifiers(), \DateTimeZone::listIdentifiers()))->searchable()->default(fn () => app(InstitutionTimezone::class)->name())->disabled()->dehydrated()->required(),
                 Select::make('aggregation_interval')->label(__('baselines.aggregation'))->options(['hourly' => 'Hourly', 'daily' => 'Daily'])->default('hourly')->required(),
             ])->action(function (array $data) {
-                $baseline = app(PhaseOneBaselineService::class)->create(MonitoredService::findOrFail($data['service_id']), $data['chart_type'], $data['baseline_start'], $data['baseline_end'], $data['analysis_timezone'], auth()->user(), $data['aggregation_interval']);
+                $baseline = app(PhaseOneBaselineService::class)->create(MonitoredService::findOrFail($data['service_id']), $data['chart_type'], Carbon::parse($data['baseline_start'], 'UTC')->toIso8601String(), Carbon::parse($data['baseline_end'], 'UTC')->toIso8601String(), app(InstitutionTimezone::class)->name(), auth()->user(), $data['aggregation_interval']);
 
                 return redirect(static::getUrl('view', ['record' => $baseline]));
             });

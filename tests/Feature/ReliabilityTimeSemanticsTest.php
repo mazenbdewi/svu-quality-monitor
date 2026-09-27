@@ -309,13 +309,13 @@ class ReliabilityTimeSemanticsTest extends TestCase
 
     public function test_default_daily_command_calculates_yesterday_with_exclusive_next_midnight(): void
     {
-        $this->travelTo(Carbon::parse('2026-09-02 00:10'));
-        $service = $this->service();
-        $this->checks($service, '2026-09-01', '2026-09-02');
+        $this->travelTo(Carbon::parse('2026-09-01 21:10'));
+        $service = $this->service('2026-08-31 21:00:00');
+        $this->checks($service, '2026-08-31 21:00:00', '2026-09-01 21:00:00');
         $this->artisan('reliability:calculate --period=daily')->assertSuccessful();
         $metric = $service->reliabilityMetrics()->sole();
-        $this->assertSame('2026-09-01 00:00:00', $metric->period_start->toDateTimeString());
-        $this->assertSame('2026-09-02 00:00:00', $metric->period_end->toDateTimeString());
+        $this->assertSame('2026-08-31 21:00:00', $metric->period_start->toDateTimeString());
+        $this->assertSame('2026-09-01 21:00:00', $metric->period_end->toDateTimeString());
         $this->assertSame(24, $metric->total_checks);
     }
 

@@ -160,7 +160,7 @@ class ReliabilityMetricCalculatorTest extends TestCase
             'check_interval_minutes' => 60,
         ]);
 
-        $this->createCheck($service, '2026-07-09 00:00:00', true, false);
+        $this->createCheck($service, '2026-07-08 21:00:00', true, false);
         $this->createCheck($service, '2026-07-08 08:00:00', isSuccess: true, isSlow: false);
 
         $this->artisan('reliability:calculate --period=daily --date=2026-07-08')

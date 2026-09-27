@@ -21,10 +21,12 @@ class ReliabilityMetricCalculator
         Carbon $end,
         string $periodType = 'daily',
         ?Carbon $dataCutoff = null,
+        ?string $analysisTimezone = null,
     ): ReliabilityMetric {
         if ($end->lte($start)) {
             throw new InvalidArgumentException('Reliability requires a positive half-open period.');
         }
+        $analysisTimezone ??= $start->timezoneName;
         $periodStart = $start->copy()->utc();
         $periodEnd = $end->copy()->utc();
         $requestedCutoff = $periodEnd->copy()->min(now()->utc());
@@ -102,10 +104,13 @@ class ReliabilityMetricCalculator
             'acceptable_performance_ratio' => $total > 0 ? $acceptable / $total : null,
         ];
 
+        $existing = ReliabilityMetric::where('monitored_service_id', $service->id)->where('period_type', $periodType)->where('period_start', $periodStart)->where('period_end', $periodEnd)->first();
+
         return ReliabilityMetric::query()->updateOrCreate([
             'monitored_service_id' => $service->id, 'period_type' => $periodType,
             'period_start' => $periodStart, 'period_end' => $periodEnd,
         ], [
+            'analysis_timezone' => $existing ? $existing->analysis_timezone : $analysisTimezone,
             'total_checks' => $total, 'successful_checks' => $acceptable, 'failed_checks' => $total - $acceptable,
             'incidents_count' => $starts,
             // Legacy integer-minute columns are presentation-only; exact seconds live in measurement_context.

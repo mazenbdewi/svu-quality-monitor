@@ -9,7 +9,7 @@ class SpcAnalysisWindow
 {
     public function timezone(): string
     {
-        return config('monitoring.spc.analysis_timezone', 'Asia/Damascus');
+        return app(InstitutionTimezone::class)->name();
     }
 
     /** Calendar windows in analysis timezone, returned as UTC half-open instants. */

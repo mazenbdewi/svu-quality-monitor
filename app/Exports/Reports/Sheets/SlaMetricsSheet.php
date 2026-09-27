@@ -4,6 +4,7 @@ namespace App\Exports\Reports\Sheets;
 
 use App\Exports\Reports\Sheets\Concerns\AppliesReportSheetFormatting;
 use App\Models\SlaMetric;
+use App\Services\InstitutionTimezone;
 use Illuminate\Database\Eloquent\Builder;
 use Maatwebsite\Excel\Concerns\FromQuery;
 use Maatwebsite\Excel\Concerns\ShouldAutoSize;
@@ -22,19 +23,19 @@ class SlaMetricsSheet implements FromQuery, ShouldAutoSize, WithHeadings, WithMa
     {
         return SlaMetric::query()->with('monitoredService:id,name')
             ->when($this->filters['service_id'] ?? null, fn (Builder $query, $id) => $query->where('monitored_service_id', $id))
-            ->when($this->filters['date_from'] ?? null, fn (Builder $query, $date) => $query->whereDate('period_start', '>=', $date))
-            ->when($this->filters['date_to'] ?? null, fn (Builder $query, $date) => $query->whereDate('period_start', '<=', $date))
+            ->when($this->filters['date_from'] ?? null, fn (Builder $query, $date) => $query->where('period_start', '>=', app(InstitutionTimezone::class)->dayStart($date)))
+            ->when($this->filters['date_to'] ?? null, fn (Builder $query, $date) => $query->where('period_start', '<', app(InstitutionTimezone::class)->dayEnd($date)))
             ->orderBy('period_start');
     }
 
     public function headings(): array
     {
-        return ['Service', 'Period', 'Target', 'Actual', 'Eligible Time (s)', 'Planned Maintenance (s)', 'Unplanned Downtime (s)', 'Allowed Downtime (s)', 'Consumed Budget (s)', 'Remaining Budget (s)', 'Budget %', 'Status'];
+        return ['Service', 'Period', 'Target', 'Actual', 'Eligible Time (s)', 'Planned Maintenance (s)', 'Unplanned Downtime (s)', 'Allowed Downtime (s)', 'Consumed Budget (s)', 'Remaining Budget (s)', 'Budget %', 'Status', 'Analysis Timezone'];
     }
 
     public function map($row): array
     {
-        return [$row->monitoredService?->name, $row->period_start?->toDateString(), $row->target_percent, $row->availability_percent, $row->eligible_observation_seconds, $row->planned_maintenance_seconds, $row->unplanned_downtime_seconds, $row->allowed_downtime_seconds, $row->error_budget_consumed_seconds, $row->error_budget_remaining_seconds, $row->error_budget_consumed_percent, $row->status];
+        return [$row->monitoredService?->name, app(InstitutionTimezone::class)->local($row->period_start, $row->analysis_timezone ?? 'UTC')->toDateString(), $row->target_percent, $row->availability_percent, $row->eligible_observation_seconds, $row->planned_maintenance_seconds, $row->unplanned_downtime_seconds, $row->allowed_downtime_seconds, $row->error_budget_consumed_seconds, $row->error_budget_remaining_seconds, $row->error_budget_consumed_percent, $row->status, $row->analysis_timezone];
     }
 
     public function title(): string

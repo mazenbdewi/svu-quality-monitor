@@ -12,8 +12,9 @@ class SlaCalculator
 {
     public function __construct(private MaintenanceWindowService $maintenance) {}
 
-    public function calculate(MonitoredService $service, Carbon $from, Carbon $to): SlaMetric
+    public function calculate(MonitoredService $service, Carbon $from, Carbon $to, ?string $analysisTimezone = null): SlaMetric
     {
+        $analysisTimezone ??= $from->timezoneName;
         $periodStart = $from->copy()->timezone(config('app.timezone'));
         $periodEnd = $to->copy()->timezone(config('app.timezone'));
         $effectiveStart = $service->created_at->greaterThan($periodStart) ? $service->created_at->copy() : $periodStart->copy();
@@ -21,7 +22,7 @@ class SlaCalculator
 
         $target = $service->sla_enabled ? (string) $service->sla_target_percent : null;
         if (! $target || $effectiveEnd->lte($effectiveStart)) {
-            return $this->store($service, $periodStart, $periodEnd, $target, 0, 0, 0, null, null, null, null, $target ? 'no_data' : 'not_configured');
+            return $this->store($service, $periodStart, $periodEnd, $target, 0, 0, 0, null, null, null, null, $target ? 'no_data' : 'not_configured', $analysisTimezone);
         }
 
         $observationSeconds = $effectiveStart->diffInSeconds($effectiveEnd);
@@ -29,7 +30,7 @@ class SlaCalculator
         $maintenanceSeconds = $this->intervalSeconds($maintenanceIntervals);
         $eligibleSeconds = max(0, $observationSeconds - $maintenanceSeconds);
         if ($eligibleSeconds === 0) {
-            return $this->store($service, $periodStart, $periodEnd, $target, 0, $maintenanceSeconds, 0, null, null, null, null, 'no_data');
+            return $this->store($service, $periodStart, $periodEnd, $target, 0, $maintenanceSeconds, 0, null, null, null, null, 'no_data', $analysisTimezone);
         }
 
         $incidentIntervals = $this->confirmedIncidentIntervals($service, $effectiveStart, $effectiveEnd);
@@ -41,7 +42,7 @@ class SlaCalculator
         $atRisk = (float) config('monitoring.sla.at_risk_error_budget_percent', 80);
         $status = $availability < (float) $target ? 'breached' : (($consumedPercent !== null && $consumedPercent >= $atRisk) ? 'at_risk' : 'met');
 
-        return $this->store($service, $periodStart, $periodEnd, $target, $eligibleSeconds, $maintenanceSeconds, $downtimeSeconds, $availability, $allowed, $remaining, $consumedPercent, $status);
+        return $this->store($service, $periodStart, $periodEnd, $target, $eligibleSeconds, $maintenanceSeconds, $downtimeSeconds, $availability, $allowed, $remaining, $consumedPercent, $status, $analysisTimezone);
     }
 
     /** @return Collection<int, array{start: Carbon, end: Carbon}> */
@@ -105,9 +106,12 @@ class SlaCalculator
         return $intervals->sum(fn (array $i): int => max(0, $i['start']->diffInSeconds($i['end'], false)));
     }
 
-    private function store(MonitoredService $service, Carbon $start, Carbon $end, ?string $target, int $eligible, int $maintenance, int $downtime, ?float $availability, ?float $allowed, ?float $remaining, ?float $consumedPercent, string $status): SlaMetric
+    private function store(MonitoredService $service, Carbon $start, Carbon $end, ?string $target, int $eligible, int $maintenance, int $downtime, ?float $availability, ?float $allowed, ?float $remaining, ?float $consumedPercent, string $status, ?string $analysisTimezone): SlaMetric
     {
+        $existing = SlaMetric::where('monitored_service_id', $service->id)->where('period_start', $start)->where('period_end', $end)->first();
+
         return SlaMetric::query()->updateOrCreate(['monitored_service_id' => $service->id, 'period_start' => $start, 'period_end' => $end], [
+            'analysis_timezone' => $existing ? $existing->analysis_timezone : $analysisTimezone,
             'target_percent' => $target, 'eligible_observation_seconds' => $eligible, 'planned_maintenance_seconds' => $maintenance,
             'unplanned_downtime_seconds' => $downtime, 'availability_percent' => $availability, 'allowed_downtime_seconds' => $allowed,
             'error_budget_consumed_seconds' => $downtime, 'error_budget_remaining_seconds' => $remaining,

@@ -2,7 +2,7 @@
 
 namespace App\Exports\Reports\Sheets\Concerns;
 
-use Carbon\Carbon;
+use App\Services\InstitutionTimezone;
 
 trait FormatsReportValues
 {
@@ -15,24 +15,24 @@ trait FormatsReportValues
         return $value ? __('monitoring.booleans.yes') : __('monitoring.booleans.no');
     }
 
-    protected function dateTime(mixed $value): string
+    protected function dateTime(mixed $value, ?string $timezone = null): string
     {
         if (! $value) {
             return '';
         }
 
-        $date = $value instanceof Carbon ? $value : Carbon::parse($value);
+        $date = app(InstitutionTimezone::class)->local($value, $timezone);
 
         return $date->format('Y-m-d H:i:s');
     }
 
-    protected function date(mixed $value): string
+    protected function date(mixed $value, ?string $timezone = null): string
     {
         if (! $value) {
             return '';
         }
 
-        $date = $value instanceof Carbon ? $value : Carbon::parse($value);
+        $date = app(InstitutionTimezone::class)->local($value, $timezone);
 
         return $date->format('Y-m-d');
     }

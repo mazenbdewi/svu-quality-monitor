@@ -5,6 +5,7 @@ namespace App\Exports\Reports\Sheets;
 use App\Exports\Reports\Sheets\Concerns\AppliesReportSheetFormatting;
 use App\Exports\Reports\Sheets\Concerns\FormatsReportValues;
 use App\Models\MaintenanceWindow;
+use App\Services\InstitutionTimezone;
 use Illuminate\Database\Eloquent\Builder;
 use Maatwebsite\Excel\Concerns\FromQuery;
 use Maatwebsite\Excel\Concerns\ShouldAutoSize;
@@ -28,8 +29,8 @@ class MaintenanceWindowsSheet implements FromQuery, ShouldAutoSize, WithEvents, 
             ->when($this->filters['service_id'] ?? null, fn (Builder $query, $id): Builder => $query->where(fn (Builder $windows) => $windows
                 ->where('applies_to_all_services', true)
                 ->orWhereHas('monitoredServices', fn (Builder $services) => $services->whereKey($id))))
-            ->when($this->filters['date_from'] ?? null, fn (Builder $query, $date): Builder => $query->whereDate('ends_at', '>=', $date))
-            ->when($this->filters['date_to'] ?? null, fn (Builder $query, $date): Builder => $query->whereDate('starts_at', '<=', $date))
+            ->when($this->filters['date_from'] ?? null, fn (Builder $query, $date): Builder => $query->where('ends_at', '>=', app(InstitutionTimezone::class)->dayStart($date)))
+            ->when($this->filters['date_to'] ?? null, fn (Builder $query, $date): Builder => $query->where('starts_at', '<', app(InstitutionTimezone::class)->dayEnd($date)))
             ->orderBy('starts_at');
     }
 

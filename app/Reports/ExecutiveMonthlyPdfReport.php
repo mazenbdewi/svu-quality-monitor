@@ -5,6 +5,7 @@ namespace App\Reports;
 use App\Models\InstitutionSetting;
 use App\Models\SlaMetric;
 use App\Services\ExecutiveDashboardService;
+use App\Services\InstitutionTimezone;
 use Carbon\Carbon;
 
 class ExecutiveMonthlyPdfReport
@@ -13,20 +14,21 @@ class ExecutiveMonthlyPdfReport
 
     private Carbon $end;
 
-    public function __construct(string $month)
+    public function __construct(string $month, private ?string $timezone = null)
     {
-        $this->start = Carbon::parse($month, config('app.timezone'))->startOfMonth();
+        $this->timezone ??= app(InstitutionTimezone::class)->name();
+        $this->start = Carbon::parse($month, $this->timezone)->startOfMonth();
         $this->end = $this->start->copy()->endOfMonth();
     }
 
     /** @return array<string, mixed> */
     public function data(): array
     {
-        $dashboard = app(ExecutiveDashboardService::class)->snapshot($this->end);
+        $dashboard = app(ExecutiveDashboardService::class)->snapshot($this->end, $this->timezone);
         $previousStart = $this->start->copy()->subMonth();
         $previousEnd = $previousStart->copy()->endOfMonth();
-        $previous = app(ExecutiveDashboardService::class)->snapshot($previousEnd);
-        $previousHasData = SlaMetric::query()->where('period_start', $previousStart)->where('period_end', $previousEnd)->exists();
+        $previous = app(ExecutiveDashboardService::class)->snapshot($previousEnd, $this->timezone);
+        $previousHasData = SlaMetric::query()->where('period_start', $previousStart->copy()->utc())->where('period_end', $previousEnd->copy()->utc())->exists();
 
         return [
             'institution' => InstitutionSetting::current(), 'periodStart' => $this->start, 'periodEnd' => $this->end,
@@ -37,7 +39,7 @@ class ExecutiveMonthlyPdfReport
 
     public function hasData(): bool
     {
-        return SlaMetric::query()->where('period_start', $this->start)->where('period_end', $this->end)->exists();
+        return SlaMetric::query()->where('period_start', $this->start->copy()->utc())->where('period_end', $this->end->copy()->utc())->exists();
     }
 
     private function summaryText(array $dashboard): string
