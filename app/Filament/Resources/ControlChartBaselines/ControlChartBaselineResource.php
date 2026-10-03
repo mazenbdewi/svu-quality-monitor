@@ -8,23 +8,30 @@ use App\Filament\Resources\ControlChartBaselines\Pages\ViewControlChartBaseline;
 use App\Models\ControlChartBaseline;
 use App\Models\MonitoredService;
 use App\Services\Baselines\PhaseOneBaselineService;
+use App\Services\Baselines\PhaseOneBaselineSubmission;
 use App\Services\InstitutionTimezone;
 use BackedEnum;
-use Carbon\Carbon;
 use Filament\Actions\Action;
 use Filament\Actions\ViewAction;
+use Filament\Forms\Components\CheckboxList;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\Toggle;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Infolists\Components\ViewEntry;
+use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
+use Filament\Schemas\Components\Text;
+use Filament\Schemas\Components\Utilities\Get;
+use Filament\Schemas\Components\View;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Validation\ValidationException;
 use Maatwebsite\Excel\Facades\Excel;
 
 class ControlChartBaselineResource extends Resource
@@ -82,7 +89,7 @@ class ControlChartBaselineResource extends Resource
 
     public static function table(Table $table): Table
     {
-        return $table->defaultSort('id', 'desc')->columns([
+        return $table->defaultGroup('monitoredService.name')->defaultSort('id', 'desc')->columns([
             TextColumn::make('monitoredService.name')->label(__('baselines.service')),
             TextColumn::make('chart_type')->label(__('baselines.chart')),
             TextColumn::make('version')->label(__('baselines.version')),
@@ -106,18 +113,46 @@ class ControlChartBaselineResource extends Resource
 
     public static function generateAction(): Action
     {
-        return Action::make('create_phase_one_baseline')->label(__('baselines.create'))->visible(fn () => static::canManage())
+        return Action::make('create_phase_one_baseline')->label(__('baseline_creation.create'))->visible(fn () => static::canManage())
+            ->modalSubmitActionLabel(__('baseline_creation.create'))
             ->schema([
-                Select::make('service_id')->label(__('baselines.service'))->options(fn () => MonitoredService::orderBy('name')->pluck('name', 'id'))->required()->searchable(),
-                Select::make('chart_type')->label(__('baselines.chart'))->options(['i_chart' => 'I', 'mr_chart' => 'MR', 'p_chart' => 'P'])->required()->default('i_chart'),
-                DateTimePicker::make('baseline_start')->label(__('baselines.start'))->required()->seconds(false),
-                DateTimePicker::make('baseline_end')->label(__('baselines.end'))->required()->after('baseline_start')->seconds(false),
+                View::make('filament.baselines.creation-help'),
+                Select::make('service_id')->label(__('baselines.service'))->options(fn () => MonitoredService::orderBy('name')->pluck('name', 'id'))->required()->searchable()->live()->rules(['exists:monitored_services,id']),
+                Text::make(fn () => __('baseline_creation.period_help', ['timezone' => app(InstitutionTimezone::class)->name()])),
+                DateTimePicker::make('baseline_start')->label(__('baselines.start'))->required()->seconds(false)->live(onBlur: true),
+                DateTimePicker::make('baseline_end')->label(__('baselines.end'))->required()->after('baseline_start')->seconds(false)->live(onBlur: true),
+                DateTimePicker::make('data_cutoff')->label(__('baseline_creation.cutoff'))->seconds(false)->live(onBlur: true),
                 Select::make('analysis_timezone')->label(__('baselines.timezone'))->options(array_combine(\DateTimeZone::listIdentifiers(), \DateTimeZone::listIdentifiers()))->searchable()->default(fn () => app(InstitutionTimezone::class)->name())->disabled()->dehydrated()->required(),
-                Select::make('aggregation_interval')->label(__('baselines.aggregation'))->options(['hourly' => 'Hourly', 'daily' => 'Daily'])->default('hourly')->required(),
-            ])->action(function (array $data) {
-                $baseline = app(PhaseOneBaselineService::class)->create(MonitoredService::findOrFail($data['service_id']), $data['chart_type'], Carbon::parse($data['baseline_start'], 'UTC')->toIso8601String(), Carbon::parse($data['baseline_end'], 'UTC')->toIso8601String(), app(InstitutionTimezone::class)->name(), auth()->user(), $data['aggregation_interval']);
+                Text::make(fn (Get $get, $livewire) => $livewire->baselineAvailability($get)['message']),
+                CheckboxList::make('metrics')->label(__('baseline_creation.metrics'))->options([
+                    'latency' => __('baseline_creation.latency'), 'problematic' => __('baseline_creation.problematic'),
+                ])
+                    ->default([])->required()->minItems(1)->live()
+                    ->disableOptionWhen(fn (string $value, Get $get, $livewire) => ($livewire->baselineAvailability($get)[$value] ?? 0) === 0),
+                Select::make('aggregation_interval')->label(__('baselines.aggregation'))->options(['hourly' => __('baseline_creation.hourly'), 'daily' => __('baseline_creation.daily')])->default('hourly')->required()
+                    ->visible(fn (Get $get) => in_array('problematic', $get('metrics') ?? [], true)),
+            ])->action(function (array $data, $livewire) {
+                abort_unless(static::canManage(), 403);
+                try {
+                    $baselines = app(PhaseOneBaselineSubmission::class)->create($data, app(InstitutionTimezone::class)->name(), auth()->user());
+                } catch (AuthorizationException $e) {
+                    throw $e;
+                } catch (ValidationException $e) {
+                    Notification::make()->danger()->title(__('baseline_creation.failed_title'))->body(collect($e->errors())->flatten()->implode(' '))->send();
+                    $prefix = $livewire->baselineErrorPath();
+                    throw ValidationException::withMessages(collect($e->errors())->mapWithKeys(fn ($messages, $field) => [$prefix.'.'.$field => $messages])->all());
+                } catch (\Throwable $e) {
+                    report($e);
+                    Notification::make()->danger()->title(__('baseline_creation.failed_title'))->body(__('baseline_creation.failed'))->persistent()->send();
 
-                return redirect(static::getUrl('view', ['record' => $baseline]));
+                    return;
+                }
+                Notification::make()->success()->title(__('baseline_creation.created', ['count' => count($baselines)]))->send();
+                if (collect($baselines)->contains(fn ($row) => $row->review_context['sufficiency'] !== 'analyzable')) {
+                    Notification::make()->warning()->title(__('baseline_creation.limited'))->send();
+                }
+
+                return redirect(static::getUrl('index'));
             });
     }
 

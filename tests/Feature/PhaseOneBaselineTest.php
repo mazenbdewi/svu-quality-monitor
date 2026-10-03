@@ -403,7 +403,7 @@ class PhaseOneBaselineTest extends TestCase
         $this->fixture();
         Livewire::actingAs($this->admin)->test(ListControlChartBaselines::class)
             ->callAction('create_phase_one_baseline', data: [
-                'service_id' => $this->service->id, 'chart_type' => 'i_chart', 'baseline_start' => '2026-09-01 00:00:00',
+                'service_id' => $this->service->id, 'metrics' => ['latency'], 'baseline_start' => '2026-09-01 00:00:00',
                 'baseline_end' => '2026-09-01 04:00:00', 'analysis_timezone' => 'UTC', 'aggregation_interval' => 'hourly',
             ])->assertHasNoActionErrors();
         $baseline = ControlChartBaseline::firstOrFail();

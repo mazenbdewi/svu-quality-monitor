@@ -1,14 +1,28 @@
-# Research Pilot release freezes — research-pilot-v1 and research-pilot-v1.1
+# Research Pilot release freezes — research-pilot-v1, v1.1 and v1.2
 
 ## Pilot release selected for collection
 
-- `research-pilot-v1` is the initial R1–R5 freeze. Its tag and commit remain unchanged.
-- `research-pilot-v1.1` is the release approved for the actual Pilot start. Resolve its immutable commit with `git rev-parse 'research-pilot-v1.1^{commit}'` after the annotated tag is created.
+- `research-pilot-v1` = Initial research freeze (R1–R5), commit `904ba87788db912409105c9bc30eabf2c849537a`. Its annotated tag and commit remain unchanged.
+- `research-pilot-v1.1` = Institution timezone management, commit `55dbe625f5570f98f729f9e34347478c0392def8`. Its annotated tag and commit remain unchanged.
+- `research-pilot-v1.2` = Phase I baseline creation fix and UX simplification. This is now the release approved for the actual Pilot start, superseding v1.1 for collection. Resolve its commit with `git rev-parse 'research-pilot-v1.2^{commit}'` after the annotated tag is created.
 - Reason for v1.1: Institution Timezone is now a central Institution Setting used by display, calendar boundaries, reports and daily schedules.
 - Database timestamps and `app.timezone` remain UTC. The default Institution Timezone is `Asia/Damascus`, stored as an IANA identifier in `institution_settings.timezone`.
-- The Pilot did not start before v1.1. Creating this freeze does not deploy code, apply migrations or start the Pilot.
+- The Pilot did not start before v1.2. Creating this freeze does not deploy code, apply migrations or start the Pilot.
 
-## Release identity
+## v1.2 freeze identity and scope
+
+- Freeze date: 2026-10-03, institution calendar Asia/Damascus.
+- Branch: `main`; remote: `origin` (`git@github.com:mazenbdewi/svu-quality-monitor.git`).
+- Pre-commit HEAD: `55dbe625f5570f98f729f9e34347478c0392def8`.
+- Commit message: `Fix and simplify Phase I baseline creation`.
+- Annotated tag: `research-pilot-v1.2`; annotation: `Research pilot v1.2 - Phase I baseline creation UX fix`.
+- Scope: Phase I UI creation orchestration, paired I/MR and optional P selection, visible validation/error messages, eligibility explanations, Arabic/English help, service grouping, regression tests and documentation. No scientific formula, underlying population policy or Phase II evaluator changes; no new migrations.
+- Actual Chrome creation and diagnostic evidence, including the limits of the root-cause diagnosis, are recorded in `phase-one-creation-fix.md`.
+- Final freeze verification: `php artisan test` — **493 passed, 2631 assertions, zero failures** (71.55 seconds); `./vendor/bin/pint --test` passed; `git diff --check` passed.
+- Reviewed release paths contain no environment files, operational credentials, test databases, generated exports or temporary browser artifacts. The local `.env` and SQLite file remain ignored; browser fixtures and test logs are outside the repository.
+- Final commit identity is the commit resolved by the annotated v1.2 tag. A release commit cannot embed its own SHA in a tracked file; the delivery report records the literal hash and verifies remote equality.
+
+## Initial v1 release identity (historical record)
 
 - Freeze verification recorded at: 2026-09-20T06:05:52+00:00 (UTC; institution timezone Asia/Damascus).
 - Branch: `main`; remote: `origin` (`git@github.com:mazenbdewi/svu-quality-monitor.git`).
@@ -18,7 +32,7 @@
 - Final commit identity: the commit pointed to by `research-pilot-v1^{commit}`. Obtain the exact full hash with `git rev-parse 'research-pilot-v1^{commit}'`; verify it matches this document's release with `git log -1 --format=%H -- docs/research-pilot-freeze.md` in the frozen checkout. The tag annotation and final delivery report record the literal final SHA. A commit cannot embed its own SHA in a file that contributes to that SHA; this resolvable Git reference preserves the requested single-commit freeze without a second documentation commit or dirty post-commit edit.
 - Status after successful commit/tag/push verification: **FROZEN FOR PILOT**. This report is prepared in the release commit; Git refs and remote equality are the evidence of publication, not a claim that publication preceded this file.
 
-## Final checks and repository scope
+## Initial v1 checks and repository scope (historical record)
 
 - PHP CLI: **8.4.24**; Laravel Framework: **12.62.0**.
 - `php artisan test`: **452 passed, 2254 assertions, 0 failures**, 55.96 seconds.
@@ -85,7 +99,7 @@ R5's recorded operating-image ledger had the preceding 19 migrations. Its fresh 
 Follow `pilot-deployment-runbook.md` in order under separate deployment authorization:
 
 1. Complete the service roster/permissions/settings, actual UTC dates, preliminary Phase II reference decision, custodian/archive and operating review details listed in `Research Decisions To Confirm`. Approved policy values above remain resolved.
-2. Check out and verify `research-pilot-v1.1`, record its final commit SHA, build release app/web images from that commit and record their digests; do not deploy `research-pilot-v1` or a previous dirty image for the Pilot.
+2. Check out and verify `research-pilot-v1.2`, record its final commit SHA, build release app/web images from that commit and record their digests; v1 and v1.1 remain historical releases, not the selected collection version.
 3. Perform the runbook's image checks and inventory the server migration ledger and role customizations.
 4. Create and verify the required production backup, including an isolated restore check, before any production migration.
 5. Execute the controlled deployment sequence: pause workers/collection, apply authorized forward migrations, required permissions, cache clear and matching container recreation; verify health, clocks, pages and exports.
@@ -94,7 +108,7 @@ Follow `pilot-deployment-runbook.md` in order under separate deployment authoriz
 
 No deployment, backup or Pilot activation is authorized or performed by this freeze report.
 
-## Exact files included in the freeze commit
+## Exact files included in the initial v1 freeze commit (historical record)
 
 - `app/Console/Commands/CalculateControlCharts.php`
 - `app/Console/Commands/CalculateReliabilityMetrics.php`
