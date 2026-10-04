@@ -5,7 +5,9 @@ namespace App\Services\Baselines;
 use App\Models\ControlChartBaseline;
 use App\Models\MonitoredService;
 use App\Models\User;
+use App\Services\SpcResearchData;
 use Carbon\Carbon;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\ValidationException;
@@ -13,15 +15,36 @@ use Illuminate\Validation\ValidationException;
 /** UI orchestration only; R4A owns population, snapshots, statistics and lifecycle. */
 class PhaseOneBaselineSubmission
 {
-    public function __construct(private PhaseOneBaselineService $engine, private BaselinePopulation $population) {}
+    public function __construct(private PhaseOneBaselineService $engine, private SpcResearchData $research) {}
 
     public function availability(MonitoredService $service, Carbon $start, Carbon $cutoff, string $timezone): array
     {
-        // P capture also records latency exclusion evidence; use the same R4A populations.
-        $latency = $this->population->capture($service, 'i_chart', $start, $cutoff, 'hourly', $timezone);
-        $binary = $this->population->capture($service, 'p_chart', $start, $cutoff, 'hourly', $timezone);
+        // Preview needs counts, not snapshots or hourly buckets across a partially typed date range.
+        return ['latency' => $this->eligibleObservations($service, $start, $cutoff, true)->count(), 'problematic' => $this->eligibleObservations($service, $start, $cutoff)->count()];
+    }
 
-        return ['latency' => $latency['counts']['included'], 'problematic' => $binary['counts']['included']];
+    /** Available historical P population as of now, for form guidance only. */
+    public function availableRange(MonitoredService $service): ?array
+    {
+        $cutoff = now()->utc()->startOfSecond();
+        $first = $service->serviceChecks()->researchChecks()->where('checked_at', '<', $cutoff)->min('checked_at');
+        if ($first === null) {
+            return null;
+        }
+        $checks = $this->eligibleObservations($service, Carbon::parse($first, 'UTC'), $cutoff);
+        if ($checks->isEmpty()) {
+            return null;
+        }
+
+        return ['first' => $checks->first()->checked_at->copy()->utc(), 'last' => $checks->last()->checked_at->copy()->utc(), 'end' => $cutoff];
+    }
+
+    private function eligibleObservations(MonitoredService $service, Carbon $start, Carbon $cutoff, bool $latency = false): Collection
+    {
+        // Same R1/R3 scopes/maintenance exclusions and R4A record-time guard as BaselinePopulation.
+        // Creation still delegates to the unmodified R4A capture and calculation.
+        return $this->research->checks($service, $start, $cutoff, $latency)
+            ->filter(fn ($check) => $check->created_at !== null && $check->created_at->lte($cutoff) && ($check->updated_at === null || $check->updated_at->lte($cutoff)));
     }
 
     public function create(array $data, string $timezone, User $actor): array

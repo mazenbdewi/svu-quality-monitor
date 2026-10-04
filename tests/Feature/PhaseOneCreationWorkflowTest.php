@@ -43,7 +43,7 @@ class PhaseOneCreationWorkflowTest extends TestCase
 
     private function data(array $metrics = ['latency', 'problematic']): array
     {
-        return ['service_id' => $this->service->id, 'metrics' => $metrics, 'baseline_start' => '2026-09-01 03:00:00', 'baseline_end' => '2026-09-01 07:00:00', 'aggregation_interval' => 'hourly'];
+        return ['service_id' => $this->service->id, 'baseline_start' => '2026-09-01 03:00:00', 'baseline_end' => '2026-09-01 07:00:00', 'aggregation_interval' => 'hourly', 'metrics' => $metrics];
     }
 
     private function assertModalContains($component, array $messages): void
@@ -88,7 +88,8 @@ class PhaseOneCreationWorkflowTest extends TestCase
     public function test_cutoff_preserves_no_look_ahead_and_utc_conversion(): void
     {
         Livewire::actingAs($this->admin)->test(ListControlChartBaselines::class)
-            ->callAction('create_phase_one_baseline', data: $this->data() + ['data_cutoff' => '2026-09-01 05:00:00'])->assertHasNoActionErrors();
+            ->mountAction('create_phase_one_baseline')->fillForm($this->data())
+            ->fillForm(['data_cutoff' => '2026-09-01 05:00:00', 'metrics' => ['latency', 'problematic']])->callMountedAction()->assertHasNoActionErrors();
         foreach (ControlChartBaseline::all() as $row) {
             $this->assertSame('2026-09-01 02:00:00', $row->data_cutoff->toDateTimeString());
             $this->assertSame(2, $row->sample_counts['included']);
@@ -130,7 +131,12 @@ class PhaseOneCreationWorkflowTest extends TestCase
     #[DataProvider('invalidInputs')]
     public function test_form_validation_prevents_invalid_creation(array $changes, string $field): void
     {
-        Livewire::actingAs($this->admin)->test(ListControlChartBaselines::class)->callAction('create_phase_one_baseline', data: array_replace($this->data(), $changes))->assertHasActionErrors([$field]);
+        $component = Livewire::actingAs($this->admin)->test(ListControlChartBaselines::class)->callAction('create_phase_one_baseline', data: array_replace($this->data(), $changes));
+        if (in_array($field, ['service_id', 'baseline_end'], true) || isset($changes['data_cutoff']) || ($changes['baseline_end'] ?? '') === '2099-09-01 07:00:00') {
+            $component->assertHasNoActionErrors()->assertNotified(__('baseline_creation.not_ready'));
+        } else {
+            $component->assertHasActionErrors([$field]);
+        }
         $this->assertDatabaseCount('control_chart_baselines', 0);
     }
 
@@ -139,7 +145,7 @@ class PhaseOneCreationWorkflowTest extends TestCase
         $component = Livewire::actingAs($this->admin)->test(ListControlChartBaselines::class)->mountAction('create_phase_one_baseline')
             ->fillForm(array_replace($this->data(), ['baseline_end' => '2099-09-01 07:00:00']));
         $this->assertModalContains($component, [__('baseline_creation.invalid_period')]);
-        $component->callMountedAction()->assertHasActionErrors();
+        $component->callMountedAction()->assertHasNoActionErrors()->assertNotified(__('baseline_creation.not_ready'));
         $this->assertDatabaseCount('control_chart_baselines', 0);
     }
 
@@ -165,7 +171,7 @@ class PhaseOneCreationWorkflowTest extends TestCase
         $component = Livewire::actingAs($this->admin)->test(ListControlChartBaselines::class)->mountAction('create_phase_one_baseline')->fillForm($this->data())
             ->assertFormFieldExists('metrics', fn (CheckboxList $field) => $field->isOptionDisabled('latency', '') && $field->isOptionDisabled('problematic', ''));
         $this->assertModalContains($component, [__('baseline_creation.no_latency'), __('baseline_creation.no_binary')]);
-        $component->callMountedAction()->assertHasActionErrors(['metrics.0']);
+        $component->callMountedAction()->assertHasNoActionErrors()->assertNotified(__('baseline_creation.not_ready'));
         $this->assertDatabaseCount('control_chart_baselines', 0);
     }
 

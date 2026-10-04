@@ -24,6 +24,7 @@ use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Schemas\Components\Text;
 use Filament\Schemas\Components\Utilities\Get;
+use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Components\View;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
@@ -115,18 +116,30 @@ class ControlChartBaselineResource extends Resource
     {
         return Action::make('create_phase_one_baseline')->label(__('baseline_creation.create'))->visible(fn () => static::canManage())
             ->modalSubmitActionLabel(__('baseline_creation.create'))
+            ->modalSubmitAction(fn (Action $action, $livewire) => $action->disabled(fn () => ! $livewire->canSubmitBaseline()))
+            ->beforeFormValidated(fn ($livewire) => $livewire->guardBaselineAvailability())
             ->schema([
                 View::make('filament.baselines.creation-help'),
-                Select::make('service_id')->label(__('baselines.service'))->options(fn () => MonitoredService::orderBy('name')->pluck('name', 'id'))->required()->searchable()->live()->rules(['exists:monitored_services,id']),
+                Select::make('service_id')->label(__('baselines.service'))->options(fn () => MonitoredService::orderBy('name')->pluck('name', 'id'))->required()->searchable()->live()->rules(['exists:monitored_services,id'])
+                    ->afterStateUpdated(fn (Get $get, Set $set, $livewire) => $livewire->baselineServiceChanged($get, $set)),
+                Text::make(fn (Get $get, $livewire) => $livewire->baselineRangeMessage($get)),
                 Text::make(fn () => __('baseline_creation.period_help', ['timezone' => app(InstitutionTimezone::class)->name()])),
-                DateTimePicker::make('baseline_start')->label(__('baselines.start'))->required()->seconds(false)->live(onBlur: true),
-                DateTimePicker::make('baseline_end')->label(__('baselines.end'))->required()->after('baseline_start')->seconds(false)->live(onBlur: true),
-                DateTimePicker::make('data_cutoff')->label(__('baseline_creation.cutoff'))->seconds(false)->live(onBlur: true),
+                DateTimePicker::make('baseline_start')->label(__('baselines.start'))->required()->seconds(true)->live(debounce: 400)
+                    ->afterStateUpdated(fn (Set $set, $livewire) => $livewire->baselinePeriodChanged($set)),
+                DateTimePicker::make('baseline_end')->label(__('baselines.end'))->required()->after('baseline_start')->seconds(true)->live(debounce: 400)
+                    ->afterStateUpdated(fn (Set $set, $livewire) => $livewire->baselinePeriodChanged($set)),
+                DateTimePicker::make('data_cutoff')->label(__('baseline_creation.cutoff'))->seconds(true)->live(debounce: 400)
+                    ->afterStateUpdated(fn (Set $set, $livewire) => $livewire->baselinePeriodChanged($set)),
                 Select::make('analysis_timezone')->label(__('baselines.timezone'))->options(array_combine(\DateTimeZone::listIdentifiers(), \DateTimeZone::listIdentifiers()))->searchable()->default(fn () => app(InstitutionTimezone::class)->name())->disabled()->dehydrated()->required(),
                 Text::make(fn (Get $get, $livewire) => $livewire->baselineAvailability($get)['message']),
                 CheckboxList::make('metrics')->label(__('baseline_creation.metrics'))->options([
                     'latency' => __('baseline_creation.latency'), 'problematic' => __('baseline_creation.problematic'),
                 ])
+                    ->descriptions(fn (Get $get, $livewire) => collect(['latency', 'problematic'])->mapWithKeys(function ($metric) use ($get, $livewire) {
+                        $count = $livewire->baselineAvailability($get)[$metric];
+
+                        return [$metric => $count > 0 ? __('baseline_creation.'.$metric.'_count', ['count' => $count]) : __('baseline_creation.'.$metric.'_unavailable')];
+                    })->all())
                     ->default([])->required()->minItems(1)->live()
                     ->disableOptionWhen(fn (string $value, Get $get, $livewire) => ($livewire->baselineAvailability($get)[$value] ?? 0) === 0),
                 Select::make('aggregation_interval')->label(__('baselines.aggregation'))->options(['hourly' => __('baseline_creation.hourly'), 'daily' => __('baseline_creation.daily')])->default('hourly')->required()

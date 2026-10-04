@@ -2,6 +2,14 @@
 
 return [
     'create' => 'Create baselines',
+    'not_ready' => 'No baseline can be created for the current selection',
+    'no_eligible' => 'No eligible research observations exist for this service in the selected period.',
+    'no_available_range' => 'This service has no eligible historical research observations as of now. Manual, maintenance and unsupported checks are not research observations.',
+    'available_range' => 'Available eligible observations: from :first to :last (:timezone). Suggested start covers up to the last 7 days of available observations; end defaults to now to include recorded observations. Review and adjust the period; these defaults do not establish stability.',
+    'latency_count' => ':count eligible response-time measurements',
+    'problematic_count' => ':count eligible automatic checks',
+    'latency_unavailable' => 'Unavailable — no eligible successful latency observations in this period.',
+    'problematic_unavailable' => 'Unavailable — no eligible automatic observations in this period.',
     'choose_metric' => 'Select at least one monitoring aspect.',
     'metrics' => 'What do you want to monitor?',
     'latency' => 'Response time (I/MR)',

@@ -1,15 +1,29 @@
-# Research Pilot release freezes — research-pilot-v1, v1.1 and v1.2
+# Research Pilot release freezes — research-pilot-v1, v1.1, v1.2 and v1.3
 
 ## Pilot release selected for collection
 
 - `research-pilot-v1` = Initial research freeze (R1–R5), commit `904ba87788db912409105c9bc30eabf2c849537a`. Its annotated tag and commit remain unchanged.
 - `research-pilot-v1.1` = Institution timezone management, commit `55dbe625f5570f98f729f9e34347478c0392def8`. Its annotated tag and commit remain unchanged.
-- `research-pilot-v1.2` = Phase I baseline creation fix and UX simplification. This is now the release approved for the actual Pilot start, superseding v1.1 for collection. Resolve its commit with `git rev-parse 'research-pilot-v1.2^{commit}'` after the annotated tag is created.
+- `research-pilot-v1.2` = Phase I creation UX fix, commit `0ddfc502699209412de97ed8e2bf70602e14ba95`. Its annotated tag and commit remain unchanged.
+- `research-pilot-v1.3` = Phase I reactive eligibility and submit protection fix. This is the release approved for the actual Pilot start, superseding v1.2 for collection. Resolve its commit with `git rev-parse 'research-pilot-v1.3^{commit}'`.
 - Reason for v1.1: Institution Timezone is now a central Institution Setting used by display, calendar boundaries, reports and daily schedules.
 - Database timestamps and `app.timezone` remain UTC. The default Institution Timezone is `Asia/Damascus`, stored as an IANA identifier in `institution_settings.timezone`.
-- The Pilot did not start before v1.2. Creating this freeze does not deploy code, apply migrations or start the Pilot.
+- The Pilot did not start before v1.3. Creating this freeze does not deploy code, apply migrations or start the Pilot.
 
-## v1.2 freeze identity and scope
+## v1.3 freeze identity and scope
+
+- Freeze date: 2026-10-04, institution calendar Asia/Damascus.
+- Branch: `main`; remote: `origin` (`git@github.com:mazenbdewi/svu-quality-monitor.git`).
+- Pre-commit HEAD: `0ddfc502699209412de97ed8e2bf70602e14ba95`.
+- Commit message: `Fix Phase I reactive chart eligibility`.
+- Annotated tag: `research-pilot-v1.3`; annotation: `Research pilot v1.3 - Phase I reactive eligibility fix`.
+- Scope: Phase I reactive eligibility with 400 ms debounce, submit/Enter protection, available-data range and eligible counts, translations, regression tests and documentation. No scientific calculation, research population policy, approval lifecycle or Phase II changes; no new migrations.
+- Diagnosis and prior Chrome verification are recorded in `phase-one-reactive-eligibility-fix.md`.
+- Final freeze verification: `php artisan test` — **499 passed, 2709 assertions, zero failures** (64.55 seconds); `./vendor/bin/pint --test` passed; `git diff --check` passed.
+- Release paths exclude environment files, credentials, generated databases/exports and temporary browser artifacts. The pre-existing local `svu-quality-monitor-v1.2.tar.gz` archive remains untracked and excluded from this commit.
+- Final commit identity is resolved by the annotated v1.3 tag; the delivery report records its literal SHA and verifies remote equality. The three previous annotated tags remain unchanged.
+
+## v1.2 freeze identity and scope (historical record)
 
 - Freeze date: 2026-10-03, institution calendar Asia/Damascus.
 - Branch: `main`; remote: `origin` (`git@github.com:mazenbdewi/svu-quality-monitor.git`).
@@ -99,7 +113,7 @@ R5's recorded operating-image ledger had the preceding 19 migrations. Its fresh 
 Follow `pilot-deployment-runbook.md` in order under separate deployment authorization:
 
 1. Complete the service roster/permissions/settings, actual UTC dates, preliminary Phase II reference decision, custodian/archive and operating review details listed in `Research Decisions To Confirm`. Approved policy values above remain resolved.
-2. Check out and verify `research-pilot-v1.2`, record its final commit SHA, build release app/web images from that commit and record their digests; v1 and v1.1 remain historical releases, not the selected collection version.
+2. Check out and verify `research-pilot-v1.3`, record its final commit SHA, build release app/web images from that commit and record their digests; v1, v1.1 and v1.2 remain historical releases, not the selected collection version.
 3. Perform the runbook's image checks and inventory the server migration ledger and role customizations.
 4. Create and verify the required production backup, including an isolated restore check, before any production migration.
 5. Execute the controlled deployment sequence: pause workers/collection, apply authorized forward migrations, required permissions, cache clear and matching container recreation; verify health, clocks, pages and exports.
