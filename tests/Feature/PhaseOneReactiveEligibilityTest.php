@@ -10,6 +10,7 @@ use App\Services\Baselines\BaselinePopulation;
 use App\Services\Baselines\PhaseOneBaselineSubmission;
 use Carbon\Carbon;
 use Database\Seeders\RolesAndPermissionsSeeder;
+use Filament\Schemas\Components\Section;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
 use Tests\TestCase;
@@ -146,5 +147,61 @@ class PhaseOneReactiveEligibilityTest extends TestCase
                 $this->assertSame($captured['counts']['included'], $counts[$metric]);
             }
         }
+    }
+
+    public function test_automatic_cutoff_follows_end_and_creates_utc_snapshots_without_editing_cutoff(): void
+    {
+        $page = $this->page()->set('mountedActions.0.data.service_id', $this->service->id);
+        $advanced = collect($page->instance()->getSchema('mountedActionSchema0')->getComponents())->first(fn ($component) => $component instanceof Section);
+        $this->assertTrue($advanced->isCollapsed());
+        $page->assertFormFieldExists('baseline_end', fn ($field) => $field->getMaxDate() === '2026-10-04T13:05:43');
+        $this->assertFalse((bool) $page->get('mountedActions.0.data.manual_cutoff'));
+        $this->assertSame($page->get('mountedActions.0.data.baseline_end'), $page->get('mountedActions.0.data.data_cutoff'));
+        $page->set('mountedActions.0.data.baseline_end', '2026-10-04T00:01:00');
+        $this->assertAvailability($page, 2, 2);
+        $page->set('mountedActions.0.data.baseline_end', '2026-10-04T00:02:00');
+        $this->assertAvailability($page, 2, 3);
+        $this->assertSame('2026-10-04 00:02:00', $page->get('mountedActions.0.data.data_cutoff'));
+        $page->set('mountedActions.0.data.metrics', ['latency', 'problematic'])->callMountedAction()->assertHasNoActionErrors();
+        foreach (ControlChartBaseline::all() as $baseline) {
+            $this->assertSame('2026-10-03 21:02:00', $baseline->data_cutoff->toDateTimeString());
+            $this->assertTrue($baseline->baseline_end->equalTo($baseline->data_cutoff));
+        }
+        $this->assertDatabaseCount('control_chart_baselines', 3);
+    }
+
+    public function test_future_end_has_immediate_field_error_and_recovers_without_submission(): void
+    {
+        $page = $this->page()->set('mountedActions.0.data.service_id', $this->service->id)
+            ->set('mountedActions.0.data.baseline_end', '2026-10-05T00:00:00');
+        $page->assertHasErrors(['mountedActions.0.data.baseline_end']);
+        $this->assertStringContainsString(e(__('baseline_creation.future_end')), $page->getMountedActionModalHtml());
+        $this->assertAvailability($page, 0, 0);
+        $page->callMountedAction()->assertNotified(__('baseline_creation.not_ready'));
+        $this->assertDatabaseCount('control_chart_baselines', 0);
+        $page->set('mountedActions.0.data.baseline_end', '2026-10-04T00:02:00')->assertHasNoErrors();
+        $this->assertAvailability($page, 2, 3);
+    }
+
+    public function test_manual_cutoff_is_preserved_validated_and_can_return_to_automatic_mode(): void
+    {
+        $page = $this->page()->set('mountedActions.0.data.service_id', $this->service->id)
+            ->set('mountedActions.0.data.baseline_end', '2026-10-04T00:02:00')
+            ->set('mountedActions.0.data.data_cutoff', '2026-10-04T00:00:05');
+        $this->assertAvailability($page, 2, 2);
+        $page->set('mountedActions.0.data.baseline_end', '2026-10-04T00:03:00');
+        $this->assertSame('2026-10-04T00:00:05', $page->get('mountedActions.0.data.data_cutoff'));
+        foreach (['2026-10-03T23:57:00', '2026-10-04T00:04:00'] as $invalid) {
+            $page->set('mountedActions.0.data.data_cutoff', $invalid)->assertHasErrors(['mountedActions.0.data.data_cutoff']);
+            $this->assertAvailability($page, 0, 0);
+            $this->assertStringContainsString(e(__('baseline_creation.invalid_cutoff')), $page->getMountedActionModalHtml());
+            $page->callMountedAction()->assertNotified(__('baseline_creation.not_ready'));
+        }
+        $this->assertDatabaseCount('control_chart_baselines', 0);
+        $page->set('mountedActions.0.data.data_cutoff', '')->assertHasNoErrors();
+        $this->assertFalse((bool) $page->get('mountedActions.0.data.manual_cutoff'));
+        $this->assertAvailability($page, 2, 3);
+        $page->set('mountedActions.0.data.baseline_end', '2026-10-04T00:02:00');
+        $this->assertSame('2026-10-04 00:02:00', $page->get('mountedActions.0.data.data_cutoff'));
     }
 }

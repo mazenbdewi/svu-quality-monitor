@@ -28,6 +28,7 @@ class ListControlChartBaselines extends ListRecords
     {
         $set('metrics', []);
         $set('data_cutoff', null);
+        $set('manual_cutoff', false);
         $this->resetErrorBag();
         try {
             $range = $this->availableBaselineRange($get('service_id'));
@@ -39,13 +40,46 @@ class ListControlChartBaselines extends ListRecords
         // Set takes UTC state and DateTimePicker converts it to institution-local display.
         $set('baseline_start', $range ? $range['last']->copy()->subDays(7)->max($range['first'])->copy()->startOfMinute()->toDateTimeString() : null);
         $set('baseline_end', $range ? $range['end']->toDateTimeString() : null);
+        $set('data_cutoff', $range ? $range['end']->toDateTimeString() : null);
     }
 
-    public function baselinePeriodChanged(Set $set): void
+    public function baselinePeriodChanged(Get $get, Set $set, bool $cutoffEdited = false): void
     {
         $set('metrics', []);
         $this->availabilityCache = [];
         $this->resetErrorBag();
+        try {
+            if ($cutoffEdited) {
+                $set('manual_cutoff', filled($get('data_cutoff')));
+            }
+            if (! $get('manual_cutoff')) {
+                $set('data_cutoff', $get('baseline_end'));
+            }
+            $errors = $this->baselinePeriodErrors($get);
+            foreach ($errors as $field => $message) {
+                $this->addError($this->baselineErrorPath().'.'.$field, $message);
+            }
+        } catch (InvalidFormatException) {
+            // A partially typed native datetime is not yet a valid period.
+        }
+    }
+
+    private function baselinePeriodErrors(Get $get): array
+    {
+        $start = $get('baseline_start');
+        $end = $get('baseline_end');
+        $cutoff = $get('data_cutoff') ?: $end;
+        $errors = [];
+        if ($end && Carbon::parse($end, 'UTC')->gt(now('UTC'))) {
+            $errors['baseline_end'] = __('baseline_creation.future_end');
+        } elseif ($start && $end && Carbon::parse($start, 'UTC')->gte(Carbon::parse($end, 'UTC'))) {
+            $errors['baseline_end'] = __('baseline_creation.end_after_start');
+        }
+        if ($start && $end && $cutoff && $get('manual_cutoff') && (Carbon::parse($cutoff, 'UTC')->lte(Carbon::parse($start, 'UTC')) || Carbon::parse($cutoff, 'UTC')->gt(Carbon::parse($end, 'UTC')))) {
+            $errors['data_cutoff'] = __('baseline_creation.invalid_cutoff');
+        }
+
+        return $errors;
     }
 
     private function availableBaselineRange($serviceId): ?array
@@ -132,7 +166,7 @@ class ListControlChartBaselines extends ListRecords
             $end = Carbon::parse($values[2], 'UTC')->utc();
             $cutoff = empty($values[3]) ? $end : Carbon::parse($values[3], 'UTC')->utc();
             if ($start->gte($cutoff) || $cutoff->gt($end) || $end->gt(now()->utc())) {
-                return array_replace($result, ['message' => __('baseline_creation.invalid_period')]);
+                return array_replace($result, ['message' => implode(' ', $this->baselinePeriodErrors($get)) ?: __('baseline_creation.invalid_period')]);
             }
             $service = MonitoredService::find($values[0]);
             if (! $service) {

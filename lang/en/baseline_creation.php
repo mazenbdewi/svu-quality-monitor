@@ -1,6 +1,12 @@
 <?php
 
 return [
+    'advanced' => 'Advanced options',
+    'cutoff_help' => 'Automatically follows the period end until edited manually. Clear it to resume automatic mode. A manual cutoff must be after start and no later than end.',
+    'future_end' => 'The period end cannot be in the future. Choose the current time or an earlier time.',
+    'end_after_start' => 'The period end must be after its start.',
+    'invalid_cutoff' => 'The manual cutoff must be after start and no later than end. Adjust it in Advanced options, or clear it to follow end.',
+
     'create' => 'Create baselines',
     'not_ready' => 'No baseline can be created for the current selection',
     'no_eligible' => 'No eligible research observations exist for this service in the selected period.',
@@ -21,7 +27,7 @@ return [
     'phase_help' => 'Phase I builds a statistical reference from eligible historical observations. Creating a baseline does not automatically approve it.',
     'baseline_help' => 'A baseline is the statistical reference used to compare future measurements after review and approval.',
     'steps' => '1. Create Draft → 2. Review data → 3. Reviewed → 4. Approved → 5. Use in Phase II. Retirement ends the approved reference’s validity.',
-    'period_help' => 'Enter dates in :timezone. End is exclusive. Start < cutoff ≤ end ≤ now. Leave cutoff empty to use end. Only automatic HTTP/API observations meeting the existing research policy and recorded/unchanged by cutoff are included; manual, maintenance, diagnostic and synthetic observations are excluded.',
+    'period_help' => 'Enter dates in :timezone. End is exclusive and must not be in the future. Data cutoff automatically follows end; a manual override is available in Advanced options. Only eligible automatic HTTP/API observations recorded and unchanged by cutoff are included; manual, maintenance, diagnostic and synthetic observations are excluded.',
     'cutoff' => 'Data cutoff (institution time, optional)',
     'select_period' => 'Choose a service and a valid historical period to check available research observations.',
     'availability' => 'Eligible observations in this period: response time :latency; P population :problematic. These counts do not establish stability or approval readiness.',

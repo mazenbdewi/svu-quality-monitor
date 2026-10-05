@@ -123,8 +123,8 @@ class PhaseOneCreationWorkflowTest extends TestCase
             [['metrics' => []], 'metrics'],
             [['metrics' => ['c_chart']], 'metrics.0'],
             [['baseline_end' => '2026-09-01 02:00:00'], 'baseline_end'],
-            [['data_cutoff' => '2026-09-01 08:00:00'], 'metrics.0'],
-            [['baseline_end' => '2099-09-01 07:00:00'], 'metrics.0'],
+            [['data_cutoff' => '2026-09-01 08:00:00'], 'data_cutoff'],
+            [['baseline_end' => '2099-09-01 07:00:00'], 'baseline_end'],
         ];
     }
 
@@ -132,7 +132,7 @@ class PhaseOneCreationWorkflowTest extends TestCase
     public function test_form_validation_prevents_invalid_creation(array $changes, string $field): void
     {
         $component = Livewire::actingAs($this->admin)->test(ListControlChartBaselines::class)->callAction('create_phase_one_baseline', data: array_replace($this->data(), $changes));
-        if (in_array($field, ['service_id', 'baseline_end'], true) || isset($changes['data_cutoff']) || ($changes['baseline_end'] ?? '') === '2099-09-01 07:00:00') {
+        if ($field === 'service_id') {
             $component->assertHasNoActionErrors()->assertNotified(__('baseline_creation.not_ready'));
         } else {
             $component->assertHasActionErrors([$field]);
@@ -144,8 +144,8 @@ class PhaseOneCreationWorkflowTest extends TestCase
     {
         $component = Livewire::actingAs($this->admin)->test(ListControlChartBaselines::class)->mountAction('create_phase_one_baseline')
             ->fillForm(array_replace($this->data(), ['baseline_end' => '2099-09-01 07:00:00']));
-        $this->assertModalContains($component, [__('baseline_creation.invalid_period')]);
-        $component->callMountedAction()->assertHasNoActionErrors()->assertNotified(__('baseline_creation.not_ready'));
+        $this->assertModalContains($component, [__('baseline_creation.future_end')]);
+        $component->callMountedAction()->assertHasActionErrors(['baseline_end'])->assertNotified(__('baseline_creation.not_ready'));
         $this->assertDatabaseCount('control_chart_baselines', 0);
     }
 

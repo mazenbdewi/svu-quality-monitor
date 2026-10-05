@@ -15,6 +15,7 @@ use Filament\Actions\Action;
 use Filament\Actions\ViewAction;
 use Filament\Forms\Components\CheckboxList;
 use Filament\Forms\Components\DateTimePicker;
+use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\Toggle;
@@ -22,6 +23,7 @@ use Filament\Infolists\Components\TextEntry;
 use Filament\Infolists\Components\ViewEntry;
 use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
+use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Text;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
@@ -125,11 +127,15 @@ class ControlChartBaselineResource extends Resource
                 Text::make(fn (Get $get, $livewire) => $livewire->baselineRangeMessage($get)),
                 Text::make(fn () => __('baseline_creation.period_help', ['timezone' => app(InstitutionTimezone::class)->name()])),
                 DateTimePicker::make('baseline_start')->label(__('baselines.start'))->required()->seconds(true)->live(debounce: 400)
-                    ->afterStateUpdated(fn (Set $set, $livewire) => $livewire->baselinePeriodChanged($set)),
+                    ->afterStateUpdated(fn (Get $get, Set $set, $livewire) => $livewire->baselinePeriodChanged($get, $set)),
                 DateTimePicker::make('baseline_end')->label(__('baselines.end'))->required()->after('baseline_start')->seconds(true)->live(debounce: 400)
-                    ->afterStateUpdated(fn (Set $set, $livewire) => $livewire->baselinePeriodChanged($set)),
-                DateTimePicker::make('data_cutoff')->label(__('baseline_creation.cutoff'))->seconds(true)->live(debounce: 400)
-                    ->afterStateUpdated(fn (Set $set, $livewire) => $livewire->baselinePeriodChanged($set)),
+                    ->maxDate(fn () => now(app(InstitutionTimezone::class)->name())->format('Y-m-d\TH:i:s'))
+                    ->afterStateUpdated(fn (Get $get, Set $set, $livewire) => $livewire->baselinePeriodChanged($get, $set)),
+                Hidden::make('manual_cutoff')->default(false)->dehydrated(false),
+                Section::make(__('baseline_creation.advanced'))->collapsible()->collapsed()->schema([
+                    DateTimePicker::make('data_cutoff')->label(__('baseline_creation.cutoff'))->helperText(__('baseline_creation.cutoff_help'))->seconds(true)->live(debounce: 400)
+                        ->afterStateUpdated(fn (Get $get, Set $set, $livewire) => $livewire->baselinePeriodChanged($get, $set, true)),
+                ]),
                 Select::make('analysis_timezone')->label(__('baselines.timezone'))->options(array_combine(\DateTimeZone::listIdentifiers(), \DateTimeZone::listIdentifiers()))->searchable()->default(fn () => app(InstitutionTimezone::class)->name())->disabled()->dehydrated()->required(),
                 Text::make(fn (Get $get, $livewire) => $livewire->baselineAvailability($get)['message']),
                 CheckboxList::make('metrics')->label(__('baseline_creation.metrics'))->options([
