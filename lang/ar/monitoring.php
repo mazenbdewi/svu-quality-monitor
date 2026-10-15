@@ -49,9 +49,10 @@ return [
     ],
 
     'navigation_groups' => [
-        'system' => 'النظام',
+        'system' => 'الإعدادات',
         'monitoring' => 'لوحة المتابعة',
-        'analysis_reliability' => 'التحليل والموثوقية',
+        'analysis_reliability' => 'الموثوقية وSLA',
+        'advanced_research' => 'التحليل البحثي المتقدم',
         'reports' => 'التقارير',
         'study_methodology' => 'الدراسة والمنهجية',
     ],

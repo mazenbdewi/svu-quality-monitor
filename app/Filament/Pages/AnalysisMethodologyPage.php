@@ -27,7 +27,7 @@ class AnalysisMethodologyPage extends Page
 
     public static function getNavigationGroup(): string|UnitEnum|null
     {
-        return __('monitoring.navigation_groups.study_methodology');
+        return __('monitoring.navigation_groups.advanced_research');
     }
 
     public function getTitle(): string

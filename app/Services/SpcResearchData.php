@@ -11,6 +11,30 @@ class SpcResearchData
 {
     public function __construct(private MaintenanceWindowService $maintenance, private ReliabilityTimeIntervals $intervals) {}
 
+    /**
+     * Read-only chart population with only the fields used by I/MR/P.
+     *
+     * The general checks() contract remains fully hydrated for baseline,
+     * Phase II, and export workflows that need recording metadata.
+     */
+    public function analysisChecks(MonitoredService $service, Carbon $start, Carbon $end): Collection
+    {
+        $query = $service->serviceChecks()
+            ->researchChecks()
+            ->select([
+                'service_checks.id',
+                'service_checks.checked_at',
+                'service_checks.response_time_ms',
+                'service_checks.is_success',
+                'service_checks.is_slow',
+            ]);
+        $windows = $end->gt($start) ? $this->maintenance->mergedOverlapIntervals($service, $start, $end) : collect();
+
+        return $query->where('checked_at', '>=', $start)->where('checked_at', '<', $end)
+            ->orderBy('checked_at')->orderBy('id')->get()
+            ->reject(fn ($check) => $windows->contains(fn ($w) => $check->checked_at->gte($w['start']) && $check->checked_at->lt($w['end'])))->values();
+    }
+
     public function checks(MonitoredService $service, Carbon $start, Carbon $end, bool $latency = false): Collection
     {
         $query = $service->serviceChecks();
@@ -24,7 +48,11 @@ class SpcResearchData
 
     public function buckets(MonitoredService $service, Carbon $start, Carbon $end, string $aggregation, string $timezone): Collection
     {
-        $checks = $this->checks($service, $start, $end);
+        return $this->bucketsFromChecks($service, $start, $end, $aggregation, $timezone, $this->checks($service, $start, $end));
+    }
+
+    public function bucketsFromChecks(MonitoredService $service, Carbon $start, Carbon $end, string $aggregation, string $timezone, Collection $checks): Collection
+    {
         $grouped = $checks->groupBy(function ($check) use ($aggregation, $timezone) {
             $at = $check->checked_at->copy()->setTimezone($timezone);
 

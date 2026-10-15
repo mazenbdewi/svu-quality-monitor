@@ -23,6 +23,15 @@ public/storage
 
 *.sql
 *.sql.gz
+*.tar.gz
+*.zip
+*.sqlite
+*.sqlite3
+*.db
+**/*.sqlite*
+**/*.db
+database/*.sqlite*
+storage/app
 backup-data
 update-state
 **/__pycache__

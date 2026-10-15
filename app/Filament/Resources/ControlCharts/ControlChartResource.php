@@ -84,7 +84,7 @@ class ControlChartResource extends Resource
 
     public static function getNavigationGroup(): string|UnitEnum|null
     {
-        return __('monitoring.navigation_groups.analysis_reliability');
+        return __('monitoring.navigation_groups.advanced_research');
     }
 
     public static function form(Schema $schema): Schema

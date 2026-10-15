@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\MonitoredServices;
 
 use App\Enums\MonitoringCheckType;
+use App\Filament\Pages\PerformanceAnalysis;
 use App\Filament\Resources\MonitoredServices\Pages\CreateMonitoredService;
 use App\Filament\Resources\MonitoredServices\Pages\EditMonitoredService;
 use App\Filament\Resources\MonitoredServices\Pages\ListMonitoredServices;
@@ -430,6 +431,10 @@ class MonitoredServiceResource extends Resource
             ])
             ->recordActions([
                 static::checkNowAction(),
+                Action::make('performance_analysis')
+                    ->label(__('performance_analysis.open'))
+                    ->icon(Heroicon::OutlinedPresentationChartLine)
+                    ->url(fn (MonitoredService $record): string => PerformanceAnalysis::getUrl(['service' => $record->id])),
                 EditAction::make()
                     ->label(__('monitoring.actions.edit')),
             ])

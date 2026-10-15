@@ -81,7 +81,7 @@
     </div>
 
     @once
-        <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+        @vite('resources/js/charts.js')
     @endonce
 
     <script>
@@ -145,11 +145,15 @@
                 });
             };
 
-            if (window.Chart) {
-                renderControlChart();
-            } else {
-                document.addEventListener('DOMContentLoaded', renderControlChart, { once: true });
-            }
+            const renderWhenReady = () => {
+                if (window.Chart) {
+                    renderControlChart();
+                } else {
+                    window.setTimeout(renderWhenReady, 100);
+                }
+            };
+
+            renderWhenReady();
         })();
     </script>
 @endif

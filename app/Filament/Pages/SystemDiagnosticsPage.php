@@ -35,7 +35,7 @@ class SystemDiagnosticsPage extends Page
 
     public static function getNavigationGroup(): string|UnitEnum|null
     {
-        return __('monitoring.navigation_groups.study_methodology');
+        return __('monitoring.navigation_groups.system');
     }
 
     public function getTitle(): string

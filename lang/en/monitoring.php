@@ -49,9 +49,10 @@ return [
     ],
 
     'navigation_groups' => [
-        'system' => 'System',
+        'system' => 'Settings',
         'monitoring' => 'Monitoring',
-        'analysis_reliability' => 'Analysis & Reliability',
+        'analysis_reliability' => 'Reliability & SLA',
+        'advanced_research' => 'Advanced Research Analysis',
         'reports' => 'Reports',
         'study_methodology' => 'Study & Methodology',
     ],

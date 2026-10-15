@@ -43,7 +43,7 @@ class InstitutionSettingsPage extends Page
 
     public static function getNavigationGroup(): string|UnitEnum|null
     {
-        return __('monitoring.navigation_groups.reports');
+        return __('monitoring.navigation_groups.system');
     }
 
     public function getTitle(): string

@@ -23,6 +23,70 @@ class ControlChartCalculator
         return $this->calculate($service, $chartType, $start, $end, $window === 'custom' ? 'custom' : $window.'_days', $aggregation);
     }
 
+    /**
+     * Calculate the research charts without persisting a ControlChart or points.
+     *
+     * The calculation methods below are shared with the scheduled writer so the
+     * historical page cannot drift from the established R3 formulas.
+     *
+     * @return array<string, array<string, mixed>>
+     */
+    public function analyzeReadOnly(
+        MonitoredService $service,
+        Carbon $start,
+        Carbon $end,
+        string $bucket = 'hourly',
+    ): array {
+        if ($end->lte($start)) {
+            throw new InvalidArgumentException('SPC requires a positive half-open analysis window.');
+        }
+
+        if (! in_array($bucket, ['hourly', 'daily'], true)) {
+            throw new InvalidArgumentException("Unsupported control chart bucket [{$bucket}].");
+        }
+
+        $periodStart = $start->copy()->utc();
+        $periodEnd = $end->copy()->utc()->min(now()->utc());
+        $timezone = $this->windows->timezone();
+        $binaryChecks = $this->research->analysisChecks($service, $periodStart, $periodEnd);
+        $checks = $binaryChecks->filter(fn (ServiceCheck $check): bool => $check->is_success && $check->response_time_ms !== null && $check->response_time_ms >= 0)->values();
+        $buckets = $this->research->bucketsFromChecks($service, $periodStart, $periodEnd, $bucket, $timezone, $binaryChecks);
+
+        $results = [
+            'i_chart' => $this->calculateIChart($service, $periodStart, $periodEnd, $checks),
+            'mr_chart' => $this->calculateMrChart($service, $periodStart, $periodEnd, $checks),
+            'p_chart' => $this->calculatePChart($service, $periodStart, $periodEnd, $bucket, $buckets, true),
+        ];
+
+        $minimum = max(2, (int) config('monitoring.spc.exploratory_min_points', 20));
+        $latencySufficiency = $checks->isEmpty() ? 'no_data' : ($checks->count() < 2 ? 'insufficient' : ($checks->count() < $minimum || $buckets->sum('missing_count') > 0 ? 'preliminary' : 'analyzable'));
+        $pSufficiency = $binaryChecks->isEmpty() ? 'no_data' : ($binaryChecks->count() < 2 ? 'insufficient' : ($binaryChecks->count() < $minimum || $buckets->sum('missing_count') > 0 ? 'preliminary' : 'analyzable'));
+        $problematicCount = $binaryChecks->filter(fn (ServiceCheck $check): bool => $check->is_problematic)->count();
+        $summary = [
+            'eligible_count' => $binaryChecks->count(),
+            'latency_count' => $checks->count(),
+            'problematic_count' => $problematicCount,
+            'problematic_percent' => $binaryChecks->count() ? 100 * $problematicCount / $binaryChecks->count() : null,
+            'mean_latency' => $checks->avg('response_time_ms'),
+            'missing_buckets' => $buckets->where('missing_count', '>', 0)->count(),
+            'buckets' => $buckets->count(),
+        ];
+
+        foreach ($results as $type => &$result) {
+            $result['chart_type'] = $type;
+            $result['period_start'] = $periodStart;
+            $result['period_end'] = $periodEnd;
+            $result['analysis_timezone'] = $timezone;
+            $result['aggregation_interval'] = in_array($type, ['i_chart', 'mr_chart'], true) ? 'raw' : $bucket;
+            $result['sufficiency'] = $type === 'p_chart' ? $pSufficiency : $latencySufficiency;
+            $result['sample_size'] = $type === 'p_chart' ? $buckets->sum('observed_count') : $checks->count();
+            $result['summary'] = $summary;
+        }
+        unset($result);
+
+        return $results;
+    }
+
     public const CHART_TYPES = [
         'i_chart',
         'mr_chart',
@@ -107,9 +171,9 @@ class ControlChartCalculator
     /**
      * @return array{center_line: ?float, ucl: ?float, lcl: ?float, points: list<array<string, mixed>>}
      */
-    private function calculateIChart(MonitoredService $service, Carbon $start, Carbon $end): array
+    private function calculateIChart(MonitoredService $service, Carbon $start, Carbon $end, ?Collection $checks = null): array
     {
-        $checks = $this->responseTimeChecks($service, $start, $end);
+        $checks ??= $this->responseTimeChecks($service, $start, $end);
         $values = $checks->pluck('response_time_ms')->map(fn ($value): float => (float) $value)->values();
         $centerLine = $values->isNotEmpty() ? $values->avg() : null;
         $movingRanges = $this->movingRanges($values);
@@ -137,9 +201,9 @@ class ControlChartCalculator
     /**
      * @return array{center_line: ?float, ucl: ?float, lcl: ?float, points: list<array<string, mixed>>}
      */
-    private function calculateMrChart(MonitoredService $service, Carbon $start, Carbon $end): array
+    private function calculateMrChart(MonitoredService $service, Carbon $start, Carbon $end, ?Collection $checks = null): array
     {
-        $checks = $this->responseTimeChecks($service, $start, $end)->values();
+        $checks = ($checks ?? $this->responseTimeChecks($service, $start, $end))->values();
         $values = $checks->pluck('response_time_ms')->map(fn ($value): float => (float) $value)->values();
         $movingRanges = $this->movingRanges($values);
         $mrBar = $movingRanges->isNotEmpty() ? $movingRanges->avg() : null;
@@ -168,9 +232,9 @@ class ControlChartCalculator
     /**
      * @return array{center_line: ?float, ucl: ?float, lcl: ?float, points: list<array<string, mixed>>}
      */
-    private function calculatePChart(MonitoredService $service, Carbon $start, Carbon $end, string $bucket): array
+    private function calculatePChart(MonitoredService $service, Carbon $start, Carbon $end, string $bucket, ?Collection $buckets = null, bool $includeDisplayPoints = false): array
     {
-        $buckets = $this->research->buckets($service, $start, $end, $bucket, $this->windows->timezone());
+        $buckets ??= $this->research->buckets($service, $start, $end, $bucket, $this->windows->timezone());
         $total = $buckets->sum('observed_count');
         $pBar = $total > 0 ? $buckets->sum('problematic_count') / $total : null;
         $points = [];
@@ -186,7 +250,28 @@ class ControlChartCalculator
         }
 
         // Variable-n limits belong to points; no misleading average chart limits.
-        return ['center_line' => $this->rounded($pBar), 'ucl' => null, 'lcl' => null, 'points' => $points];
+        $result = ['center_line' => $this->rounded($pBar), 'ucl' => null, 'lcl' => null, 'points' => $points];
+        if ($includeDisplayPoints) {
+            $byBucket = collect($points)->keyBy(fn (array $point): string => $point['point_time']->copy()->utc()->toIso8601String());
+            $result['display_points'] = $buckets->map(function (array $group) use ($byBucket): array {
+                $key = Carbon::parse($group['bucket_start'])->utc()->toIso8601String();
+
+                return $byBucket->get($key) ?? [
+                    'point_time' => Carbon::parse($group['bucket_start']),
+                    'value' => null,
+                    'center_line' => null,
+                    'ucl' => null,
+                    'lcl' => null,
+                    'sample_size' => 0,
+                    'failed_count' => 0,
+                    'is_out_of_control' => false,
+                    'signal_type' => null,
+                    'research_context' => $group,
+                ];
+            })->values()->all();
+        }
+
+        return $result;
     }
 
     /**

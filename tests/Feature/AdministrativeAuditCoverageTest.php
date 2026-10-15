@@ -18,6 +18,7 @@ use App\Models\NotificationDelivery;
 use App\Models\NotificationSetting;
 use App\Models\ServiceCheck;
 use App\Models\User;
+use App\Services\InstitutionTimezone;
 use App\Services\NotificationDeliveryRetryService;
 use App\Services\UserAdministrationService;
 use Database\Seeders\RolesAndPermissionsSeeder;
@@ -235,10 +236,11 @@ class AdministrativeAuditCoverageTest extends TestCase
     {
         $service = MonitoredService::factory()->create(['name' => 'synthetic-report-content']);
         ServiceCheck::create(['monitored_service_id' => $service->id, 'checked_at' => now(), 'is_success' => true, 'is_slow' => false]);
-        Livewire::test(ReportsPage::class)->fillForm(['report_type' => 'service_checks', 'date_from' => now()->toDateString(), 'date_to' => now()->toDateString()])->call('export')->assertFileDownloaded();
+        $institutionDate = now(app(InstitutionTimezone::class)->name())->toDateString();
+        Livewire::test(ReportsPage::class)->fillForm(['report_type' => 'service_checks', 'date_from' => $institutionDate, 'date_to' => $institutionDate])->call('export')->assertFileDownloaded();
         $log = $this->audit('report.generated');
         $this->assertSame('service_checks', $log->context['report_type']);
-        $this->assertSame(now()->toDateString(), $log->context['period']['date_from']);
+        $this->assertSame($institutionDate, $log->context['period']['date_from']);
         $this->assertSame('excel', $log->context['format']);
         $this->assertNoSecrets(['synthetic-report-content']);
     }

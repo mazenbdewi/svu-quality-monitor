@@ -6,6 +6,8 @@ return [
         'association_horizon_minutes' => (int) env('SPC_INCIDENT_ASSOCIATION_HORIZON_MINUTES', 60),
         // Exploratory reporting policy, not a universal scientific minimum.
         'exploratory_min_points' => 20,
+        // Display-only cap. Statistical calculations always use the full population.
+        'visualization_max_points' => 1000,
     ],
     /*
     |--------------------------------------------------------------------------

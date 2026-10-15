@@ -24,6 +24,65 @@ class ListControlChartBaselines extends ListRecords
 
     private array $rangeCache = [];
 
+    /** @var array<string, mixed> */
+    public array $prefill = [];
+
+    public function mount(): void
+    {
+        parent::mount();
+        $this->prefill = $this->validatedPrefill();
+    }
+
+    public function baselinePrefill(string $field): mixed
+    {
+        return $this->prefill[$field] ?? null;
+    }
+
+    public function mountAction(string $name, array $arguments = [], array $context = []): mixed
+    {
+        $result = parent::mountAction($name, $arguments, $context);
+
+        if ($name === 'create_phase_one_baseline' && $this->prefill !== [] && isset($this->mountedActions[0])) {
+            $this->mountedActions[0]['data'] = array_replace(
+                $this->mountedActions[0]['data'] ?? [],
+                $this->prefill,
+            );
+        }
+
+        return $result;
+    }
+
+    /** @return array<string, mixed> */
+    private function validatedPrefill(): array
+    {
+        $serviceId = request()->integer('prefill_service');
+        $start = request()->string('prefill_start')->toString();
+        $end = request()->string('prefill_end')->toString();
+
+        if (! $serviceId || ! MonitoredService::whereKey($serviceId)->exists() || blank($start) || blank($end)) {
+            return [];
+        }
+
+        try {
+            $startAt = Carbon::parse($start, 'UTC');
+            $endAt = Carbon::parse($end, 'UTC');
+            if ($endAt->lte($startAt) || $endAt->gt(now('UTC'))) {
+                return [];
+            }
+        } catch (\Throwable) {
+            return [];
+        }
+
+        return [
+            'service_id' => $serviceId,
+            'baseline_start' => $startAt->toDateTimeString(),
+            'baseline_end' => $endAt->toDateTimeString(),
+            'data_cutoff' => $endAt->toDateTimeString(),
+            'metrics' => ['latency', 'problematic'],
+            'aggregation_interval' => 'hourly',
+        ];
+    }
+
     public function baselineServiceChanged(Get $get, Set $set): void
     {
         $set('metrics', []);

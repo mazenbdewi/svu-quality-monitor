@@ -36,6 +36,7 @@ use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\ValidationException;
 use Maatwebsite\Excel\Facades\Excel;
+use UnitEnum;
 
 class ControlChartBaselineResource extends Resource
 {
@@ -90,6 +91,11 @@ class ControlChartBaselineResource extends Resource
         return (auth()->user()?->is_active && auth()->user()?->can(PhaseOneBaselineService::PERMISSION)) ?? false;
     }
 
+    public static function getNavigationGroup(): string|UnitEnum|null
+    {
+        return __('monitoring.navigation_groups.advanced_research');
+    }
+
     public static function table(Table $table): Table
     {
         return $table->defaultGroup('monitoredService.name')->defaultSort('id', 'desc')->columns([
@@ -122,18 +128,18 @@ class ControlChartBaselineResource extends Resource
             ->beforeFormValidated(fn ($livewire) => $livewire->guardBaselineAvailability())
             ->schema([
                 View::make('filament.baselines.creation-help'),
-                Select::make('service_id')->label(__('baselines.service'))->options(fn () => MonitoredService::orderBy('name')->pluck('name', 'id'))->required()->searchable()->live()->rules(['exists:monitored_services,id'])
+                Select::make('service_id')->label(__('baselines.service'))->options(fn () => MonitoredService::orderBy('name')->pluck('name', 'id'))->default(fn ($livewire) => $livewire->baselinePrefill('service_id'))->required()->searchable()->live()->rules(['exists:monitored_services,id'])
                     ->afterStateUpdated(fn (Get $get, Set $set, $livewire) => $livewire->baselineServiceChanged($get, $set)),
                 Text::make(fn (Get $get, $livewire) => $livewire->baselineRangeMessage($get)),
                 Text::make(fn () => __('baseline_creation.period_help', ['timezone' => app(InstitutionTimezone::class)->name()])),
-                DateTimePicker::make('baseline_start')->label(__('baselines.start'))->required()->seconds(true)->live(debounce: 400)
+                DateTimePicker::make('baseline_start')->label(__('baselines.start'))->default(fn ($livewire) => $livewire->baselinePrefill('baseline_start'))->required()->seconds(true)->live(debounce: 400)
                     ->afterStateUpdated(fn (Get $get, Set $set, $livewire) => $livewire->baselinePeriodChanged($get, $set)),
-                DateTimePicker::make('baseline_end')->label(__('baselines.end'))->required()->after('baseline_start')->seconds(true)->live(debounce: 400)
+                DateTimePicker::make('baseline_end')->label(__('baselines.end'))->default(fn ($livewire) => $livewire->baselinePrefill('baseline_end'))->required()->after('baseline_start')->seconds(true)->live(debounce: 400)
                     ->maxDate(fn () => now(app(InstitutionTimezone::class)->name())->format('Y-m-d\TH:i:s'))
                     ->afterStateUpdated(fn (Get $get, Set $set, $livewire) => $livewire->baselinePeriodChanged($get, $set)),
                 Hidden::make('manual_cutoff')->default(false)->dehydrated(false),
                 Section::make(__('baseline_creation.advanced'))->collapsible()->collapsed()->schema([
-                    DateTimePicker::make('data_cutoff')->label(__('baseline_creation.cutoff'))->helperText(__('baseline_creation.cutoff_help'))->seconds(true)->live(debounce: 400)
+                    DateTimePicker::make('data_cutoff')->label(__('baseline_creation.cutoff'))->default(fn ($livewire) => $livewire->baselinePrefill('data_cutoff'))->helperText(__('baseline_creation.cutoff_help'))->seconds(true)->live(debounce: 400)
                         ->afterStateUpdated(fn (Get $get, Set $set, $livewire) => $livewire->baselinePeriodChanged($get, $set, true)),
                 ]),
                 Select::make('analysis_timezone')->label(__('baselines.timezone'))->options(array_combine(\DateTimeZone::listIdentifiers(), \DateTimeZone::listIdentifiers()))->searchable()->default(fn () => app(InstitutionTimezone::class)->name())->disabled()->dehydrated()->required(),
@@ -146,9 +152,9 @@ class ControlChartBaselineResource extends Resource
 
                         return [$metric => $count > 0 ? __('baseline_creation.'.$metric.'_count', ['count' => $count]) : __('baseline_creation.'.$metric.'_unavailable')];
                     })->all())
-                    ->default([])->required()->minItems(1)->live()
+                    ->default(fn ($livewire) => $livewire->baselinePrefill('metrics') ?? [])->required()->minItems(1)->live()
                     ->disableOptionWhen(fn (string $value, Get $get, $livewire) => ($livewire->baselineAvailability($get)[$value] ?? 0) === 0),
-                Select::make('aggregation_interval')->label(__('baselines.aggregation'))->options(['hourly' => __('baseline_creation.hourly'), 'daily' => __('baseline_creation.daily')])->default('hourly')->required()
+                Select::make('aggregation_interval')->label(__('baselines.aggregation'))->options(['hourly' => __('baseline_creation.hourly'), 'daily' => __('baseline_creation.daily')])->default(fn ($livewire) => $livewire->baselinePrefill('aggregation_interval') ?? 'hourly')->required()
                     ->visible(fn (Get $get) => in_array('problematic', $get('metrics') ?? [], true)),
             ])->action(function (array $data, $livewire) {
                 abort_unless(static::canManage(), 403);

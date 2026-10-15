@@ -40,6 +40,7 @@ class AdminPanelProvider extends PanelProvider
                 NavigationGroup::make()->label(fn (): string => __('monitoring.navigation_groups.monitoring')),
                 NavigationGroup::make()->label(fn (): string => __('monitoring.navigation_groups.analysis_reliability')),
                 NavigationGroup::make()->label(fn (): string => __('monitoring.navigation_groups.reports')),
+                NavigationGroup::make()->label(fn (): string => __('monitoring.navigation_groups.advanced_research')),
                 NavigationGroup::make()->label(fn (): string => __('monitoring.navigation_groups.system')),
                 NavigationGroup::make()->label(fn (): string => __('monitoring.navigation_groups.study_methodology')),
             ])

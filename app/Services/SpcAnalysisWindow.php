@@ -22,8 +22,8 @@ class SpcAnalysisWindow
             $start = Carbon::parse($from, $this->timezone());
             $end = Carbon::parse($to, $this->timezone());
         } else {
-            if (! in_array($window, ['7', '30', '90'], true)) {
-                throw new InvalidArgumentException('Analysis window must be 7, 30, 90 or custom.');
+            if (! in_array($window, ['7', '15', '30', '60', '90'], true)) {
+                throw new InvalidArgumentException('Analysis window must be 7, 15, 30, 60, 90 or custom.');
             }
             $end = $to ? Carbon::parse($to, $this->timezone()) : now($this->timezone())->startOfDay();
             $start = $end->copy()->subDays((int) $window);

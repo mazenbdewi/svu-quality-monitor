@@ -47,6 +47,11 @@ class SpcResearchMonitoring extends Page
         return __('spc_phase2.title');
     }
 
+    public static function getNavigationGroup(): string|\UnitEnum|null
+    {
+        return __('monitoring.navigation_groups.advanced_research');
+    }
+
     public static function canAccess(): bool
     {
         return (bool) (auth()->user()?->is_active && auth()->user()?->can('control_charts.view'));
