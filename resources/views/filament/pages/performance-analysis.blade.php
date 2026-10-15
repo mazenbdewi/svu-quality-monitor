@@ -2,25 +2,8 @@
     @vite('resources/js/charts.js')
     @include('filament.pages.partials.exploratory-spc-script')
     <p>{{ __('performance_analysis.intro') }}</p>
-    <div class="grid gap-4 md:grid-cols-3">
-        <label>{{ __('performance_analysis.service') }}
-            <select wire:model.live="serviceId" class="fi-input w-full">
-                <option value="">—</option>
-                @foreach ($services as $service)
-                    <option value="{{ $service->id }}">{{ $service->name }} · {{ strtoupper($service->check_type->value) }}</option>
-                @endforeach
-            </select>
-        </label>
-        <label>{{ __('performance_analysis.window') }}
-            <select wire:model.live="window" class="fi-input w-full">
-                @foreach (['7', '15', '30', '60', '90'] as $days)
-                    <option value="{{ $days }}">{{ trans_choice('performance_analysis.days', (int) $days, ['count' => $days]) }}</option>
-                @endforeach
-                <option value="custom">{{ __('performance_analysis.custom') }}</option>
-            </select>
-        </label>
-        <div class="text-sm text-gray-500 self-end">{{ __('performance_analysis.calendar_policy', ['timezone' => $timezone]) }}</div>
-    </div>
+    {{ $this->form }}
+    <p class="text-sm text-gray-500">{{ __('performance_analysis.calendar_policy', ['timezone' => $timezone]) }}</p>
     @if ($window === 'custom')
         <div class="grid gap-4 md:grid-cols-2 mt-4">
             <label>{{ __('performance_analysis.start') }}<input type="datetime-local" wire:model.live.debounce.400ms="customStart" class="fi-input w-full" /></label>

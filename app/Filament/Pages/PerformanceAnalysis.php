@@ -13,7 +13,9 @@ use App\Services\SpcResearchData;
 use BackedEnum;
 use Carbon\Carbon;
 use Filament\Actions\Action;
+use Filament\Forms\Components\Select;
 use Filament\Pages\Page;
+use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\ValidationException;
@@ -66,6 +68,34 @@ class PerformanceAnalysis extends Page
         return __('performance_analysis.title');
     }
 
+    public function form(Schema $schema): Schema
+    {
+        return $schema
+            ->statePath('')
+            ->columns(['default' => 1, 'md' => 2])
+            ->components([
+                Select::make('serviceId')
+                    ->label(__('performance_analysis.service'))
+                    ->placeholder('—')
+                    ->options(fn (): array => MonitoredService::orderBy('name')->get()
+                        ->mapWithKeys(fn (MonitoredService $service): array => [
+                            $service->id => $service->name.' · '.strtoupper($service->check_type->value),
+                        ])->all())
+                    ->searchable()
+                    ->native(false)
+                    ->wrapOptionLabels()
+                    ->live(),
+                Select::make('window')
+                    ->label(__('performance_analysis.window'))
+                    ->options(collect(['7', '15', '30', '60', '90'])
+                        ->mapWithKeys(fn (string $days): array => [
+                            $days => trans_choice('performance_analysis.days', (int) $days, ['count' => $days]),
+                        ])->put('custom', __('performance_analysis.custom'))->all())
+                    ->native(false)
+                    ->live(),
+            ]);
+    }
+
     protected function getHeaderActions(): array
     {
         return [
@@ -104,6 +134,7 @@ class PerformanceAnalysis extends Page
         abort_unless(static::canAccess(), 403);
         $requested = request()->integer('service');
         $this->serviceId = $requested && MonitoredService::whereKey($requested)->exists() ? $requested : null;
+        $this->form->fill(['serviceId' => $this->serviceId, 'window' => $this->window]);
         $this->refreshCharts();
     }
 
@@ -362,7 +393,6 @@ class PerformanceAnalysis extends Page
         abort_unless(static::canAccess(), 403);
 
         return [
-            'services' => MonitoredService::orderBy('name')->get(),
             'summary' => $this->summaryCache ?? $this->summary($this->serviceId ? MonitoredService::find($this->serviceId) : null),
             'timezone' => app(InstitutionTimezone::class)->name(),
         ];

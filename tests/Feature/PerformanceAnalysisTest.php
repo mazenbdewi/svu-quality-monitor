@@ -70,6 +70,35 @@ class PerformanceAnalysisTest extends TestCase
             ->assertDontSee('cdn.jsdelivr.net', false);
     }
 
+    public function test_service_and_period_use_wrapping_filament_selects_in_both_locales(): void
+    {
+        $arabicName = 'خدمة المراقبة الإلكترونية للمكتبة الجامعية والبوابة الطلابية';
+        $englishName = 'University Student Portal and Electronic Library Monitoring Service';
+        $this->service->update(['name' => $arabicName]);
+        MonitoredService::factory()->create(['name' => $englishName, 'check_type' => 'api']);
+
+        foreach (['ar', 'en'] as $locale) {
+            app()->setLocale($locale);
+            $response = $this->actingAs($this->viewer)->get(PerformanceAnalysis::getUrl());
+            $response->assertOk()->assertSee('fi-select-input', false);
+
+            $component = Livewire::actingAs($this->viewer)->test(PerformanceAnalysis::class);
+            $fields = $component->instance()->form->getComponents();
+            $this->assertCount(2, $fields);
+            $this->assertSame('serviceId', $fields[0]->getStatePath());
+            $this->assertSame('window', $fields[1]->getStatePath());
+            foreach ($fields as $field) {
+                $this->assertFalse($field->isNative());
+                $this->assertTrue($field->canOptionLabelsWrap());
+            }
+            $this->assertTrue($fields[0]->isSearchable());
+            $this->assertSame($arabicName.' · HTTP', $fields[0]->getOptions()[$this->service->id]);
+            $this->assertContains($englishName.' · API', $fields[0]->getOptions());
+            $this->assertSame('30', $component->get('window'));
+            $this->assertArrayHasKey('custom', $fields[1]->getOptions());
+        }
+    }
+
     public function test_page_reads_historical_summary_without_writing_any_analysis_rows(): void
     {
         $this->check('2026-10-13 20:00:00');
