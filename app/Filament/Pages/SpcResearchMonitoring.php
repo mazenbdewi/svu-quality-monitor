@@ -60,7 +60,11 @@ class SpcResearchMonitoring extends Page
     public function mount(): void
     {
         abort_unless(static::canAccess(), 403);
-        $this->baselineId = ControlChartBaseline::where('status', 'approved')->latest('id')->value('id');
+        $requested = request()->query('baseline');
+        $requestedId = is_scalar($requested) && ctype_digit((string) $requested) ? (int) $requested : null;
+        $this->baselineId = $requestedId && ControlChartBaseline::whereKey($requestedId)->whereNotNull('approved_at')->exists()
+            ? $requestedId
+            : ControlChartBaseline::where('status', 'approved')->latest('id')->value('id');
         $this->reportTimezone = app(InstitutionTimezone::class)->name();
         $this->periodStart = now($this->reportTimezone)->subDays(7)->format('Y-m-d\TH:i');
         $this->periodEnd = now($this->reportTimezone)->format('Y-m-d\TH:i');

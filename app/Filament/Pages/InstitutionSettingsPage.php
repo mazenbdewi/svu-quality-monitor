@@ -2,11 +2,14 @@
 
 namespace App\Filament\Pages;
 
+use App\Filament\Resources\AuditLogs\AuditLogResource;
+use App\Filament\Resources\Users\UserResource;
 use App\Models\InstitutionSetting;
 use App\Services\AdministrativeAudit;
 use App\Services\InstitutionTimezone;
 use BackedEnum;
 use Filament\Actions\Action;
+use Filament\Actions\ActionGroup;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
@@ -49,6 +52,18 @@ class InstitutionSettingsPage extends Page
     public function getTitle(): string
     {
         return __('monitoring.executive.branding.title');
+    }
+
+    protected function getHeaderActions(): array
+    {
+        return [ActionGroup::make([
+            Action::make('notificationSettings')->label(NotificationSettingsPage::getNavigationLabel())->url(NotificationSettingsPage::getUrl())->visible(fn (): bool => NotificationSettingsPage::canAccess()),
+            Action::make('systemOperations')->label(SystemOperationsPage::getNavigationLabel())->url(SystemOperationsPage::getUrl())->visible(fn (): bool => SystemOperationsPage::canAccess()),
+            Action::make('systemDiagnostics')->label(SystemDiagnosticsPage::getNavigationLabel())->url(SystemDiagnosticsPage::getUrl())->visible(fn (): bool => SystemDiagnosticsPage::canAccess()),
+            Action::make('users')->label(UserResource::getNavigationLabel())->url(UserResource::getUrl())->visible(fn (): bool => UserResource::canViewAny()),
+            Action::make('auditLogs')->label(AuditLogResource::getNavigationLabel())->url(AuditLogResource::getUrl())->visible(fn (): bool => AuditLogResource::canViewAny()),
+            Action::make('aboutSystem')->label(AboutSystemPage::getNavigationLabel())->url(AboutSystemPage::getUrl()),
+        ])->label(__('monitoring.navigation_groups.system').' · '.__('early_deterioration.more'))];
     }
 
     public function mount(): void

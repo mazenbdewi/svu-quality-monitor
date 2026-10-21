@@ -1,6 +1,7 @@
 <?php
 
 return [
+    'related_pages' => 'سجلات المراقبة',
     'spc_research' => [
         'no_exceedance' => 'لا يوجد تجاوز للحدود المقدّرة',
         'expected' => 'الفحوص المتوقعة',

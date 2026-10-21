@@ -12,6 +12,7 @@ use App\Exports\Reports\Sheets\ReliabilityMetricsSheet;
 use App\Exports\Reports\Sheets\ServiceChecksSheet;
 use App\Exports\Reports\Sheets\ServiceIncidentsSheet;
 use App\Exports\Reports\Sheets\SlaMetricsSheet;
+use App\Filament\Resources\ReliabilityMetrics\ReliabilityMetricResource;
 use App\Models\MonitoredService;
 use App\Reports\ComprehensivePdfReport;
 use App\Reports\ExecutiveMonthlyPdfReport;
@@ -72,6 +73,14 @@ class ReportsPage extends Page
     public function getTitle(): string
     {
         return __('monitoring.reports.page.title');
+    }
+
+    protected function getHeaderActions(): array
+    {
+        return [Action::make('reliabilityMetrics')
+            ->label(ReliabilityMetricResource::getNavigationLabel())
+            ->url(ReliabilityMetricResource::getUrl())
+            ->visible(fn (): bool => ReliabilityMetricResource::canViewAny())];
     }
 
     public function mount(): void

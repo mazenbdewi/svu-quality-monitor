@@ -1,10 +1,10 @@
 <?php
 
 return [
-    'title' => 'Phase I Baselines', 'create' => 'Create Phase I Baseline', 'service' => 'Service', 'chart' => 'Chart',
+    'title' => 'Reference Performance Setup', 'create' => 'Create Reference Performance', 'service' => 'Service', 'chart' => 'Chart',
     'version' => 'Version', 'status' => 'Status', 'start' => 'Phase I start (selected timezone)', 'end' => 'Phase I end (exclusive, selected timezone)',
     'timezone' => 'Analysis timezone', 'aggregation' => 'P aggregation interval', 'sufficiency' => 'Data sufficiency',
-    'review' => 'Review', 'approve' => 'Approve', 'retire' => 'Retire', 'reject' => 'Reject', 'export' => 'Export frozen Phase I sample',
+    'review' => 'Review', 'approve' => 'Approve Reference Performance', 'retire' => 'Retire', 'reject' => 'Reject', 'export' => 'Export frozen Phase I sample',
     'review_notes' => 'Stability review: distribution, signals, gaps, configuration changes and period selection rationale',
     'acknowledge' => 'I reviewed coverage, signals and configuration warnings; preliminary/analyzable is not proof of stability.',
     'reason' => 'Decision rationale', 'scope' => 'Phase I review only. Approval identifies a study reference; it does not certify a perfect or stable process.',

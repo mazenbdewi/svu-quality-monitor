@@ -7,7 +7,7 @@ return [
     'end_after_start' => 'The period end must be after its start.',
     'invalid_cutoff' => 'The manual cutoff must be after start and no later than end. Adjust it in Advanced options, or clear it to follow end.',
 
-    'create' => 'Create baselines',
+    'create' => 'Create Reference Performance',
     'not_ready' => 'No baseline can be created for the current selection',
     'no_eligible' => 'No eligible research observations exist for this service in the selected period.',
     'no_available_range' => 'This service has no eligible historical research observations as of now. Manual, maintenance and unsupported checks are not research observations.',

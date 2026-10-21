@@ -1,6 +1,7 @@
 <?php
 
 return [
+    'related_pages' => 'Monitoring records',
     'spc_research' => [
         'no_exceedance' => 'No estimated limit exceedance',
         'expected' => 'Expected checks',

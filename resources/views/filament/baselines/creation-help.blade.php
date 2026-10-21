@@ -1,6 +1,6 @@
 <div class="space-y-3">
     <details>
-        <summary title="{{ __('baseline_creation.phase_help') }}">Phase I / Baseline ⓘ</summary>
+        <summary title="{{ __('baseline_creation.phase_help') }}">{{ __('baselines.title') }} ⓘ</summary>
         <p>{{ __('baseline_creation.phase_help') }}</p>
         <p title="{{ __('baseline_creation.baseline_help') }}">{{ __('baseline_creation.baseline_help') }}</p>
     </details>
