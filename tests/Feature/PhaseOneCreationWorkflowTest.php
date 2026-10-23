@@ -67,6 +67,7 @@ class PhaseOneCreationWorkflowTest extends TestCase
         Livewire::actingAs($this->admin)->test(ListControlChartBaselines::class)
             ->mountAction('create_phase_one_baseline')->fillForm($this->data($metrics))
             ->assertFormFieldExists('service_id', fn (Select $field) => $field->getOptions()[$this->service->id] === 'Research HTTP')
+            ->call('checkBaselineQuality')
             ->callMountedAction()->assertHasNoActionErrors()->assertRedirect('/admin/control-chart-baselines');
         $rows = ControlChartBaseline::orderBy('id')->get();
         $this->assertSame($types, $rows->pluck('chart_type')->all());
@@ -89,7 +90,7 @@ class PhaseOneCreationWorkflowTest extends TestCase
     {
         Livewire::actingAs($this->admin)->test(ListControlChartBaselines::class)
             ->mountAction('create_phase_one_baseline')->fillForm($this->data())
-            ->fillForm(['data_cutoff' => '2026-09-01 05:00:00', 'metrics' => ['latency', 'problematic']])->callMountedAction()->assertHasNoActionErrors();
+            ->fillForm(['data_cutoff' => '2026-09-01 05:00:00', 'metrics' => ['latency', 'problematic']])->call('checkBaselineQuality')->callMountedAction()->assertHasNoActionErrors();
         foreach (ControlChartBaseline::all() as $row) {
             $this->assertSame('2026-09-01 02:00:00', $row->data_cutoff->toDateTimeString());
             $this->assertSame(2, $row->sample_counts['included']);
@@ -99,17 +100,21 @@ class PhaseOneCreationWorkflowTest extends TestCase
     public function test_duplicate_component_prevents_partial_group_and_preserves_history(): void
     {
         $component = Livewire::actingAs($this->admin)->test(ListControlChartBaselines::class);
-        $component->callAction('create_phase_one_baseline', data: $this->data(['problematic']))->assertHasNoActionErrors();
+        $component->mountAction('create_phase_one_baseline')->fillForm($this->data(['problematic']))->call('checkBaselineQuality')->callMountedAction()->assertHasNoActionErrors();
         $before = ControlChartBaseline::sole()->toArray();
-        $component->callAction('create_phase_one_baseline', data: $this->data())->assertHasActionErrors(['metrics'])->assertNotified(__('baseline_creation.failed_title'));
+        $component->mountAction('create_phase_one_baseline')->fillForm($this->data())->call('checkBaselineQuality');
+        $this->assertSame('ineligible', $component->instance()->qualityPreviewCurrent()['status']);
+        $component->callMountedAction()->assertNotified(__('baseline_creation.not_ready'));
         $this->assertDatabaseCount('control_chart_baselines', 1);
         $this->assertSame($before, ControlChartBaseline::sole()->toArray());
     }
 
     public function test_failure_in_second_component_rolls_back_baselines_samples_and_audit(): void
     {
+        $component = Livewire::actingAs($this->admin)->test(ListControlChartBaselines::class)
+            ->mountAction('create_phase_one_baseline')->fillForm($this->data())->call('checkBaselineQuality');
         $this->partialMock(BaselineStatistics::class)->shouldReceive('calculate')->with('mr_chart', \Mockery::any(), \Mockery::any())->andThrow(new \RuntimeException('Sensitive internal fixture detail'));
-        Livewire::actingAs($this->admin)->test(ListControlChartBaselines::class)->callAction('create_phase_one_baseline', data: $this->data())
+        $component->callMountedAction()
             ->assertNotified(__('baseline_creation.failed_title'))->assertDontSee('Sensitive internal fixture detail');
         $this->assertDatabaseCount('control_chart_baselines', 0);
         $this->assertSame(0, ControlChartBaselineSample::count());
@@ -131,12 +136,10 @@ class PhaseOneCreationWorkflowTest extends TestCase
     #[DataProvider('invalidInputs')]
     public function test_form_validation_prevents_invalid_creation(array $changes, string $field): void
     {
-        $component = Livewire::actingAs($this->admin)->test(ListControlChartBaselines::class)->callAction('create_phase_one_baseline', data: array_replace($this->data(), $changes));
-        if ($field === 'service_id') {
-            $component->assertHasNoActionErrors()->assertNotified(__('baseline_creation.not_ready'));
-        } else {
-            $component->assertHasActionErrors([$field]);
-        }
+        $component = Livewire::actingAs($this->admin)->test(ListControlChartBaselines::class)
+            ->mountAction('create_phase_one_baseline')->fillForm(array_replace($this->data(), $changes))
+            ->call('checkBaselineQuality')->callMountedAction();
+        $component->assertNotified(__('baseline_creation.not_ready'));
         $this->assertDatabaseCount('control_chart_baselines', 0);
     }
 
@@ -145,7 +148,7 @@ class PhaseOneCreationWorkflowTest extends TestCase
         $component = Livewire::actingAs($this->admin)->test(ListControlChartBaselines::class)->mountAction('create_phase_one_baseline')
             ->fillForm(array_replace($this->data(), ['baseline_end' => '2099-09-01 07:00:00']));
         $this->assertModalContains($component, [__('baseline_creation.future_end')]);
-        $component->callMountedAction()->assertHasActionErrors(['baseline_end'])->assertNotified(__('baseline_creation.not_ready'));
+        $component->callMountedAction()->assertNotified(__('baseline_creation.not_ready'));
         $this->assertDatabaseCount('control_chart_baselines', 0);
     }
 
@@ -157,7 +160,7 @@ class PhaseOneCreationWorkflowTest extends TestCase
         $component = Livewire::actingAs($this->admin)->test(ListControlChartBaselines::class)->mountAction('create_phase_one_baseline')->fillForm($this->data(['problematic']))
             ->assertFormFieldExists('metrics', fn (CheckboxList $field) => $field->isOptionDisabled('latency', '') && ! $field->isOptionDisabled('problematic', ''));
         $this->assertModalContains($component, [__('baseline_creation.no_latency')]);
-        $component->callMountedAction()->assertHasNoActionErrors();
+        $component->call('checkBaselineQuality')->callMountedAction()->assertHasNoActionErrors();
         $this->assertSame('p_chart', ControlChartBaseline::sole()->chart_type);
     }
 
@@ -212,7 +215,8 @@ class PhaseOneCreationWorkflowTest extends TestCase
         $engine->approve($old, $this->admin, 'Approved fixture');
         $before = $old->fresh()->toArray();
         $samples = $engine->samples($old);
-        Livewire::actingAs($this->admin)->test(ListControlChartBaselines::class)->callAction('create_phase_one_baseline', data: $this->data())->assertHasNoActionErrors();
+        Livewire::actingAs($this->admin)->test(ListControlChartBaselines::class)
+            ->mountAction('create_phase_one_baseline')->fillForm($this->data())->call('checkBaselineQuality')->callMountedAction()->assertHasNoActionErrors();
         $this->assertSame($before, $old->fresh()->toArray());
         $this->assertSame($samples, $engine->samples($old));
     }

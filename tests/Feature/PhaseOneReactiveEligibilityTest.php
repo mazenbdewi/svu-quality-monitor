@@ -55,7 +55,8 @@ class PhaseOneReactiveEligibilityTest extends TestCase
         $this->assertSame($latency, $availability['latency']);
         $this->assertSame($binary, $availability['problematic']);
         $submit = $page->instance()->getMountedActions()[0]->getModalSubmitAction();
-        $this->assertSame($latency + $binary === 0, $submit->isDisabled());
+        $this->assertSame($latency + $binary > 0, $page->instance()->canSubmitBaseline());
+        $this->assertTrue($submit->isDisabled());
     }
 
     public function test_service_update_suggests_available_period_and_enables_both_options_with_counts(): void
@@ -69,7 +70,7 @@ class PhaseOneReactiveEligibilityTest extends TestCase
         $this->assertStringContainsString('2026-10-04 00:01:47', $html);
         $this->assertStringContainsString(e(__('baseline_creation.latency_count', ['count' => 2])), $html);
         $this->assertStringContainsString(e(__('baseline_creation.problematic_count', ['count' => 3])), $html);
-        $page->set('mountedActions.0.data.metrics', ['latency', 'problematic'])->callMountedAction()->assertHasNoActionErrors();
+        $page->set('mountedActions.0.data.metrics', ['latency', 'problematic'])->call('checkBaselineQuality')->callMountedAction()->assertHasNoActionErrors();
         $this->assertSame(['i_chart', 'mr_chart', 'p_chart'], ControlChartBaseline::orderBy('id')->pluck('chart_type')->all());
         $this->assertSame(['draft'], ControlChartBaseline::pluck('status')->unique()->values()->all());
         $this->assertSame('2026-10-04 10:05:43', ControlChartBaseline::first()->data_cutoff->toDateTimeString());
@@ -102,7 +103,7 @@ class PhaseOneReactiveEligibilityTest extends TestCase
         $page->set('mountedActions.0.data.service_id', $onlyP->id);
         $this->assertSame([], $page->get('mountedActions.0.data.metrics'));
         $this->assertAvailability($page, 0, 1);
-        $page->set('mountedActions.0.data.metrics', ['problematic'])->callMountedAction()->assertHasNoActionErrors();
+        $page->set('mountedActions.0.data.metrics', ['problematic'])->call('checkBaselineQuality')->callMountedAction()->assertHasNoActionErrors();
         $this->assertSame('p_chart', ControlChartBaseline::sole()->chart_type);
         $this->assertSame(1, ControlChartBaseline::sole()->sample_counts['included']);
     }
@@ -128,7 +129,7 @@ class PhaseOneReactiveEligibilityTest extends TestCase
         $page->callMountedAction()->assertHasNoActionErrors()->assertNotified(__('baseline_creation.not_ready'));
         $page->set('mountedActions.0.data.baseline_start', '2026-10-03T23:00:00')->set('mountedActions.0.data.baseline_end', '2026-10-04T01:00:00');
         $this->assertAvailability($page, 2, 3);
-        $page->set('mountedActions.0.data.metrics', ['latency', 'problematic'])->callMountedAction()->assertHasNoActionErrors();
+        $page->set('mountedActions.0.data.metrics', ['latency', 'problematic'])->call('checkBaselineQuality')->callMountedAction()->assertHasNoActionErrors();
         $this->assertDatabaseCount('control_chart_baselines', 3);
     }
 
@@ -162,7 +163,7 @@ class PhaseOneReactiveEligibilityTest extends TestCase
         $page->set('mountedActions.0.data.baseline_end', '2026-10-04T00:02:00');
         $this->assertAvailability($page, 2, 3);
         $this->assertSame('2026-10-04 00:02:00', $page->get('mountedActions.0.data.data_cutoff'));
-        $page->set('mountedActions.0.data.metrics', ['latency', 'problematic'])->callMountedAction()->assertHasNoActionErrors();
+        $page->set('mountedActions.0.data.metrics', ['latency', 'problematic'])->call('checkBaselineQuality')->callMountedAction()->assertHasNoActionErrors();
         foreach (ControlChartBaseline::all() as $baseline) {
             $this->assertSame('2026-10-03 21:02:00', $baseline->data_cutoff->toDateTimeString());
             $this->assertTrue($baseline->baseline_end->equalTo($baseline->data_cutoff));

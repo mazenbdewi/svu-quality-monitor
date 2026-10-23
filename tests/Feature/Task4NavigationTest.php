@@ -80,9 +80,9 @@ class Task4NavigationTest extends TestCase
         $this->assertSame($this->service->id, $page->instance()->baselinePrefill('service_id'));
         $page->mountAction('create_phase_one_baseline');
         $this->assertSame($this->service->id, $page->get('mountedActions.0.data.service_id'));
-        $this->assertSame($start, $page->get('mountedActions.0.data.baseline_start'));
-        $this->assertSame($end, $page->get('mountedActions.0.data.baseline_end'));
-        $this->assertSame($end, $page->get('mountedActions.0.data.data_cutoff'));
+        $this->assertSame('2026-10-01 03:00:00', $page->get('mountedActions.0.data.baseline_start'));
+        $this->assertSame('2026-10-07 03:00:00', $page->get('mountedActions.0.data.baseline_end'));
+        $this->assertSame('2026-10-07 03:00:00', $page->get('mountedActions.0.data.data_cutoff'));
         $this->assertSame(0, ControlChartBaseline::count());
     }
 

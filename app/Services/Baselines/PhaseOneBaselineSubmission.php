@@ -76,6 +76,9 @@ class PhaseOneBaselineSubmission
             if (! $service) {
                 $this->invalid('service_id', 'missing_service');
             }
+            if (! in_array($service->check_type->value, ['http', 'api'], true)) {
+                $this->invalid('service_id', 'unsupported_service');
+            }
             $types = array_merge(in_array('latency', $metrics, true) ? ['i_chart', 'mr_chart'] : [], in_array('problematic', $metrics, true) ? ['p_chart'] : []);
             foreach ($types as $type) {
                 if (ControlChartBaseline::where('monitored_service_id', $service->id)->where('chart_type', $type)

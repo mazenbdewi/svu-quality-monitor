@@ -402,10 +402,10 @@ class PhaseOneBaselineTest extends TestCase
         InstitutionSetting::current()->update(['timezone' => 'UTC']);
         $this->fixture();
         Livewire::actingAs($this->admin)->test(ListControlChartBaselines::class)
-            ->callAction('create_phase_one_baseline', data: [
+            ->mountAction('create_phase_one_baseline')->fillForm([
                 'service_id' => $this->service->id, 'baseline_start' => '2026-09-01 00:00:00',
                 'baseline_end' => '2026-09-01 04:00:00', 'analysis_timezone' => 'UTC', 'aggregation_interval' => 'hourly', 'metrics' => ['latency'],
-            ])->assertHasNoActionErrors();
+            ])->call('checkBaselineQuality')->callMountedAction()->assertHasNoActionErrors();
         $baseline = ControlChartBaseline::firstOrFail();
         $component = Livewire::test(ViewControlChartBaseline::class, ['record' => $baseline->id]);
         $component->callAction('review_baseline', data: ['notes' => 'Reviewed distribution, configuration, signals and missing periods.', 'acknowledge' => true])->assertHasNoActionErrors();

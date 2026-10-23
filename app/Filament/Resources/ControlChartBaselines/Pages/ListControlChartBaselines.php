@@ -5,6 +5,7 @@ namespace App\Filament\Resources\ControlChartBaselines\Pages;
 use App\Filament\Resources\ControlChartBaselines\ControlChartBaselineResource;
 use App\Models\MonitoredService;
 use App\Services\Baselines\PhaseOneBaselineSubmission;
+use App\Services\Baselines\ReferencePerformancePreview;
 use App\Services\InstitutionTimezone;
 use Carbon\Carbon;
 use Carbon\Exceptions\InvalidFormatException;
@@ -27,6 +28,11 @@ class ListControlChartBaselines extends ListRecords
     /** @var array<string, mixed> */
     public array $prefill = [];
 
+    /** Compact, read-only preview; never a source of truth for creation. */
+    public array $qualityPreview = [];
+
+    public ?string $qualityPreviewKey = null;
+
     public function mount(): void
     {
         parent::mount();
@@ -40,6 +46,7 @@ class ListControlChartBaselines extends ListRecords
 
     public function mountAction(string $name, array $arguments = [], array $context = []): mixed
     {
+        $this->invalidateBaselinePreview();
         $result = parent::mountAction($name, $arguments, $context);
 
         if ($name === 'create_phase_one_baseline' && $this->prefill !== [] && isset($this->mountedActions[0])) {
@@ -73,11 +80,13 @@ class ListControlChartBaselines extends ListRecords
             return [];
         }
 
+        $clock = app(InstitutionTimezone::class);
+
         return [
             'service_id' => $serviceId,
-            'baseline_start' => $startAt->toDateTimeString(),
-            'baseline_end' => $endAt->toDateTimeString(),
-            'data_cutoff' => $endAt->toDateTimeString(),
+            'baseline_start' => $clock->local($startAt)->toDateTimeString(),
+            'baseline_end' => $clock->local($endAt)->toDateTimeString(),
+            'data_cutoff' => $clock->local($endAt)->toDateTimeString(),
             'metrics' => ['latency', 'problematic'],
             'aggregation_interval' => 'hourly',
         ];
@@ -85,6 +94,7 @@ class ListControlChartBaselines extends ListRecords
 
     public function baselineServiceChanged(Get $get, Set $set): void
     {
+        $this->invalidateBaselinePreview();
         $set('metrics', []);
         $set('data_cutoff', null);
         $set('manual_cutoff', false);
@@ -96,7 +106,7 @@ class ListControlChartBaselines extends ListRecords
             $range = null;
             Notification::make()->danger()->title(__('baseline_creation.unavailable'))->send();
         }
-        // Set takes UTC state and DateTimePicker converts it to institution-local display.
+        // Set casts UTC instants to the local DateTimePicker state.
         $set('baseline_start', $range ? $range['last']->copy()->subDays(7)->max($range['first'])->copy()->startOfMinute()->toDateTimeString() : null);
         $set('baseline_end', $range ? $range['end']->toDateTimeString() : null);
         $set('data_cutoff', $range ? $range['end']->toDateTimeString() : null);
@@ -104,6 +114,7 @@ class ListControlChartBaselines extends ListRecords
 
     public function baselinePeriodChanged(Get $get, Set $set, bool $cutoffEdited = false): void
     {
+        $this->invalidateBaselinePreview();
         $set('metrics', []);
         $this->availabilityCache = [];
         $this->resetErrorBag();
@@ -188,12 +199,83 @@ class ListControlChartBaselines extends ListRecords
         return $availability['latency'] > 0 || $availability['problematic'] > 0;
     }
 
+    public function invalidateBaselinePreview(): void
+    {
+        $this->qualityPreview = [];
+        $this->qualityPreviewKey = null;
+    }
+
+    private function baselineSelection(): array
+    {
+        $field = $this->getMountedActionSchema()?->getComponentByStatePath('service_id');
+        if (! $field) {
+            return [];
+        }
+        $get = new Get($field);
+
+        return [
+            'service_id' => $get('service_id'), 'start' => $get('baseline_start'), 'end' => $get('baseline_end'),
+            'cutoff' => $get('data_cutoff'), 'metrics' => $get('metrics') ?? [],
+            'aggregation' => $get('aggregation_interval') ?? 'hourly',
+            'timezone' => app(InstitutionTimezone::class)->name(),
+        ];
+    }
+
+    private function selectionKey(array $selection): string
+    {
+        return hash('sha256', json_encode($selection));
+    }
+
+    public function qualityPreviewCurrent(): array
+    {
+        try {
+            $selection = $this->baselineSelection();
+
+            return $selection !== [] && $this->qualityPreviewKey === $this->selectionKey($selection) ? $this->qualityPreview : [];
+        } catch (\Throwable) {
+            return [];
+        }
+    }
+
+    public function checkBaselineQuality(): void
+    {
+        abort_unless(ControlChartBaselineResource::canManage(), 403);
+        $this->invalidateBaselinePreview();
+        try {
+            $selection = $this->baselineSelection();
+            $service = MonitoredService::find($selection['service_id'] ?? null);
+            if (! $service || ! $selection['start'] || ! $selection['end']) {
+                $this->qualityPreview = ['status' => 'ineligible', 'reason' => 'invalid_selection', 'charts' => []];
+            } else {
+                $start = Carbon::parse($selection['start'], 'UTC')->utc();
+                $end = Carbon::parse($selection['end'], 'UTC')->utc();
+                $cutoff = empty($selection['cutoff']) ? $end : Carbon::parse($selection['cutoff'], 'UTC')->utc();
+                $this->qualityPreview = app(ReferencePerformancePreview::class)->analyze($service, $start, $end, $cutoff,
+                    $selection['timezone'], $selection['metrics'], $selection['aggregation']);
+            }
+            $this->qualityPreviewKey = $this->selectionKey($selection);
+        } catch (\Throwable $e) {
+            report($e);
+            $this->qualityPreview = ['status' => 'ineligible', 'reason' => 'unavailable', 'charts' => []];
+            if (isset($selection)) {
+                $this->qualityPreviewKey = $this->selectionKey($selection);
+            }
+        }
+    }
+
+    public function canConfirmBaseline(): bool
+    {
+        $preview = $this->qualityPreviewCurrent();
+
+        return $this->canSubmitBaseline() && in_array($preview['status'] ?? null, ['eligible', 'needs_review'], true);
+    }
+
     public function guardBaselineAvailability(): void
     {
         // Also guard Enter/forged submit, before the required checkbox validation runs.
         abort_unless(ControlChartBaselineResource::canManage(), 403);
-        if (! $this->canSubmitBaseline()) {
-            Notification::make()->warning()->title(__('baseline_creation.not_ready'))->body($this->currentBaselineAvailability()['message'])->send();
+        if (! $this->canConfirmBaseline()) {
+            Notification::make()->warning()->title(__('baseline_creation.not_ready'))->body(__('baseline_creation.check_quality_first'))->send();
             throw new Halt;
         }
     }
