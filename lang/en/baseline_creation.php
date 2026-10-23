@@ -65,7 +65,7 @@ return [
     'created' => 'Created :count Draft baselines. Review each record before approval.',
     'limited' => 'Some drafts have limited data. Review sample counts and coverage; insufficient baselines cannot be approved.',
     'hourly' => 'Hourly', 'daily' => 'Daily',
-    'group_help' => 'Records are grouped by service. I and MR remain separate records with independent review/approval; open each record for its details. A component absent from a service group has not been created. Versions remain visible.',
+    'group_help' => 'Each row is a separate I, MR or P component with its own review and approval. The service and version are shown in the table; open a row for details.',
     'legacy' => 'Research baseline creation supports I/MR and P. Legacy C/U charts remain available in Control Charts; Phase I approval for C/U is not supported.',
     'unavailable' => 'Could not check eligibility. Retry or ask an administrator to inspect the application log.',
     'permission' => 'You need baseline management permission to create or review baselines.',

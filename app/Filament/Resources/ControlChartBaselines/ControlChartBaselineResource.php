@@ -98,7 +98,7 @@ class ControlChartBaselineResource extends Resource
 
     public static function table(Table $table): Table
     {
-        return $table->defaultGroup('monitoredService.name')->defaultSort('id', 'desc')->columns([
+        return $table->defaultSort('id', 'desc')->columns([
             TextColumn::make('monitoredService.name')->label(__('baselines.service')),
             TextColumn::make('chart_type')->label(__('baselines.chart')),
             TextColumn::make('version')->label(__('baselines.version')),
