@@ -10,6 +10,7 @@ use Carbon\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 /** UI orchestration only; R4A owns population, snapshots, statistics and lifecycle. */
@@ -89,8 +90,9 @@ class PhaseOneBaselineSubmission
                 }
             }
             $created = [];
+            $draftSetId = (string) Str::uuid();
             foreach ($types as $type) {
-                $baseline = $this->engine->create($service, $type, $start->toIso8601String(), $end->toIso8601String(), $timezone, $actor, $aggregation, $cutoff->toIso8601String());
+                $baseline = $this->engine->create($service, $type, $start->toIso8601String(), $end->toIso8601String(), $timezone, $actor, $aggregation, $cutoff->toIso8601String(), $draftSetId);
                 // Empty submissions get a visible explanation; the underlying R4A method is unchanged.
                 if ($baseline->sample_counts['included'] === 0) {
                     $this->invalid('metrics', $type === 'p_chart' ? 'no_binary' : 'no_latency');

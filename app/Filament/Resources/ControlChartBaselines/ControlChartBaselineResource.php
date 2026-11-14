@@ -7,6 +7,7 @@ use App\Filament\Resources\ControlChartBaselines\Pages\ListControlChartBaselines
 use App\Filament\Resources\ControlChartBaselines\Pages\ViewControlChartBaseline;
 use App\Models\ControlChartBaseline;
 use App\Models\MonitoredService;
+use App\Services\Baselines\DeletePhaseOneDraft;
 use App\Services\Baselines\PhaseOneBaselineService;
 use App\Services\Baselines\PhaseOneBaselineSubmission;
 use App\Services\InstitutionTimezone;
@@ -78,7 +79,7 @@ class ControlChartBaselineResource extends Resource
 
     public static function canDelete($record): bool
     {
-        return false;
+        return $record->status === 'draft' && static::canManage();
     }
 
     public static function canDeleteAny(): bool
@@ -106,7 +107,7 @@ class ControlChartBaselineResource extends Resource
             TextColumn::make('baseline_start')->label(__('baselines.start'))->dateTime(),
             TextColumn::make('baseline_end')->label(__('baselines.end'))->dateTime(),
             TextColumn::make('review_context.sufficiency')->label(__('baselines.sufficiency')),
-        ])->recordActions([ViewAction::make()])->recordUrl(fn ($record) => static::getUrl('view', ['record' => $record]));
+        ])->recordActions([ViewAction::make(), static::deleteDraftAction()])->recordUrl(fn ($record) => static::getUrl('view', ['record' => $record]));
     }
 
     public static function infolist(Schema $schema): Schema
@@ -190,6 +191,7 @@ class ControlChartBaselineResource extends Resource
     public static function lifecycleActions(): array
     {
         return [
+            static::deleteDraftAction(true),
             Action::make('review_baseline')->label(__('baselines.review'))->visible(fn ($record) => static::canManage() && $record->status === 'draft')
                 ->schema([Textarea::make('notes')->label(__('baselines.review_notes'))->required()->maxLength(10000), Toggle::make('acknowledge')->label(__('baselines.acknowledge'))->accepted()->required()])
                 ->action(fn ($record, array $data) => app(PhaseOneBaselineService::class)->review($record, auth()->user(), $data['notes'], (bool) ($data['acknowledge'] ?? false))),
@@ -206,6 +208,33 @@ class ControlChartBaselineResource extends Resource
                     return Excel::download(new PhaseOneBaselineExport($record), 'baseline-'.$record->id.'-v'.$record->version.'.xlsx');
                 }),
         ];
+    }
+
+    public static function deleteDraftAction(bool $redirect = false): Action
+    {
+        return Action::make('delete_draft')->label(__('baselines.delete'))->color('danger')->icon(Heroicon::OutlinedTrash)
+            ->visible(fn (ControlChartBaseline $record): bool => static::canDelete($record))
+            ->authorize(fn (ControlChartBaseline $record): bool => static::canDelete($record))
+            ->requiresConfirmation()
+            ->modalHeading(__('baselines.delete'))
+            ->modalDescription(fn (ControlChartBaseline $record): string => __('baselines.delete_confirmation', [
+                'count' => app(DeletePhaseOneDraft::class)->count($record),
+            ]))
+            ->modalSubmitActionLabel(__('baselines.delete'))
+            ->action(function (ControlChartBaseline $record) use ($redirect) {
+                try {
+                    $count = app(DeletePhaseOneDraft::class)->delete($record, auth()->user());
+                } catch (AuthorizationException $e) {
+                    throw $e;
+                } catch (ValidationException $e) {
+                    Notification::make()->danger()->title(collect($e->errors())->flatten()->first())->send();
+
+                    return null;
+                }
+                Notification::make()->success()->title(__('baselines.deleted', ['count' => $count]))->send();
+
+                return $redirect ? redirect(static::getUrl('index')) : null;
+            });
     }
 
     public static function getPages(): array

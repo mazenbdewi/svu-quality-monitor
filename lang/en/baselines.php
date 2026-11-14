@@ -16,4 +16,8 @@ return [
     'no_points' => 'No computable points', 'cutoff' => 'Data cutoff (UTC)', 'review_context' => 'Stability and time-coverage review',
     'bucket_start' => 'Bucket start (UTC)', 'observed' => 'Observed', 'missing' => 'Missing',
     'lifecycle' => 'Review, approval and validity history',
+    'delete' => 'Delete', 'delete_confirmation' => 'Permanently delete :count draft baseline(s)?',
+    'deleted' => ':count draft baseline(s) deleted.',
+    'delete_changed' => 'The draft changed or no longer exists. Refresh and try again.',
+    'delete_protected' => 'This draft has monitoring history and cannot be deleted.',
 ];

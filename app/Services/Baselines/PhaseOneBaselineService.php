@@ -20,7 +20,7 @@ class PhaseOneBaselineService
 
     public function __construct(private BaselinePopulation $population, private BaselineStatistics $statistics, private BaselineConfiguration $configuration, private AuditLogger $audit) {}
 
-    public function create(MonitoredService $service, string $type, string $from, string $to, string $timezone, User $actor, string $aggregation = 'hourly', ?string $cutoff = null): ControlChartBaseline
+    public function create(MonitoredService $service, string $type, string $from, string $to, string $timezone, User $actor, string $aggregation = 'hourly', ?string $cutoff = null, ?string $draftSetId = null): ControlChartBaseline
     {
         $this->authorize($actor);
         if (! in_array($type, ['i_chart', 'mr_chart', 'p_chart'], true) || ! in_array($aggregation, ['hourly', 'daily'], true)) {
@@ -37,7 +37,7 @@ class PhaseOneBaselineService
         $aggregation = $type === 'p_chart' ? $aggregation : 'raw';
         $method = $type === 'p_chart' ? 'pooled-binomial-proportion-v1' : 'individuals-moving-range-2-v1';
 
-        return DB::transaction(function () use ($service, $type, $timezone, $actor, $aggregation, $method, $start, $end, $dataCutoff, $created) {
+        return DB::transaction(function () use ($service, $type, $timezone, $actor, $aggregation, $method, $start, $end, $dataCutoff, $created, $draftSetId) {
             // Serialize version allocation and configuration capture for this service.
             $service = MonitoredService::query()->lockForUpdate()->findOrFail($service->id);
             $captured = $this->population->capture($service, $type, $start, $dataCutoff, $aggregation === 'raw' ? 'hourly' : $aggregation, $timezone);
@@ -49,6 +49,7 @@ class PhaseOneBaselineService
             $warnings = $this->configuration->changes($service, $start, $end);
             $version = 1 + (int) ControlChartBaseline::query()->where('monitored_service_id', $service->id)->where('chart_type', $type)->max('version');
             $baseline = ControlChartBaseline::create([
+                'draft_set_id' => $draftSetId,
                 'monitored_service_id' => $service->id, 'chart_type' => $type, 'metric_name' => $type === 'p_chart' ? 'problematic_proportion' : 'response_time_ms',
                 'version' => $version, 'status' => 'draft', 'aggregation_interval' => $aggregation, 'analysis_timezone' => $timezone,
                 'baseline_start' => $start, 'baseline_end' => $end, 'data_cutoff' => $dataCutoff,
