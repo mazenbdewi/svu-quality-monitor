@@ -12,7 +12,7 @@ return [
             'baseline.approved' => 'Baseline approved',
             'baseline.retired' => 'Baseline retired',
             'baseline.rejected' => 'Baseline rejected',
-            'baseline.deleted' => 'Draft baseline deleted',
+            'baseline.deleted' => 'Phase I baseline deleted',
 
             'service.created' => 'Monitoring service created',
             'service.updated' => 'Monitoring service updated',

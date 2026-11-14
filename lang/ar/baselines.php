@@ -16,8 +16,8 @@ return [
     'no_points' => 'لا توجد نقاط قابلة للحساب', 'cutoff' => 'حد البيانات (UTC)', 'review_context' => 'مراجعة الاستقرار والتغطية الزمنية',
     'bucket_start' => 'بداية الفترة (UTC)', 'observed' => 'المرصود', 'missing' => 'المفقود',
     'lifecycle' => 'سجل المراجعة والاعتماد والصلاحية',
-    'delete' => 'حذف', 'delete_confirmation' => 'هل تريد حذف :count من مسودات Baseline نهائياً؟',
-    'deleted' => 'تم حذف :count من مسودات Baseline.',
-    'delete_changed' => 'تغيّرت المسودة أو لم تعد موجودة. حدّث الصفحة وحاول مجدداً.',
-    'delete_protected' => 'ترتبط بهذه المسودة بيانات مراقبة ولا يمكن حذفها.',
+    'delete' => 'حذف', 'delete_confirmation' => 'هل تريد حذف :count من سجلات Baseline نهائياً؟',
+    'deleted' => 'تم حذف :count من سجلات Baseline.',
+    'delete_changed' => 'تغيّر سجل Baseline أو لم يعد موجوداً. حدّث الصفحة وحاول مجدداً.',
+    'delete_protected' => 'ترتبط بسجل Baseline بيانات مراقبة أو بحث ولا يمكن حذفه.',
 ];

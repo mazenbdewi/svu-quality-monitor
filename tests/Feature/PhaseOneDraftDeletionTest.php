@@ -8,7 +8,7 @@ use App\Models\AuditLog;
 use App\Models\ControlChartBaseline;
 use App\Models\MonitoredService;
 use App\Models\User;
-use App\Services\Baselines\DeletePhaseOneDraft;
+use App\Services\Baselines\DeletePhaseOneBaseline;
 use App\Services\Baselines\PhaseOneBaselineService;
 use App\Services\Baselines\PhaseOneBaselineSubmission;
 use Carbon\Carbon;
@@ -85,6 +85,12 @@ class PhaseOneDraftDeletionTest extends TestCase
         $this->assertDatabaseCount('control_chart_baseline_samples', 0);
         $this->assertSame($checksBefore, DB::table('service_checks')->get()->toJson());
         $this->assertSame(3, AuditLog::where('event', 'baseline.deleted')->count());
+        foreach (AuditLog::where('event', 'baseline.deleted')->get() as $audit) {
+            $this->assertSame($rows->pluck('id')->all(), $audit->context['deleted_baseline_ids']);
+            $this->assertSame('draft', $audit->context['previous_status']);
+            $this->assertSame($this->admin->id, $audit->context['actor_id']);
+            $this->assertNotEmpty($audit->context['deleted_at']);
+        }
     }
 
     public function test_legacy_ungrouped_draft_deletes_only_selected_record(): void
@@ -94,7 +100,7 @@ class PhaseOneDraftDeletionTest extends TestCase
         $second = $engine->create($this->service, 'mr_chart', '2026-09-01T00:00:00Z', '2026-09-01T04:00:00Z', 'UTC', $this->admin);
 
         $this->assertNull($first->draft_set_id);
-        $this->assertSame(1, app(DeletePhaseOneDraft::class)->delete($first, $this->admin));
+        $this->assertSame(1, app(DeletePhaseOneBaseline::class)->delete($first, $this->admin));
         $this->assertDatabaseMissing('control_chart_baselines', ['id' => $first->id]);
         $this->assertDatabaseHas('control_chart_baselines', ['id' => $second->id, 'status' => 'draft']);
     }
@@ -120,15 +126,39 @@ class PhaseOneDraftDeletionTest extends TestCase
         $this->assertDatabaseMissing('control_chart_baselines', ['id' => $draft->id]);
     }
 
-    public function test_set_is_not_bulk_deleted_when_one_member_is_no_longer_a_draft(): void
+    public function test_draft_set_is_not_bulk_deleted_when_one_member_is_rejected(): void
     {
         $rows = $this->createSet();
-        app(PhaseOneBaselineService::class)->review($rows[1], $this->admin, 'Reviewed before concurrent deletion', true);
+        app(PhaseOneBaselineService::class)->reject($rows[1], $this->admin, 'Rejected before draft deletion');
 
-        $this->assertSame(1, app(DeletePhaseOneDraft::class)->delete($rows[0], $this->admin));
+        $this->assertSame(1, app(DeletePhaseOneBaseline::class)->delete($rows[0], $this->admin));
         $this->assertDatabaseMissing('control_chart_baselines', ['id' => $rows[0]->id]);
-        $this->assertDatabaseHas('control_chart_baselines', ['id' => $rows[1]->id, 'status' => 'reviewed']);
+        $this->assertDatabaseHas('control_chart_baselines', ['id' => $rows[1]->id, 'status' => 'rejected']);
         $this->assertDatabaseHas('control_chart_baselines', ['id' => $rows[2]->id, 'status' => 'draft']);
+    }
+
+    public function test_rejected_baseline_is_visible_and_deletes_only_the_explicitly_selected_record(): void
+    {
+        $rows = $this->createSet();
+        $rejected = app(PhaseOneBaselineService::class)->reject($rows[0], $this->admin, 'Mistaken Phase I baseline');
+        $checksBefore = DB::table('service_checks')->get()->toJson();
+
+        Livewire::actingAs($this->admin)->test(ListControlChartBaselines::class)
+            ->assertActionVisible(TestAction::make('delete_draft')->table($rejected))
+            ->mountAction(TestAction::make('delete_draft')->table($rejected))
+            ->callMountedAction()
+            ->assertNotified(__('baselines.deleted', ['count' => 1]))
+            ->assertCanNotSeeTableRecords([$rejected]);
+
+        $this->assertDatabaseMissing('control_chart_baselines', ['id' => $rejected->id]);
+        $this->assertDatabaseHas('control_chart_baselines', ['id' => $rows[1]->id, 'status' => 'draft']);
+        $this->assertDatabaseHas('control_chart_baselines', ['id' => $rows[2]->id, 'status' => 'draft']);
+        $this->assertSame($checksBefore, DB::table('service_checks')->get()->toJson());
+        $audit = AuditLog::where('event', 'baseline.deleted')->sole();
+        $this->assertSame([$rejected->id], $audit->context['deleted_baseline_ids']);
+        $this->assertSame('rejected', $audit->context['previous_status']);
+        $this->assertSame($this->admin->id, $audit->context['actor_id']);
+        $this->assertNotEmpty($audit->context['deleted_at']);
     }
 
     public function test_server_side_permission_and_current_draft_status_are_required(): void
@@ -138,7 +168,7 @@ class PhaseOneDraftDeletionTest extends TestCase
         $viewer->assignRole('viewer');
 
         try {
-            app(DeletePhaseOneDraft::class)->delete($draft, $viewer);
+            app(DeletePhaseOneBaseline::class)->delete($draft, $viewer);
             $this->fail('Expected authorization to fail.');
         } catch (AuthorizationException) {
             $this->assertDatabaseHas('control_chart_baselines', ['id' => $draft->id]);
@@ -146,16 +176,26 @@ class PhaseOneDraftDeletionTest extends TestCase
 
         app(PhaseOneBaselineService::class)->review($draft, $this->admin, 'Reviewed before deletion attempt', true);
         $this->expectException(ValidationException::class);
-        app(DeletePhaseOneDraft::class)->delete($draft, $this->admin);
+        app(DeletePhaseOneBaseline::class)->delete($draft, $this->admin);
     }
 
-    public static function nonDraftStatuses(): array
+    public function test_unauthorized_user_cannot_delete_a_rejected_baseline(): void
     {
-        return [['reviewed'], ['approved'], ['rejected'], ['retired']];
+        $rejected = app(PhaseOneBaselineService::class)->reject($this->createSet()->first(), $this->admin, 'Rejected test baseline');
+        $viewer = User::factory()->create();
+        $viewer->assignRole('viewer');
+
+        $this->expectException(AuthorizationException::class);
+        app(DeletePhaseOneBaseline::class)->delete($rejected, $viewer);
     }
 
-    #[DataProvider('nonDraftStatuses')]
-    public function test_every_non_draft_lifecycle_status_is_hidden_and_rejected_server_side(string $status): void
+    public static function protectedStatuses(): array
+    {
+        return [['reviewed'], ['approved'], ['retired']];
+    }
+
+    #[DataProvider('protectedStatuses')]
+    public function test_protected_lifecycle_status_is_hidden_and_rejected_server_side(string $status): void
     {
         $baseline = $this->createSet()->first();
         DB::table('control_chart_baselines')->where('id', $baseline->id)->update(['status' => $status]);
@@ -165,7 +205,7 @@ class PhaseOneDraftDeletionTest extends TestCase
             ->assertActionHidden(TestAction::make('delete_draft')->table($baseline));
 
         try {
-            app(DeletePhaseOneDraft::class)->delete($baseline, $this->admin);
+            app(DeletePhaseOneBaseline::class)->delete($baseline, $this->admin);
             $this->fail("Expected {$status} baseline deletion to fail.");
         } catch (ValidationException) {
             $this->assertDatabaseHas('control_chart_baselines', ['id' => $baseline->id, 'status' => $status]);
@@ -191,13 +231,22 @@ class PhaseOneDraftDeletionTest extends TestCase
         $this->assertStringContainsString(e(__('baselines.delete_confirmation', ['count' => 3])), $modal);
     }
 
-    public function test_phase_two_reference_blocks_deletion_without_removing_history(): void
+    public static function deletableStatuses(): array
     {
-        $draft = $this->createSet()->first();
+        return [['draft'], ['rejected']];
+    }
+
+    #[DataProvider('deletableStatuses')]
+    public function test_phase_two_reference_blocks_deletion_without_removing_history(string $status): void
+    {
+        $baseline = $this->createSet()->first();
+        if ($status === 'rejected') {
+            $baseline = app(PhaseOneBaselineService::class)->reject($baseline, $this->admin, 'Rejected baseline with protected reference');
+        }
         DB::table('spc_monitoring_evaluations')->insert([
-            'baseline_id' => $draft->id,
+            'baseline_id' => $baseline->id,
             'service_id' => $this->service->id,
-            'chart_type' => $draft->chart_type,
+            'chart_type' => $baseline->chart_type,
             'mode' => 'retrospective',
             'detected_at' => now(),
             'data_cutoff' => now(),
@@ -209,11 +258,11 @@ class PhaseOneDraftDeletionTest extends TestCase
         ]);
 
         try {
-            app(DeletePhaseOneDraft::class)->delete($draft, $this->admin);
+            app(DeletePhaseOneBaseline::class)->delete($baseline, $this->admin);
             $this->fail('Expected protected monitoring history to block deletion.');
         } catch (ValidationException) {
-            $this->assertDatabaseHas('control_chart_baselines', ['id' => $draft->id]);
-            $this->assertDatabaseHas('spc_monitoring_evaluations', ['baseline_id' => $draft->id]);
+            $this->assertDatabaseHas('control_chart_baselines', ['id' => $baseline->id, 'status' => $status]);
+            $this->assertDatabaseHas('spc_monitoring_evaluations', ['baseline_id' => $baseline->id]);
         }
     }
 }

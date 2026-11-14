@@ -12,7 +12,7 @@ return [
             'baseline.approved' => 'اعتماد Baseline',
             'baseline.retired' => 'إنهاء صلاحية Baseline',
             'baseline.rejected' => 'رفض Baseline',
-            'baseline.deleted' => 'حذف مسودة Baseline',
+            'baseline.deleted' => 'حذف سجل Baseline للمرحلة الأولى',
 
             'service.created' => 'تم إنشاء خدمة المراقبة',
             'service.updated' => 'تم تعديل خدمة المراقبة',

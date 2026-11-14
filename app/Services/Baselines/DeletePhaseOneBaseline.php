@@ -11,8 +11,10 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\ValidationException;
 
-class DeletePhaseOneDraft
+class DeletePhaseOneBaseline
 {
+    private const DELETABLE_STATUSES = ['draft', 'rejected'];
+
     private const PROTECTED_REFERENCE_TABLES = [
         'spc_monitoring_evaluations',
         'spc_monitoring_points',
@@ -26,22 +28,21 @@ class DeletePhaseOneDraft
     /** Number shown in the confirmation dialog; final eligibility is rechecked under locks. */
     public function count(ControlChartBaseline $baseline): int
     {
-        if ($baseline->status !== 'draft') {
+        if (! in_array($baseline->status, self::DELETABLE_STATUSES, true)) {
             return 0;
         }
 
-        return $this->eligibleSetIds($baseline)->count();
+        return $this->deletionTargets($baseline)->count();
     }
 
     /**
-     * Delete the selected draft, or its explicitly identified creation set when every
-     * member remains a draft. Operational and Phase II records are never cascaded.
+     * Rejected baselines are always explicit single-record deletions. A selected draft
+     * may delete its explicit creation set only while every member remains a draft.
      */
     public function delete(ControlChartBaseline $baseline, User $actor): int
     {
-        $this->authorize($actor);
-
         return DB::transaction(function () use ($baseline, $actor): int {
+            $this->authorize($actor);
             $snapshot = ControlChartBaseline::query()->find($baseline->id);
             if (! $snapshot) {
                 $this->invalid();
@@ -50,39 +51,38 @@ class DeletePhaseOneDraft
             // Match creation/lifecycle lock order and prevent concurrent set expansion.
             DB::table('monitored_services')->where('id', $snapshot->monitored_service_id)->lockForUpdate()->first();
             $selected = ControlChartBaseline::query()->lockForUpdate()->find($baseline->id);
-            if (! $selected || $selected->status !== 'draft') {
+            if (! $selected || ! in_array($selected->status, self::DELETABLE_STATUSES, true)) {
                 $this->invalid();
             }
 
-            $rows = $this->eligibleSetIds($selected, true);
+            $rows = $this->deletionTargets($selected, true);
             if ($rows->isEmpty() || ! $rows->contains($selected->id)) {
                 $this->invalid();
             }
 
             $ids = $rows->pluck('id');
             foreach (self::PROTECTED_REFERENCE_TABLES as $table) {
-                if (DB::table($table)->whereIn('baseline_id', $ids)->exists()) {
+                if (DB::table($table)->whereIn('baseline_id', $ids)->lockForUpdate()->first(['baseline_id'])) {
                     throw ValidationException::withMessages(['baseline' => __('baselines.delete_protected')]);
                 }
             }
 
+            $deletedAt = now();
             foreach ($rows as $row) {
-                $this->audit->log('baseline.deleted', $row, 'Phase I draft baseline permanently deleted', context: [
+                $this->audit->log('baseline.deleted', $row, 'Phase I baseline permanently deleted', context: [
                     'baseline_id' => $row->id,
+                    'deleted_baseline_ids' => $ids->values()->all(),
                     'draft_set_id' => $row->draft_set_id,
-                    'deleted_count' => $rows->count(),
-                    'service_id' => $row->monitored_service_id,
-                    'chart_type' => $row->chart_type,
-                    'version' => $row->version,
-                    'status' => $row->status,
+                    'previous_status' => $row->status,
                     'actor_id' => $actor->id,
+                    'deleted_at' => $deletedAt->toIso8601String(),
                 ], actor: $actor);
             }
 
-            // Samples are frozen copies specific to these drafts. Raw service checks and
+            // Samples are frozen copies specific to these records. Raw service checks and
             // all operational/research history tables above remain untouched.
             DB::table('control_chart_baseline_samples')->whereIn('control_chart_baseline_id', $ids)->delete();
-            $deleted = DB::table('control_chart_baselines')->whereIn('id', $ids)->where('status', 'draft')->delete();
+            $deleted = DB::table('control_chart_baselines')->whereIn('id', $ids)->whereIn('status', self::DELETABLE_STATUSES)->delete();
             if ($deleted !== $ids->count()) {
                 throw ValidationException::withMessages(['baseline' => __('baselines.delete_changed')]);
             }
@@ -92,26 +92,26 @@ class DeletePhaseOneDraft
     }
 
     /** @return Collection<int, ControlChartBaseline> */
-    private function eligibleSetIds(ControlChartBaseline $selected, bool $lock = false): Collection
+    private function deletionTargets(ControlChartBaseline $selected, bool $lock = false): Collection
     {
-        $query = ControlChartBaseline::query();
-        if ($selected->draft_set_id) {
-            $query->where('draft_set_id', $selected->draft_set_id);
+        if ($selected->status === 'rejected' || ! $selected->draft_set_id) {
+            $query = ControlChartBaseline::query()->whereKey($selected->id);
         } else {
-            $query->whereKey($selected->id);
+            $query = ControlChartBaseline::query()->where('draft_set_id', $selected->draft_set_id);
         }
         if ($lock) {
             $query->lockForUpdate();
         }
         $rows = $query->orderBy('id')->get();
 
-        // A known set is deleted as one unit only while every member is eligible.
-        // Otherwise, retain the set and permit deletion of the selected draft alone.
-        if ($rows->contains(fn (ControlChartBaseline $row): bool => $row->status !== 'draft')) {
-            return $rows->where('id', $selected->id)->where('status', 'draft')->values();
+        // Never include rejected or other mixed-status siblings implicitly.
+        if ($selected->status === 'draft' && $rows->every(fn (ControlChartBaseline $row): bool => $row->status === 'draft')) {
+            return $rows;
         }
 
-        return $rows;
+        return $rows->where('id', $selected->id)
+            ->filter(fn (ControlChartBaseline $row): bool => in_array($row->status, self::DELETABLE_STATUSES, true))
+            ->values();
     }
 
     private function authorize(User $actor): void
