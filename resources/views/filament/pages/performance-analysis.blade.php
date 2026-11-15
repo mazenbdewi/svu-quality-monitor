@@ -35,6 +35,9 @@
             </div>
             <p class="mt-4 text-sm text-gray-500">{{ __('performance_analysis.exploratory_notice') }}</p>
         </div>
+        @can('reliability.view')
+            @include('filament.pages.partials.service-quality-overview', ['overview' => $qualityOverview, 'loaded' => $qualityOverviewLoaded, 'error' => $qualityOverviewError])
+        @endcan
         @if (! empty($charts))
             <div class="mt-6 rounded-xl border border-warning-200 bg-warning-50 p-4 text-sm text-warning-800">
                 {{ __('performance_analysis.exploratory_warning') }}

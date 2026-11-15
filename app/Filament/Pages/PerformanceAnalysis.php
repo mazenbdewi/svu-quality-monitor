@@ -8,6 +8,7 @@ use App\Services\Baselines\PhaseOneBaselineService;
 use App\Services\ControlChartCalculator;
 use App\Services\InstitutionTimezone;
 use App\Services\MonitoringCoverageCalculator;
+use App\Services\ServiceQualityOverview;
 use App\Services\SpcAnalysisWindow;
 use App\Services\SpcResearchData;
 use BackedEnum;
@@ -18,7 +19,9 @@ use Filament\Pages\Page;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
+use Throwable;
 use UnitEnum;
 
 class PerformanceAnalysis extends Page
@@ -44,6 +47,13 @@ class PerformanceAnalysis extends Page
 
     /** Display points travel as one scalar to avoid deep reactive proxies for large windows. */
     public string $chartPayload = '{}';
+
+    /** Loaded only on explicit request; kept in Livewire state to avoid repeat percentile queries. */
+    public array $qualityOverview = [];
+
+    public bool $qualityOverviewLoaded = false;
+
+    public bool $qualityOverviewError = false;
 
     /** @var array<string, mixed>|null */
     private ?array $summaryCache = null;
@@ -140,8 +150,35 @@ class PerformanceAnalysis extends Page
 
     public function updatedServiceId(): void
     {
+        $this->qualityOverview = [];
+        $this->qualityOverviewLoaded = false;
+        $this->qualityOverviewError = false;
         $this->resetValidation();
         $this->refreshCharts();
+    }
+
+    public function loadQualityOverview(): void
+    {
+        abort_unless(static::canAccess() && auth()->user()?->can('reliability.view'), 403);
+        $service = $this->serviceId ? MonitoredService::query()->find($this->serviceId) : null;
+        if (! $service || ! in_array($service->check_type->value, ['http', 'api'], true)) {
+            $this->qualityOverview = [];
+            $this->qualityOverviewLoaded = false;
+            $this->qualityOverviewError = false;
+
+            return;
+        }
+
+        try {
+            $this->qualityOverview = app(ServiceQualityOverview::class)->forService($service);
+            $this->qualityOverviewLoaded = true;
+            $this->qualityOverviewError = false;
+        } catch (Throwable $exception) {
+            Log::error('Unable to load service quality overview.', ['service_id' => $service->id, 'exception' => $exception]);
+            $this->qualityOverview = [];
+            $this->qualityOverviewLoaded = false;
+            $this->qualityOverviewError = true;
+        }
     }
 
     public function updatedWindow(): void
@@ -346,7 +383,7 @@ class PerformanceAnalysis extends Page
             return app(SpcAnalysisWindow::class)->resolve($this->window);
         } catch (ValidationException $exception) {
             throw $exception;
-        } catch (\Throwable $exception) {
+        } catch (Throwable $exception) {
             throw ValidationException::withMessages(['window' => __('performance_analysis.invalid_range')]);
         }
     }
