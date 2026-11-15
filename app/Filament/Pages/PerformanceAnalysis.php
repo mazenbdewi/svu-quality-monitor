@@ -4,20 +4,26 @@ namespace App\Filament\Pages;
 
 use App\Filament\Resources\ControlChartBaselines\ControlChartBaselineResource;
 use App\Models\MonitoredService;
+use App\Models\SloProposal;
 use App\Services\Baselines\PhaseOneBaselineService;
 use App\Services\ControlChartCalculator;
 use App\Services\InstitutionTimezone;
 use App\Services\MonitoringCoverageCalculator;
 use App\Services\ServiceQualityOverview;
+use App\Services\SloProposalService;
 use App\Services\SpcAnalysisWindow;
 use App\Services\SpcResearchData;
 use BackedEnum;
 use Carbon\Carbon;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Select;
+use Filament\Forms\Components\Textarea;
+use Filament\Forms\Components\Toggle;
+use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
@@ -179,6 +185,90 @@ class PerformanceAnalysis extends Page
             $this->qualityOverviewLoaded = false;
             $this->qualityOverviewError = true;
         }
+    }
+
+    public function reviewSloProposalAction(): Action
+    {
+        return Action::make('reviewSloProposal')
+            ->label(__('slo_overview.actions.review'))
+            ->visible(fn (): bool => $this->canManageSloProposal('draft'))
+            ->requiresConfirmation()
+            ->modalDescription(__('slo_overview.actions.review_description'))
+            ->schema([
+                Textarea::make('notes')->label(__('slo_overview.actions.review_notes'))->required()->maxLength(10000),
+                Toggle::make('acknowledge')->label(__('slo_overview.actions.acknowledge'))->accepted()->required(),
+            ])
+            ->action(fn (array $data) => $this->transitionSloProposal('review', $data));
+    }
+
+    public function approveSloProposalAction(): Action
+    {
+        return Action::make('approveSloProposal')
+            ->label(__('slo_overview.actions.approve'))
+            ->visible(fn (): bool => $this->canManageSloProposal('reviewed')
+                && ($this->qualityOverview['latest_proposal']['scientific_status'] ?? null) === 'provisional_research_only'
+                && ($this->qualityOverview['latest_proposal']['configuration_compatible'] ?? false))
+            ->requiresConfirmation()
+            ->modalDescription(__('slo_overview.actions.approve_description'))
+            ->schema([Textarea::make('rationale')->label(__('slo_overview.actions.approval_rationale'))->required()->maxLength(10000)])
+            ->action(fn (array $data) => $this->transitionSloProposal('approve', $data));
+    }
+
+    public function retireSloProposalAction(): Action
+    {
+        return Action::make('retireSloProposal')
+            ->label(__('slo_overview.actions.retire'))
+            ->color('danger')
+            ->visible(fn (): bool => $this->canManageSloProposal('approved'))
+            ->requiresConfirmation()
+            ->modalDescription(__('slo_overview.actions.retire_description'))
+            ->schema([Textarea::make('reason')->label(__('slo_overview.actions.retirement_reason'))->required()->maxLength(10000)])
+            ->action(fn (array $data) => $this->transitionSloProposal('retire', $data));
+    }
+
+    private function canManageSloProposal(string $status): bool
+    {
+        return $this->qualityOverviewLoaded && static::canAccess()
+            && (bool) auth()->user()?->can(SloProposalService::PERMISSION)
+            && ($this->qualityOverview['latest_proposal']['status'] ?? null) === $status;
+    }
+
+    /** @param array<string, mixed> $data */
+    private function transitionSloProposal(string $event, array $data): void
+    {
+        abort_unless(static::canAccess(), 403);
+        Gate::authorize(SloProposalService::PERMISSION);
+        $proposal = SloProposal::query()->where('monitored_service_id', $this->serviceId)
+            ->latest('id')->firstOrFail();
+        if ($proposal->id !== ($this->qualityOverview['latest_proposal']['id'] ?? null)) {
+            Notification::make()->danger()->title(__('slo_overview.actions.stale'))->send();
+
+            return;
+        }
+
+        try {
+            $manager = app(SloProposalService::class);
+            match ($event) {
+                'review' => $manager->review($proposal, auth()->user(), $data['notes'], (bool) ($data['acknowledge'] ?? false)),
+                'approve' => $manager->approve($proposal, auth()->user(), $data['rationale']),
+                'retire' => $manager->retire($proposal, auth()->user(), $data['reason']),
+            };
+        } catch (ValidationException $exception) {
+            Notification::make()->danger()->title(__('slo_overview.actions.failed'))
+                ->body(collect($exception->errors())->flatten()->first())->send();
+
+            return;
+        } catch (AuthorizationException $exception) {
+            throw $exception;
+        } catch (Throwable $exception) {
+            report($exception);
+            Notification::make()->danger()->title(__('slo_overview.actions.failed'))->persistent()->send();
+
+            return;
+        }
+
+        $this->loadQualityOverview();
+        Notification::make()->success()->title(__('slo_overview.actions.success_'.$event))->send();
     }
 
     public function updatedWindow(): void

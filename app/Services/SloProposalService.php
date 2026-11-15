@@ -26,39 +26,63 @@ class SloProposalService
         return DB::transaction(function () use ($service, $actor): SloProposal {
             $service = MonitoredService::query()->lockForUpdate()->findOrFail($service->id);
             $payload = $this->calibration->propose($service);
-            $identity = hash('sha256', ResearchSnapshotEncoding::encode([
-                $service->id, $payload['policy_version'], $payload['calibration_start'], $payload['calibration_end'],
-                $payload['calibration_cutoff'], $payload['configuration_fingerprint'],
-            ]));
-            $existing = SloProposal::query()->where('identity_digest', $identity)->first();
-            if ($existing) {
-                self::assertIntegrity($existing);
-                if (! hash_equals($existing->payload_digest, self::digest($payload))) {
-                    throw new LogicException('Historical calibration differs from the frozen proposal; investigate data provenance.');
-                }
 
-                return $existing;
-            }
-            $proposal = SloProposal::query()->create([
-                'monitored_service_id' => $service->id,
-                'policy_version' => $payload['policy_version'],
-                'calibration_start' => $payload['calibration_start'],
-                'calibration_end' => $payload['calibration_end'],
-                'calibration_cutoff' => $payload['calibration_cutoff'],
-                'analysis_timezone' => $payload['analysis_timezone'],
-                'configuration_fingerprint' => $payload['configuration_fingerprint'],
-                'identity_digest' => $identity,
-                'payload_digest' => self::digest($payload),
-                'calibration_payload' => $payload,
-                'proposed_latency_ms' => $payload['proposed_combined_latency_objective_ms'],
-                'proposed_compliance_percent' => $payload['proposed_combined_compliance_percent'],
-                'status' => 'draft', 'created_by' => $actor->id,
-            ]);
-            $this->audit->log('slo.proposal.created', $proposal, 'Provisional SLO research proposal created',
-                context: ['service_id' => $service->id, 'policy_version' => $proposal->policy_version, 'actor_id' => $actor->id], actor: $actor);
-
-            return $proposal;
+            return $this->persist($service, $payload, $actor);
         }, 3);
+    }
+
+    /** Scheduler-only path. The caller must hold the service row lock and verify evidence first. */
+    public function prepareAutomatically(MonitoredService $service): ?SloProposal
+    {
+        if (! $service->is_active || ! in_array($service->check_type->value, ['http', 'api'], true)
+            || SloProposal::query()->where('monitored_service_id', $service->id)->exists()) {
+            return null;
+        }
+
+        $payload = $this->calibration->propose($service);
+        if ($payload['status'] !== 'provisional_research_only') {
+            return null;
+        }
+
+        return $this->persist($service, $payload, null);
+    }
+
+    /** @param array<string, mixed> $payload */
+    private function persist(MonitoredService $service, array $payload, ?User $actor): SloProposal
+    {
+        $identity = hash('sha256', ResearchSnapshotEncoding::encode([
+            $service->id, $payload['policy_version'], $payload['calibration_start'], $payload['calibration_end'],
+            $payload['calibration_cutoff'], $payload['configuration_fingerprint'],
+        ]));
+        $existing = SloProposal::query()->where('identity_digest', $identity)->first();
+        if ($existing) {
+            self::assertIntegrity($existing);
+            if (! hash_equals($existing->payload_digest, self::digest($payload))) {
+                throw new LogicException('Historical calibration differs from the frozen proposal; investigate data provenance.');
+            }
+
+            return $existing;
+        }
+        $proposal = SloProposal::query()->create([
+            'monitored_service_id' => $service->id,
+            'policy_version' => $payload['policy_version'],
+            'calibration_start' => $payload['calibration_start'],
+            'calibration_end' => $payload['calibration_end'],
+            'calibration_cutoff' => $payload['calibration_cutoff'],
+            'analysis_timezone' => $payload['analysis_timezone'],
+            'configuration_fingerprint' => $payload['configuration_fingerprint'],
+            'identity_digest' => $identity,
+            'payload_digest' => self::digest($payload),
+            'calibration_payload' => $payload,
+            'proposed_latency_ms' => $payload['proposed_combined_latency_objective_ms'],
+            'proposed_compliance_percent' => $payload['proposed_combined_compliance_percent'],
+            'status' => 'draft', 'created_by' => $actor?->id,
+        ]);
+        $this->audit->log('slo.proposal.created', $proposal, 'Provisional SLO research proposal created',
+            context: ['service_id' => $service->id, 'policy_version' => $proposal->policy_version,
+                'actor_id' => $actor?->id, 'initiator' => $actor ? 'researcher' : 'scheduled_system'], actor: $actor);
+
+        return $proposal;
     }
 
     public function review(SloProposal $proposal, User $actor, string $notes, bool $acknowledgeLimitations): SloProposal

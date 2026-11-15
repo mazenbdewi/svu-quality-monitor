@@ -55,11 +55,12 @@ The scheduler runs:
 - `php artisan reliability:calculate --period=daily` daily at `00:10`
 - `php artisan sla:calculate` daily at `00:20`
 - `php artisan control-charts:calculate --period=daily` daily at `00:25`
+- `php artisan slo:prepare-due` daily at `00:35`, dispatching bounded research-only preparation jobs
 - `php artisan backup:create --scheduled` daily at `02:00`
 - `php artisan backup:cleanup --scheduled` daily at `03:00`
 
 Scheduled commands use `withoutOverlapping()` to reduce duplicate concurrent runs;
-the lightweight heartbeat is a named callback. Times follow the configured application timezone.
+the lightweight heartbeat is a named callback. Daily times follow the institution timezone.
 
 For service checks, the command only identifies due active services and dispatches one `CheckMonitoredServiceJob` per service. The queue worker executes the HTTP check through `ServiceCheckRunner`. Each job is unique per monitored service and also has a short execution lock, so repeated scheduling, retries, or a slow request cannot run two checks for the same service concurrently. The uniqueness lock expires safely if a worker dies.
 

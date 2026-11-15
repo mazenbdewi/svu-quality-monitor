@@ -76,20 +76,41 @@
             <x-filament::section :heading="__('slo_overview.proposal_heading')">
                 @if (! $latest)
                     <p role="status">{{ $overview['proposal_access_limited'] ? __('slo_overview.no_visible_proposal') : __('slo_overview.no_proposal') }}</p>
+                    @can('slo.proposals.manage')
+                        <p class="mt-2 text-sm text-gray-600 dark:text-gray-300">{{ __('slo_overview.preparation_state.'.$overview['preparation_state']) }}</p>
+                    @endcan
                 @else
                     <div class="space-y-2 text-sm">
+                        @if ($overview['preparation_state'] === 'ready_for_review')
+                            <p role="status" class="text-primary-700 dark:text-primary-400">{{ __('slo_overview.preparation_state.ready_for_review') }}</p>
+                        @endif
+                        <p><strong>{{ __('slo_overview.service') }}:</strong> {{ $latest['service_name'] }}</p>
                         <p role="status"><strong>{{ __('slo_overview.proposal_status') }}:</strong> {{ __('slo_overview.status.'.$latest['status']) }}</p>
                         <p><strong>{{ __('slo_overview.evidence_status') }}:</strong> {{ __('slo_overview.evidence.'.$latest['scientific_status']) }}</p>
                         <p>{{ __('slo_overview.policy') }}: {{ $latest['policy_version'] }}</p>
                         <p>{{ __('slo_overview.calibration_period') }}: {{ $formatTime($latest['calibration_start']) }} – {{ $formatTime($latest['calibration_end']) }} ({{ $latest['analysis_timezone'] }})</p>
                         <p>{{ __('slo_overview.cutoff') }}: {{ $formatTime($latest['calibration_cutoff']) }}</p>
                         <p>{{ __('slo_overview.historical_p90') }}: {{ $formatMs($latest['measured_p90_ms']) }} · {{ __('slo_overview.historical_p99') }}: {{ $formatMs($latest['measured_p99_ms']) }}</p>
-                        <p>{{ __('slo_overview.proposed_guardrail') }}: {{ $formatMs($latest['proposed_p90_guardrail_ms']) }} · {{ __('slo_overview.latency_objective') }}: {{ $formatMs($latest['proposed_latency_ms']) }}</p>
+                        <p>{{ __('slo_overview.proposed_guardrail') }}: {{ $formatMs($latest['proposed_p90_guardrail_ms']) }} · {{ __('slo_overview.latency_objective') }}: {{ $formatMs($latest['proposed_latency_ms']) }} ({{ $latest['proposed_latency_seconds'] === null ? '—' : number_format($latest['proposed_latency_seconds'], 3).' s' }})</p>
                         <p>{{ __('slo_overview.target') }}: {{ $formatPercent($latest['proposed_compliance_percent']) }} · {{ __('slo_overview.rounding') }}: {{ __('slo_overview.rounding_rule.'.$latest['rounding_rule']) }}</p>
+                        <p>{{ __('slo_overview.calibration_counts') }}: {{ number_format($latest['executed_checks']) }} / {{ number_format($latest['latency_observations']) }}</p>
+                        <p>{{ __('slo_overview.calibration_coverage') }}: {{ $formatPercent($latest['coverage_percent']) }} · {{ __('slo_overview.missing_opportunities') }}: {{ number_format($latest['missing_opportunities']) }}</p>
+                        <p role="status">{{ __('slo_overview.configuration_compatibility') }}: {{ __('slo_overview.compatibility.'.($latest['configuration_compatible'] ? 'compatible' : 'incompatible')) }}</p>
                         <p class="text-gray-600 dark:text-gray-300">{{ __('slo_overview.research_only') }}</p>
                         @foreach ($latest['warnings'] as $warning)
                             <p class="text-warning-700 dark:text-warning-400">{{ __('slo_overview.warnings.'.$warning) }}</p>
                         @endforeach
+                        @can('slo.proposals.manage')
+                            <div class="flex flex-wrap gap-2 pt-2">
+                                @if ($latest['status'] === 'draft')
+                                    {{ $this->reviewSloProposalAction }}
+                                @elseif ($latest['status'] === 'reviewed' && $latest['scientific_status'] === 'provisional_research_only' && $latest['configuration_compatible'])
+                                    {{ $this->approveSloProposalAction }}
+                                @elseif ($latest['status'] === 'approved')
+                                    {{ $this->retireSloProposalAction }}
+                                @endif
+                            </div>
+                        @endcan
                     </div>
                 @endif
             </x-filament::section>
@@ -108,7 +129,7 @@
                                 <h3 class="font-semibold">{{ __('slo_overview.evaluation_mode.'.$evaluation['evaluation_mode']) }}</h3>
                                 <p>{{ $formatTime($evaluation['evaluation_start']) }} – {{ $formatTime($evaluation['evaluation_end']) }}</p>
                                 <p role="status">{{ __('slo_overview.target_status.'.$evaluation['target_status']) }}
-                                    · {{ __('slo_overview.actual_combined') }}: {{ $formatPercent($evaluation['sli']['combined_latency_success_percent']) }}</p>
+                                    · {{ __('slo_overview.actual_combined') }}: {{ $evaluation['target_status'] === 'insufficient_evidence' ? '—' : $formatPercent($evaluation['sli']['combined_latency_success_percent']) }}</p>
                                 <p>{{ __('slo_overview.evaluation_coverage') }}: {{ $formatPercent($evaluation['coverage']['coverage_percent']) }}
                                     · {{ __('slo_overview.missing_opportunities') }}: {{ number_format($evaluation['coverage']['missing_opportunities']) }}</p>
                                 @foreach ($evaluation['warnings'] as $warning)

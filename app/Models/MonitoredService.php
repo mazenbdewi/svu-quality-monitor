@@ -70,6 +70,11 @@ class MonitoredService extends Model
         return $this->hasMany(ServiceCheck::class);
     }
 
+    public function sloProposals(): HasMany
+    {
+        return $this->hasMany(SloProposal::class);
+    }
+
     public function latestServiceCheck(): HasOne
     {
         return $this->hasOne(ServiceCheck::class)->latestOfMany('checked_at');

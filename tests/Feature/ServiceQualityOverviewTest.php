@@ -145,6 +145,14 @@ class ServiceQualityOverviewTest extends TestCase
         $this->assertNull($empty->get('qualityOverview')['prospective']['sli']['combined_latency_success_percent']);
         $empty->assertSee(__('slo_overview.target_status.insufficient_evidence'));
 
+        $this->check('2026-11-16 21:00:00', 100);
+        $partial = Livewire::actingAs($this->viewer)->test(PerformanceAnalysis::class)
+            ->set('serviceId', $this->service->id)->call('loadQualityOverview');
+        $this->assertSame(100.0, $partial->get('qualityOverview')['prospective']['sli']['combined_latency_success_percent']);
+        $this->assertSame('insufficient_evidence', $partial->get('qualityOverview')['prospective']['target_status']);
+        $this->assertNull($partial->get('qualityOverview')['sli']['combined_latency_success_percent']);
+        $this->assertSame('descriptive_28_complete_days', $partial->get('qualityOverview')['sli_basis']);
+
         $this->service->update(['check_interval_minutes' => 30]);
         $changed = Livewire::actingAs($this->viewer)->test(PerformanceAnalysis::class)
             ->set('serviceId', $this->service->id)->call('loadQualityOverview');

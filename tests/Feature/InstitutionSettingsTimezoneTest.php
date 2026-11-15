@@ -194,8 +194,9 @@ class InstitutionSettingsTimezoneTest extends TestCase
             $b = $read();
             $this->assertSame('10 20 * * *', $b['php artisan reliability:calculate --period=daily']['expression']);
             $this->assertSame('25 20 * * *', $b['php artisan control-charts:calculate --period=daily']['expression']);
+            $this->assertSame('35 20 * * *', $b['php artisan slo:prepare-due']['expression']);
             $this->assertSame('* * * * *', $b['php artisan spc:evaluate']['expression']);
-            $this->assertCount(9, $b);
+            $this->assertCount(10, $b);
         } finally {
             unset($db);
             unlink($path);

@@ -10,6 +10,7 @@ use App\Models\SpcMonitoringPoint;
 use App\Models\SpcSignal;
 use App\Services\Baselines\PhaseOneBaselineService;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\Cache;
 use InvalidArgumentException;
 
 /** Explicitly loaded, read-only presentation built from the existing research services. */
@@ -19,6 +20,8 @@ class ServiceQualityOverview
         private LatencyPercentileAnalysis $latency,
         private SliIndicatorAnalysis $indicators,
         private SloEvaluationAnalysis $evaluation,
+        private SloCalibrationAnalysis $calibration,
+        private InstitutionTimezone $institutionTimezone,
         private PhaseOneBaselineService $baselines,
     ) {}
 
@@ -48,21 +51,29 @@ class ServiceQualityOverview
                 $retrospective = $this->evaluation->evaluate($approved, ...$periods['retrospective']);
             }
         }
-        // With no independent evaluation, report availability only. A calibration
-        // threshold is never silently used to present an in-sample combined SLI.
-        $sli = $prospective['sli'] ?? $retrospective['sli'] ?? $this->indicators->describe(
-            $service, Carbon::parse($latency['period_start']), Carbon::parse($latency['period_end']), null
-        );
+        $assessableProspective = $prospective && $prospective['target_status'] !== 'insufficient_evidence';
+        $assessableRetrospective = $retrospective && $retrospective['target_status'] !== 'insufficient_evidence';
+        // Inadequate coverage or incompatible configuration cannot supply the
+        // headline compliance cards. Fall back to descriptive availability only.
+        $sli = ($assessableProspective ? $prospective['sli'] : null)
+            ?? ($assessableRetrospective ? $retrospective['sli'] : null)
+            ?? $this->indicators->describe(
+                $service, Carbon::parse($latency['period_start']), Carbon::parse($latency['period_end']), null
+            );
 
         return [
             'service_id' => $service->id,
             'calculated_at' => $calculatedAt->toIso8601String(),
             'latency' => $latency,
             'sli' => $sli,
-            'sli_basis' => $prospective ? 'prospective_after_approval' : ($retrospective ? 'post_calibration_retrospective' : 'descriptive_28_complete_days'),
-            'latest_proposal' => $latest ? $this->proposalSummary($latest) : null,
-            'approved_proposal' => $approved ? $this->proposalSummary($approved) : null,
+            'sli_basis' => $assessableProspective ? 'prospective_after_approval' : ($assessableRetrospective ? 'post_calibration_retrospective' : 'descriptive_28_complete_days'),
+            'latest_proposal' => $latest ? $this->proposalSummary($latest, $service) : null,
+            'approved_proposal' => $approved ? $this->proposalSummary($approved, $service) : null,
             'proposal_access_limited' => ! $canViewResearchProposals,
+            'preparation_state' => $canViewResearchProposals
+                ? ($latest ? ($latest->status === 'draft' ? 'ready_for_review' : 'existing_decision')
+                    : (Cache::has(SloAutomaticPreparation::statusKey($service->id)) ? 'preparing' : 'waiting'))
+                : null,
             'prospective' => $prospective,
             'retrospective' => $retrospective,
             'spc' => $this->spcStatus($service),
@@ -91,13 +102,14 @@ class ServiceQualityOverview
     }
 
     /** @return array<string, mixed> */
-    private function proposalSummary(SloProposal $proposal): array
+    private function proposalSummary(SloProposal $proposal, MonitoredService $service): array
     {
         SloProposalService::assertIntegrity($proposal);
         $payload = $proposal->calibration_payload;
 
         return [
             'id' => $proposal->id,
+            'service_name' => $service->name,
             'status' => $proposal->status,
             'scientific_status' => $payload['status'],
             'policy_version' => $proposal->policy_version,
@@ -109,7 +121,14 @@ class ServiceQualityOverview
             'measured_p99_ms' => $payload['measured_p99_ms'],
             'proposed_p90_guardrail_ms' => $payload['proposed_p90_guardrail_ms'],
             'proposed_latency_ms' => $proposal->proposed_latency_ms,
+            'proposed_latency_seconds' => $proposal->proposed_latency_ms === null ? null : $proposal->proposed_latency_ms / 1000,
             'proposed_compliance_percent' => (float) $proposal->proposed_compliance_percent,
+            'executed_checks' => $payload['executed_checks'],
+            'latency_observations' => $payload['latency_observations'],
+            'coverage_percent' => $payload['coverage']['coverage_percent'],
+            'missing_opportunities' => $payload['coverage']['missing_opportunities'],
+            'configuration_compatible' => hash_equals($proposal->configuration_fingerprint,
+                $this->calibration->configurationFingerprint($service, $this->institutionTimezone->name())),
             'rounding_rule' => $payload['rounding_rule'],
             'warnings' => $payload['warnings'],
         ];
