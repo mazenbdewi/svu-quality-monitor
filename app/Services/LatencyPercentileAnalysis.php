@@ -48,6 +48,14 @@ class LatencyPercentileAnalysis
         return $this->analyzeWindow($service, $this->window());
     }
 
+    /** Coverage only; reuses the same eligible cohort and current-cadence policy. */
+    public function coverageForPeriod(MonitoredService $service, Carbon $start, Carbon $end): array
+    {
+        $maintenance = $this->eligibility->maintenance($service, $start, $end);
+
+        return $this->coverage($this->eligibility->query($service, $start, $end, $maintenance), $service, $start, $end, $maintenance);
+    }
+
     private function analyzeWindow(MonitoredService $service, array $window): array
     {
         if (! in_array($service->check_type->value, ['http', 'api'], true)) {

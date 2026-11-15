@@ -106,7 +106,7 @@ class SloCalibrationAnalysis
             (int) (ceil($milliseconds / self::ROUNDING_QUANTUM_MS) * self::ROUNDING_QUANTUM_MS));
     }
 
-    private function configurationFingerprint(MonitoredService $service, string $timezone): string
+    public function configurationFingerprint(MonitoredService $service, string $timezone): string
     {
         $configuration = [
             'service_id' => $service->id,
