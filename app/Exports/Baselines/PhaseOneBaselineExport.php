@@ -17,7 +17,7 @@ class PhaseOneBaselineExport implements WithMultipleSheets
         $baseline = $this->baseline->fresh();
         $result = $service->reproduce($baseline);
         $samples = $service->samples($baseline);
-        $summary = $baseline->only(['id', 'monitored_service_id', 'chart_type', 'metric_name', 'version', 'status', 'baseline_start', 'baseline_end', 'analysis_timezone', 'aggregation_interval', 'data_cutoff', 'calculation_version', 'method_identifier', 'eligibility_policy_version', 'sample_counts', 'parameters', 'configuration_snapshot', 'compatibility_fingerprint', 'membership_digest', 'review_context', 'created_by', 'created_at', 'reviewed_by', 'reviewed_at', 'approved_by', 'approved_at', 'effective_from', 'effective_to', 'review_notes', 'decision_reason']);
+        $summary = $baseline->only(['id', 'monitored_service_id', 'chart_type', 'metric_name', 'version', 'status', 'baseline_start', 'baseline_end', 'analysis_timezone', 'aggregation_interval', 'data_cutoff', 'calculation_version', 'method_identifier', 'eligibility_policy_version', 'selection_policy_version', 'automatic_identity', 'sample_counts', 'parameters', 'configuration_snapshot', 'compatibility_fingerprint', 'membership_digest', 'review_context', 'created_by', 'created_at', 'reviewed_by', 'reviewed_at', 'approved_by', 'approved_at', 'effective_from', 'effective_to', 'review_notes', 'decision_reason']);
         $summary['coverage_context'] = Arr::except($baseline->coverage_context, ['buckets']);
         $review = $summary['review_context'];
         $summary['review_context'] = Arr::except($review, ['configuration_changes']);

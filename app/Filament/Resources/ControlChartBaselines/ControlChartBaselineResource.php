@@ -7,6 +7,7 @@ use App\Filament\Resources\ControlChartBaselines\Pages\ListControlChartBaselines
 use App\Filament\Resources\ControlChartBaselines\Pages\ViewControlChartBaseline;
 use App\Models\ControlChartBaseline;
 use App\Models\MonitoredService;
+use App\Services\Baselines\AutomaticPhaseOneBaselineService;
 use App\Services\Baselines\DeletePhaseOneBaseline;
 use App\Services\Baselines\PhaseOneBaselineService;
 use App\Services\Baselines\PhaseOneBaselineSubmission;
@@ -106,6 +107,7 @@ class ControlChartBaselineResource extends Resource
             TextColumn::make('status')->label(__('baselines.status'))->badge(),
             TextColumn::make('baseline_start')->label(__('baselines.start'))->dateTime(),
             TextColumn::make('baseline_end')->label(__('baselines.end'))->dateTime(),
+            TextColumn::make('selection_policy_version')->label(__('baseline_creation.policy_version'))->placeholder('—'),
             TextColumn::make('review_context.sufficiency')->label(__('baselines.sufficiency')),
         ])->recordActions([ViewAction::make(), static::deleteBaselineAction()])->recordUrl(fn ($record) => static::getUrl('view', ['record' => $record]));
     }
@@ -208,6 +210,36 @@ class ControlChartBaselineResource extends Resource
                     return Excel::download(new PhaseOneBaselineExport($record), 'baseline-'.$record->id.'-v'.$record->version.'.xlsx');
                 }),
         ];
+    }
+
+    public static function automaticGenerateAction(): Action
+    {
+        return Action::make('prepare_reference_performance_automatically')
+            ->label(__('baseline_creation.prepare_automatically'))
+            ->icon(Heroicon::OutlinedSparkles)
+            ->visible(fn (): bool => static::canManage())
+            ->requiresConfirmation()
+            ->modalHeading(__('baseline_creation.prepare_automatically'))
+            ->modalDescription(__('baseline_creation.automatic_policy_summary'))
+            ->modalSubmitActionLabel(__('baseline_creation.prepare_automatically'))
+            ->action(function () {
+                abort_unless(static::canManage(), 403);
+                try {
+                    $count = app(AutomaticPhaseOneBaselineService::class)->dispatch(auth()->user());
+                } catch (AuthorizationException $e) {
+                    throw $e;
+                } catch (\Throwable $e) {
+                    report($e);
+                    Notification::make()->danger()->title(__('baseline_creation.failed_title'))->body(__('baseline_creation.failed'))->persistent()->send();
+
+                    return null;
+                }
+
+                Notification::make()->success()->title(__('baseline_creation.automatic_queued', ['count' => $count]))
+                    ->body(__('baseline_creation.automatic_review_required'))->send();
+
+                return redirect(static::getUrl('index'));
+            });
     }
 
     public static function deleteBaselineAction(bool $redirect = false): Action

@@ -139,7 +139,7 @@ class ResearchPackage
             $write('exploratory_charts.json', $charts->map(fn ($c) => Arr::except($c->toArray(), ['notes']))->all());
             $write('exploratory_points.json', ControlChartPoint::whereIn('control_chart_id', $charts->pluck('id'))->orderBy('id')->get()->toArray());
             $baselines = ControlChartBaseline::whereNotNull('approved_at')->where('approved_at', '<=', $cutoff)->orderBy('id')->get();
-            $write('baselines.json', $baselines->map(fn ($b) => $b->only(['id', 'monitored_service_id', 'chart_type', 'version', 'status', 'baseline_start', 'baseline_end', 'data_cutoff', 'effective_from', 'effective_to', 'approved_at', 'parameters', 'configuration_snapshot', 'compatibility_fingerprint', 'membership_digest', 'calculation_version', 'eligibility_policy_version', 'analysis_timezone', 'aggregation_interval', 'coverage_context']))->all());
+            $write('baselines.json', $baselines->map(fn ($b) => $b->only(['id', 'monitored_service_id', 'chart_type', 'version', 'status', 'baseline_start', 'baseline_end', 'data_cutoff', 'effective_from', 'effective_to', 'approved_at', 'parameters', 'configuration_snapshot', 'compatibility_fingerprint', 'membership_digest', 'calculation_version', 'eligibility_policy_version', 'selection_policy_version', 'automatic_identity', 'analysis_timezone', 'aggregation_interval', 'coverage_context', 'review_context']))->all());
             foreach ($baselines as $baseline) {
                 $engine = app(PhaseOneBaselineService::class);
                 $write('baseline_'.$baseline->id.'_membership.json', $engine->samples($baseline));

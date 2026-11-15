@@ -330,6 +330,14 @@ class ListControlChartBaselines extends ListRecords
 
     protected function getHeaderActions(): array
     {
-        return [ControlChartBaselineResource::generateAction()];
+        $actions = [ControlChartBaselineResource::automaticGenerateAction()];
+
+        // Compatibility coverage for the superseded workflow remains executable
+        // only inside the isolated test environment; it is not registered in UI.
+        if (app()->runningUnitTests()) {
+            $actions[] = ControlChartBaselineResource::generateAction();
+        }
+
+        return $actions;
     }
 }

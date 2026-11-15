@@ -1,6 +1,30 @@
 <?php
 
 return [
+    'prepare_automatically' => 'Prepare Reference Performance Automatically',
+    'automatic_policy_summary' => 'The application will use the latest 14 complete institution-local calendar days, expanding deterministically to 21 and then 28 days only when project sample-adequacy thresholds are not met. It prepares eligible I/MR and hourly P drafts for every HTTP/API service. Dates, cutoff, chart families, subgroup interval, and sample sizes cannot be selected. Signals never influence window selection, and nothing is approved or activated automatically.',
+    'automatic_page_intro' => 'Phase I reference candidates are prepared by one predefined, versioned research policy. Researchers review the resulting Draft records; they do not select analysis parameters.',
+    'automatic_created' => 'Prepared :created Draft candidates; :existing identical candidates already existed; :unavailable service/chart families had no eligible observations.',
+    'automatic_queued' => 'Automatic preparation was queued for :count eligible HTTP/API services.',
+    'automatic_review_required' => 'Review the selected period, coverage, missing opportunities, exclusions, adequacy, warnings, and statistical signals independently before any lifecycle decision.',
+    'policy_version' => 'Selection policy',
+    'automatic_trace' => 'Automatic research-policy trace',
+    'selected_period' => 'Selected complete-day period',
+    'selection_reason' => 'Window-selection reason',
+    'sample_adequacy' => 'Sample adequacy',
+    'stability_assessment' => 'Statistical stability assessment',
+    'window_reasons' => [
+        'latest_complete_14_days_adequate' => 'The latest 14 complete days met the project sample-adequacy thresholds.',
+        'expanded_for_sample_adequacy' => 'The shorter window was sample-inadequate, so the policy expanded deterministically.',
+        'maximum_28_days_still_sample_inadequate' => 'The maximum 28-day window remains below the project sample-adequacy thresholds and requires review.',
+    ],
+    'automatic_warnings' => [
+        'sample_adequacy_below_project_policy' => 'Sample size is below the documented project research-policy threshold (not an ISO minimum).',
+        'missing_monitoring_opportunities' => 'Expected monitoring opportunities are missing; assess coverage separately.',
+        'exploratory_out_of_control_points_require_review' => 'Exploratory out-of-control points are present. They were retained and did not alter the selected period.',
+        'p_zero_nonconforming_degenerate_limits' => 'All P subgroups have zero nonconforming checks. The P limits are degenerate and stability is not assessable.',
+        'p_all_nonconforming_degenerate_limits' => 'All eligible P checks are nonconforming. The P limits are degenerate and stability is not assessable.',
+    ],
     'step_service' => '1. Select an HTTP/API service',
     'step_period' => '2. Choose a completed historical reference period',
     'step_preview' => '3. Preview data quality',

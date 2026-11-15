@@ -20,7 +20,7 @@ class PhaseOneBaselineService
 
     public function __construct(private BaselinePopulation $population, private BaselineStatistics $statistics, private BaselineConfiguration $configuration, private AuditLogger $audit) {}
 
-    public function create(MonitoredService $service, string $type, string $from, string $to, string $timezone, User $actor, string $aggregation = 'hourly', ?string $cutoff = null, ?string $draftSetId = null): ControlChartBaseline
+    public function create(MonitoredService $service, string $type, string $from, string $to, string $timezone, User $actor, string $aggregation = 'hourly', ?string $cutoff = null, ?string $draftSetId = null, ?array $automaticPolicy = null): ControlChartBaseline
     {
         $this->authorize($actor);
         if (! in_array($type, ['i_chart', 'mr_chart', 'p_chart'], true) || ! in_array($aggregation, ['hourly', 'daily'], true)) {
@@ -37,14 +37,15 @@ class PhaseOneBaselineService
         $aggregation = $type === 'p_chart' ? $aggregation : 'raw';
         $method = $type === 'p_chart' ? 'pooled-binomial-proportion-v1' : 'individuals-moving-range-2-v1';
 
-        return DB::transaction(function () use ($service, $type, $timezone, $actor, $aggregation, $method, $start, $end, $dataCutoff, $created, $draftSetId) {
+        return DB::transaction(function () use ($service, $type, $timezone, $actor, $aggregation, $method, $start, $end, $dataCutoff, $created, $draftSetId, $automaticPolicy) {
             // Serialize version allocation and configuration capture for this service.
             $service = MonitoredService::query()->lockForUpdate()->findOrFail($service->id);
             $captured = $this->population->capture($service, $type, $start, $dataCutoff, $aggregation === 'raw' ? 'hourly' : $aggregation, $timezone);
             $result = $this->statistics->calculate($type, $captured['samples'], $captured['coverage']['buckets']);
             $minimum = max(2, (int) config('monitoring.spc.exploratory_min_points', 20));
             $points = count($result['points']);
-            $sufficiency = $captured['counts']['included'] === 0 ? 'no_data' : ($points < 2 ? 'insufficient' : ($points < $minimum || $captured['coverage']['missing_count'] > 0 ? 'preliminary' : 'analyzable'));
+            $sufficiency = $automaticPolicy['assessment']['sufficiency']
+                ?? ($captured['counts']['included'] === 0 ? 'no_data' : ($points < 2 ? 'insufficient' : ($points < $minimum || $captured['coverage']['missing_count'] > 0 ? 'preliminary' : 'analyzable')));
             $snapshot = $this->configuration->snapshot($service, $timezone, $aggregation, $method);
             $warnings = $this->configuration->changes($service, $start, $end);
             $version = 1 + (int) ControlChartBaseline::query()->where('monitored_service_id', $service->id)->where('chart_type', $type)->max('version');
@@ -55,6 +56,8 @@ class PhaseOneBaselineService
                 'baseline_start' => $start, 'baseline_end' => $end, 'data_cutoff' => $dataCutoff,
                 'calculation_version' => $snapshot['calculation_version'], 'method_identifier' => $method,
                 'eligibility_policy_version' => $snapshot['eligibility_policy_version'],
+                'selection_policy_version' => $automaticPolicy['version'] ?? null,
+                'automatic_identity' => $automaticPolicy['identity'] ?? null,
                 'sample_counts' => $captured['counts'], 'coverage_context' => $captured['coverage'], 'parameters' => $result['parameters'],
                 'configuration_snapshot' => $snapshot, 'compatibility_fingerprint' => $this->configuration->fingerprint($snapshot),
                 'membership_digest' => $this->digest($captured['samples']),
@@ -66,6 +69,7 @@ class PhaseOneBaselineService
                     'first_included_at' => collect($captured['samples'])->where('included', true)->first()['measurement']['checked_at'] ?? null,
                     'last_included_at' => collect($captured['samples'])->where('included', true)->last()['measurement']['checked_at'] ?? null,
                     'outlier_policy' => 'no_discretionary_exclusions',
+                    'automatic_policy' => $automaticPolicy,
                 ],
                 'created_by' => $actor->id, 'created_at' => $created,
             ]);
@@ -99,8 +103,8 @@ class PhaseOneBaselineService
             if ($row->status !== 'reviewed' || ! $row->limitations_acknowledged || trim($reason) === '') {
                 $this->invalid('Approval requires explicit completed review and a decision rationale.');
             }
-            if (in_array($row->review_context['sufficiency'], ['no_data', 'insufficient'], true) || $row->coverage_context['coverage_percent'] === null) {
-                $this->invalid('No-data or insufficient baselines cannot be approved.');
+            if (in_array($row->review_context['sufficiency'], ['no_data', 'insufficient', 'degenerate'], true) || $row->coverage_context['coverage_percent'] === null) {
+                $this->invalid('No-data, insufficient, or statistically degenerate baselines cannot be approved.');
             }
             if (ControlChartBaseline::query()->where('monitored_service_id', $row->monitored_service_id)->where('chart_type', $row->chart_type)->where('status', 'approved')->exists()) {
                 $this->invalid('Retire the active version explicitly before approving another version in this family.');

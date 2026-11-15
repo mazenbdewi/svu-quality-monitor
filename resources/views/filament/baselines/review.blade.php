@@ -16,6 +16,20 @@
     <p>{{ __('baselines.cutoff') }}: {{ $baseline->data_cutoff->toIso8601String() }}</p>
     <p>{{ __('baselines.warnings') }}: {{ $engine->compatible($baseline) ? __('baselines.compatible') : __('baselines.incompatible') }}</p>
     <p>{{ __('baselines.history_limit') }}</p>
+    @if ($policy = data_get($baseline->review_context, 'automatic_policy'))
+        <section>
+            <h3>{{ __('baseline_creation.automatic_trace') }}</h3>
+            <p>{{ __('baseline_creation.policy_version') }}: <span dir="ltr">{{ $policy['version'] }}</span></p>
+            <p>{{ __('baseline_creation.selected_period') }}: <span dir="ltr">{{ $policy['period']['start'] }} → {{ $policy['period']['end'] }} ({{ $policy['actual_window_days'] }} days)</span></p>
+            <p>{{ __('baseline_creation.selection_reason') }}: {{ __('baseline_creation.window_reasons.'.$policy['window_selection_reason']) }}</p>
+            <p>{{ __('baseline_creation.sample_adequacy') }}: {{ data_get($policy, 'assessment.sample_adequacy.status') }} · n={{ data_get($policy, 'assessment.sample_adequacy.included') }} · points={{ data_get($policy, 'assessment.sample_adequacy.point_count') }}</p>
+            <p>{{ __('baselines.coverage') }}: {{ data_get($policy, 'assessment.coverage.percent', '—') }}% · {{ __('baselines.missing') }}: {{ data_get($policy, 'assessment.missing_opportunities') }}</p>
+            <p>{{ __('baseline_creation.stability_assessment') }}: {{ data_get($policy, 'assessment.statistical_stability.status') }} · signals={{ data_get($policy, 'assessment.statistical_stability.out_of_control_count') }}</p>
+            @foreach (($policy['warnings'] ?? []) as $warning)
+                <p style="color:#b45309">⚠ {{ __('baseline_creation.automatic_warnings.'.$warning) }}</p>
+            @endforeach
+        </section>
+    @endif
     <h3>{{ __('baselines.graph') }}</h3>
     @if ($points->isEmpty())
         <p>{{ __('baselines.no_points') }}</p>

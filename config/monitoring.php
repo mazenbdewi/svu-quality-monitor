@@ -8,6 +8,19 @@ return [
         'exploratory_min_points' => 20,
         // Display-only cap. Statistical calculations always use the full population.
         'visualization_max_points' => 1000,
+        /*
+         * Project research-policy parameters, not mandatory ISO requirements.
+         * Window expansion uses quantities only; signals never steer selection.
+         */
+        'automatic_baseline' => [
+            'version' => 'phase1-automatic-v1',
+            'window_days' => [14, 21, 28],
+            'minimum_i_observations' => 20,
+            'minimum_mr_pairs' => 20,
+            'minimum_p_observations' => 20,
+            'minimum_p_subgroups' => 8,
+            'p_aggregation' => 'hourly',
+        ],
     ],
     /*
     |--------------------------------------------------------------------------
