@@ -3,7 +3,6 @@
 namespace App\Services;
 
 use App\Models\MonitoredService;
-use App\Models\ServiceCheck;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
@@ -17,7 +16,7 @@ class LatencyPercentileAnalysis
 
     public function __construct(
         private InstitutionTimezone $institutionTimezone,
-        private MaintenanceWindowService $maintenance,
+        private EligibleSyntheticChecks $eligibility,
         private ReliabilityTimeIntervals $intervals,
     ) {}
 
@@ -67,8 +66,8 @@ class LatencyPercentileAnalysis
 
     private function analyzeSnapshot(MonitoredService $service, array $window, Carbon $start, Carbon $end): array
     {
-        $maintenance = $this->maintenance->mergedOverlapIntervals($service, $start, $end);
-        $checks = $this->eligibleChecks($service, $start, $end, $maintenance);
+        $maintenance = $this->eligibility->maintenance($service, $start, $end);
+        $checks = $this->eligibility->query($service, $start, $end, $maintenance);
         $summary = (clone $checks)->toBase()->selectRaw(
             'COUNT(*) AS eligible_checks, '.
             'SUM(CASE WHEN is_success = 0 THEN 1 ELSE 0 END) AS failed_checks, '.
@@ -109,22 +108,6 @@ class LatencyPercentileAnalysis
             'configuration_warnings' => (int) $service->critical_response_ms < (int) $service->warning_response_ms
                 ? ['critical_response_below_warning_response'] : [],
         ];
-    }
-
-    private function eligibleChecks(MonitoredService $service, Carbon $start, Carbon $end, Collection $maintenance): Builder
-    {
-        $query = ServiceCheck::query()->where('monitored_service_id', $service->id)->researchChecks()
-            ->where('checked_at', '>=', $start)->where('checked_at', '<', $end)
-            ->whereNotNull('created_at')->where('created_at', '<=', $end)
-            ->where(fn (Builder $query) => $query->whereNull('updated_at')->orWhere('updated_at', '<=', $end));
-        // Apply the same merged maintenance intervals used by existing research
-        // populations without hydrating every observation into PHP memory.
-        foreach ($maintenance as $interval) {
-            $query->where(fn (Builder $query) => $query->where('checked_at', '<', $interval['start'])
-                ->orWhere('checked_at', '>=', $interval['end']));
-        }
-
-        return $query;
     }
 
     /** Exact R type 7 interpolation: h = 1 + (n - 1)p, using 1-based sorted ranks. */
