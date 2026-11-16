@@ -38,7 +38,8 @@ services:
       - ../app:/var/www/html/app:ro
       - ../config:/var/www/html/config:ro
       - ../database:/var/www/html/database:ro
-    command: ["php", "verify-backup-isolated.php"]
+    # Refresh this disposable container's authoritative classmap for mounted current app code.
+    command: ["sh", "-c", "composer dump-autoload --no-dev --classmap-authoritative --no-scripts --quiet && php verify-backup-isolated.php"]
 networks:
   default:
     internal: true

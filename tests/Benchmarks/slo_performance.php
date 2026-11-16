@@ -20,9 +20,11 @@ use App\Services\SloProposalService;
 use Carbon\Carbon;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Contracts\Console\Kernel;
+use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Queue;
+use Illuminate\Support\Facades\Schema;
 
 require dirname(__DIR__, 2).'/vendor/autoload.php';
 $app = require dirname(__DIR__, 2).'/bootstrap/app.php';
@@ -442,6 +444,290 @@ if ($mode === 'stage-interference') {
     exit;
 }
 
+// Two 90-second phases against 50 historical HTTP/API services. Both phases
+// run ten local-only one-minute monitors; optional nightly probes execute in
+// the parent process. Only the second phase has queued high-volume calibration.
+if ($mode === 'stage-sustained') {
+    Carbon::setTestNow();
+    $assertHostResources();
+    if (DB::table('service_checks')->count() !== 500000 || DB::table('jobs')->exists()
+        || DB::table('slo_proposals')->exists()
+        || DB::table('monitored_services')->where('name', 'like', 'b5c2-%')->exists()
+        || Schema::hasTable('b5c2_events')) {
+        throw new RuntimeException('Expected a new 500,000-check disposable fixture with empty queues and proposals.');
+    }
+    DB::table('monitored_services')->update(['is_active' => false]);
+    $bulk = DB::table('monitored_services')->where('name', 'like', 'b5b-bulk-%')->orderBy('id')->get(['id', 'check_interval_minutes']);
+    if ($bulk->count() !== 50) {
+        throw new RuntimeException('Expected exactly 50 historical bulk services.');
+    }
+    foreach ($bulk as $service) {
+        DB::table('monitored_services')->where('id', $service->id)->update([
+            'is_active' => true, 'check_interval_minutes' => max(5, $service->check_interval_minutes),
+        ]);
+        // This current manual marker prevents the historical calibration
+        // services from being operationally checked during the 75-second run.
+        DB::table('service_checks')->insert([
+            'monitored_service_id' => $service->id, 'checked_at' => now()->utc()->format('Y-m-d H:i:s'),
+            'source' => 'manual', 'check_type' => DB::table('monitored_services')->where('id', $service->id)->value('check_type'),
+            'is_during_maintenance' => false, 'is_success' => true, 'response_time_ms' => 100,
+            'status_code' => 200, 'created_at' => now()->utc()->format('Y-m-d H:i:s'),
+            'updated_at' => now()->utc()->format('Y-m-d H:i:s'),
+        ]);
+    }
+    foreach (['baseline', 'concurrent'] as $phase) {
+        for ($index = 1; $index <= 10; $index++) {
+            DB::table('monitored_services')->insert([
+                'name' => "b5c2-{$phase}-{$index}", 'url' => 'http://127.0.0.1:18081/up',
+                'check_type' => $index % 3 === 0 ? 'api' : 'http',
+                'check_interval_minutes' => 1, 'is_active' => false,
+                'warning_response_ms' => 1500, 'critical_response_ms' => 3000,
+                'created_at' => now()->utc()->format('Y-m-d H:i:s'), 'updated_at' => now()->utc()->format('Y-m-d H:i:s'),
+            ]);
+        }
+    }
+    Schema::create('b5c2_events', function (Blueprint $table): void {
+        $table->id();
+        $table->string('phase', 20);
+        $table->string('queue', 30);
+        $table->unsignedBigInteger('job_id');
+        $table->double('due_unix')->nullable();
+        $table->double('enqueued_unix');
+        $table->double('started_unix');
+        $table->double('finished_unix')->nullable();
+        $table->boolean('failed')->default(false);
+    });
+    echo json_encode(['mode' => $mode, 'bulk_services' => $bulk->count(), 'monitoring_services_per_phase' => 10,
+        'historical_checks' => 500000, 'manual_operational_markers' => 50], JSON_THROW_ON_ERROR)."\n";
+    exit;
+}
+
+if ($mode === 'reset-sustained') {
+    if (! Schema::hasTable('b5c2_events') || DB::table('jobs')->where('queue', 'slo-calibration')->exists()
+        || DB::table('slo_proposals')->exists()) {
+        throw new RuntimeException('Reset is allowed only before SLO calibration in the disposable fixture.');
+    }
+    $monitorIds = DB::table('monitored_services')->where('name', 'like', 'b5c2-%')->pluck('id');
+    DB::table('jobs')->where('queue', 'default')->delete();
+    DB::table('service_checks')->whereIn('monitored_service_id', $monitorIds)->delete();
+    DB::table('b5c2_events')->delete();
+    DB::table('monitored_services')->whereIn('id', $monitorIds)->update(['is_active' => false]);
+    // Keep the historical bulk cohort eligible for daily SLO calibration but
+    // out of the operational one-minute check queue during this experiment.
+    DB::table('monitored_services')->where('name', 'like', 'b5b-bulk-%')->update(['check_interval_minutes' => 1440]);
+    echo json_encode(['mode' => $mode, 'monitor_services' => $monitorIds->count(),
+        'remaining_benchmark_monitor_checks' => DB::table('service_checks')->whereIn('monitored_service_id', $monitorIds)->count()], JSON_THROW_ON_ERROR)."\n";
+    exit;
+}
+
+if ($mode === 'run-sustained') {
+    Carbon::setTestNow();
+    $phase = $argv[2] ?? '';
+    $withNightly = ($argv[3] ?? '') === 'nightly';
+    if (! in_array($phase, ['baseline', 'concurrent'], true) || ! Schema::hasTable('b5c2_events')
+        || DB::table('b5c2_events')->where('phase', $phase)->exists()
+        || DB::table('jobs')->exists()
+        || DB::table('monitored_services')->where('name', 'like', "b5c2-{$phase}-%")->count() !== 10) {
+        throw new RuntimeException('Stage a fresh disposable sustained fixture and run each phase only once.');
+    }
+    $assertHostResources();
+    DB::table('monitored_services')->where('name', 'like', 'b5c2-%')->update(['is_active' => false]);
+    DB::table('monitored_services')->where('name', 'like', "b5c2-{$phase}-%")->update(['is_active' => true]);
+    $benchmarkDue = null;
+    Queue::createPayloadUsing(static function () use (&$benchmarkDue): array {
+        return ['b5c2_due_unix' => $benchmarkDue, 'b5c2_enqueued_unix' => microtime(true)];
+    });
+    $phaseStart = microtime(true);
+    $dispatches = [];
+    $nightly = [];
+    $maxDefaultBacklog = 0;
+    $maxSloBacklog = 0;
+    if ($phase === 'concurrent') {
+        $sloDispatchStart = microtime(true);
+        Artisan::call('slo:prepare-due');
+        $sloDispatchSeconds = microtime(true) - $sloDispatchStart;
+        $initialSloJobs = DB::table('jobs')->where('queue', 'slo-calibration')->count();
+        if ($initialSloJobs < 20 || $initialSloJobs > 50) {
+            throw new RuntimeException('Expected 20-50 real high-volume SLO jobs, got '.$initialSloJobs);
+        }
+    } else {
+        $sloDispatchSeconds = null;
+        $initialSloJobs = 0;
+    }
+    $workers = [];
+    foreach ($phase === 'concurrent' ? ['default', 'slo-calibration'] : ['default'] as $queueName) {
+        $pid = pcntl_fork();
+        if ($pid === -1) {
+            throw new RuntimeException('Could not fork a disposable benchmark worker.');
+        }
+        if ($pid === 0) {
+            DB::disconnect();
+            $started = [];
+            $queryTimes = [];
+            DB::listen(static function ($query) use (&$queryTimes): void {
+                if (count($queryTimes) < 20000) {
+                    $queryTimes[] = $query->time;
+                }
+            });
+            Queue::before(static function ($event) use (&$started, $phase): void {
+                $payload = $event->job->payload();
+                $started[$event->job->getJobId()] = DB::table('b5c2_events')->insertGetId([
+                    'phase' => $phase, 'queue' => $event->job->getQueue(), 'job_id' => $event->job->getJobId(),
+                    'due_unix' => $payload['b5c2_due_unix'] ?? null,
+                    'enqueued_unix' => $payload['b5c2_enqueued_unix'] ?? microtime(true),
+                    'started_unix' => microtime(true),
+                ]);
+            });
+            Queue::after(static function ($event) use (&$started): void {
+                DB::table('b5c2_events')->where('id', $started[$event->job->getJobId()])->update(['finished_unix' => microtime(true)]);
+            });
+            Queue::failing(static function ($event) use (&$started): void {
+                if (isset($started[$event->job->getJobId()])) {
+                    DB::table('b5c2_events')->where('id', $started[$event->job->getJobId()])->update([
+                        'failed' => true, 'finished_unix' => microtime(true),
+                    ]);
+                }
+            });
+            $usageBefore = getrusage();
+            Artisan::call('queue:work', ['connection' => 'database', '--queue' => $queueName,
+                '--sleep' => 1, '--tries' => 3, '--timeout' => 60, '--max-time' => 125,
+                '--max-jobs' => $queueName === 'default' ? 25 : $initialSloJobs]);
+            $usageAfter = getrusage();
+            sort($queryTimes);
+            $p95Index = $queryTimes === [] ? null : (int) ceil(.95 * count($queryTimes)) - 1;
+            echo json_encode(['worker' => $queueName, 'phase' => $phase,
+                'sql_query_count' => count($queryTimes),
+                'sql_query_p95_ms' => $p95Index === null ? null : $queryTimes[$p95Index],
+                'cpu_user_seconds' => round(($usageAfter['ru_utime.tv_sec'] - $usageBefore['ru_utime.tv_sec'])
+                    + ($usageAfter['ru_utime.tv_usec'] - $usageBefore['ru_utime.tv_usec']) / 1000000, 3),
+                'peak_php_mb' => round(memory_get_peak_usage(true) / 1048576, 3)], JSON_THROW_ON_ERROR)."\n";
+            exit;
+        }
+        $workers[$queueName] = $pid;
+    }
+    // Allow for the first round's actual HTTP execution time before the
+    // one-minute check interval elapses; exactly +60s can be too early.
+    foreach ([0, 65] as $offset) {
+        $target = $phaseStart + $offset;
+        while (microtime(true) < $target) {
+            $maxDefaultBacklog = max($maxDefaultBacklog, DB::table('jobs')->where('queue', 'default')->count());
+            $maxSloBacklog = max($maxSloBacklog, DB::table('jobs')->where('queue', 'slo-calibration')->count());
+            usleep(250000);
+        }
+        $benchmarkDue = $target;
+        $started = microtime(true);
+        Artisan::call('services:check-due');
+        $dispatches[] = ['due_unix' => $target, 'start_delay_seconds' => round($started - $target, 3),
+            'elapsed_seconds' => round(microtime(true) - $started, 3)];
+        $benchmarkDue = null;
+        if ($offset === 0 && $withNightly) {
+            foreach (['reliability:calculate --period=daily', 'sla:calculate', 'control-charts:calculate --period=daily', 'spc:evaluate'] as $command) {
+                $started = microtime(true);
+                Artisan::call($command);
+                $nightly[] = ['command' => $command, 'elapsed_seconds' => round(microtime(true) - $started, 3)];
+            }
+        }
+    }
+    while (microtime(true) < $phaseStart + 90) {
+        $maxDefaultBacklog = max($maxDefaultBacklog, DB::table('jobs')->where('queue', 'default')->count());
+        $maxSloBacklog = max($maxSloBacklog, DB::table('jobs')->where('queue', 'slo-calibration')->count());
+        usleep(250000);
+    }
+    posix_kill($workers['default'], SIGTERM);
+    foreach ($workers as $pid) {
+        pcntl_waitpid($pid, $status);
+    }
+    $events = DB::table('b5c2_events')->where('phase', $phase)->get();
+    $distribution = static function (array $values): array {
+        if ($values === []) {
+            return ['n' => 0, 'p50' => null, 'p95' => null, 'p99' => null, 'max' => null];
+        }
+        sort($values);
+        $percentile = static function (float $p) use ($values): float {
+            $h = $p * (count($values) - 1);
+            $lo = (int) floor($h);
+            $hi = (int) ceil($h);
+
+            return round($values[$lo] + ($h - $lo) * ($values[$hi] - $values[$lo]), 3);
+        };
+
+        return ['n' => count($values), 'p50' => $percentile(.50), 'p95' => $percentile(.95),
+            'p99' => $percentile(.99), 'max' => round(max($values), 3)];
+    };
+    $checks = $events->where('queue', 'default');
+    $slos = $events->where('queue', 'slo-calibration');
+    echo json_encode(['mode' => $mode, 'phase' => $phase, 'nightly_commands_in_same_process' => $withNightly,
+        'duration_seconds' => round(microtime(true) - $phaseStart, 3),
+        'slo_dispatch_seconds' => $sloDispatchSeconds, 'initial_slo_jobs' => $initialSloJobs,
+        'dispatches' => $dispatches, 'nightly' => $nightly,
+        'check_queue_wait_seconds' => $distribution($checks->map(fn ($e) => $e->started_unix - $e->enqueued_unix)->all()),
+        'check_end_lateness_seconds' => $distribution($checks->filter(fn ($e) => $e->finished_unix && $e->due_unix)
+            ->map(fn ($e) => $e->finished_unix - $e->due_unix)->all()),
+        'slo_queue_wait_seconds' => $distribution($slos->map(fn ($e) => $e->started_unix - $e->enqueued_unix)->all()),
+        'slo_execution_seconds' => $distribution($slos->filter(fn ($e) => $e->finished_unix)
+            ->map(fn ($e) => $e->finished_unix - $e->started_unix)->all()),
+        'check_events' => $checks->count(), 'slo_events' => $slos->count(),
+        'max_default_backlog' => $maxDefaultBacklog, 'max_slo_backlog' => $maxSloBacklog,
+        'pending_default' => DB::table('jobs')->where('queue', 'default')->count(),
+        'pending_slo' => DB::table('jobs')->where('queue', 'slo-calibration')->count(),
+        'failed_jobs' => DB::table('failed_jobs')->count(),
+        'successful_checks' => DB::table('service_checks')->whereIn('monitored_service_id',
+            DB::table('monitored_services')->select('id')->where('name', 'like', "b5c2-{$phase}-%"))->where('is_success', true)->count(),
+        'failed_checks' => DB::table('service_checks')->whereIn('monitored_service_id',
+            DB::table('monitored_services')->select('id')->where('name', 'like', "b5c2-{$phase}-%"))->where('is_success', false)->count()],
+        JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR)."\n";
+    exit;
+}
+
+if ($mode === 'concurrent-dispatch') {
+    Carbon::setTestNow();
+    if (DB::table('jobs')->exists() || DB::table('monitored_services')->where('name', 'b5c2-concurrent-scheduler')->exists()) {
+        throw new RuntimeException('Expected an empty disposable queue and no prior concurrency fixture.');
+    }
+    $window = app(LatencyPercentileAnalysis::class)->window();
+    $serviceId = DB::table('monitored_services')->insertGetId([
+        'name' => 'b5c2-concurrent-scheduler', 'url' => 'https://concurrency.invalid/health',
+        'check_type' => 'http', 'check_interval_minutes' => 1440, 'is_active' => true,
+        'warning_response_ms' => 2500, 'critical_response_ms' => 5000,
+        'created_at' => $window['start']->copy()->subDay()->format('Y-m-d H:i:s'),
+        'updated_at' => $window['start']->copy()->subDay()->format('Y-m-d H:i:s'),
+    ]);
+    for ($day = 0; $day < 28; $day++) {
+        $at = $window['start']->copy()->addDays($day)->addHour()->format('Y-m-d H:i:s');
+        DB::table('service_checks')->insert([
+            'monitored_service_id' => $serviceId, 'checked_at' => $at, 'source' => 'automatic',
+            'check_type' => 'http', 'is_during_maintenance' => false, 'is_success' => true,
+            'response_time_ms' => 100 + $day, 'status_code' => 200,
+            'created_at' => $at, 'updated_at' => $at,
+        ]);
+    }
+    $children = [];
+    foreach ([1, 2] as $instance) {
+        $pid = pcntl_fork();
+        if ($pid === -1) {
+            throw new RuntimeException('Could not fork concurrent scheduler probe.');
+        }
+        if ($pid === 0) {
+            DB::disconnect();
+            $result = Artisan::call('slo:prepare-due');
+            echo json_encode(['scheduler_instance' => $instance, 'exit_code' => $result,
+                'output' => trim(Artisan::output())], JSON_THROW_ON_ERROR)."\n";
+            exit($result);
+        }
+        $children[] = $pid;
+    }
+    $allExited = true;
+    foreach ($children as $pid) {
+        pcntl_waitpid($pid, $status);
+        $allExited = $allExited && pcntl_wifexited($status) && pcntl_wexitstatus($status) === 0;
+    }
+    $queued = DB::table('jobs')->where('queue', 'slo-calibration')->count();
+    echo json_encode(['mode' => $mode, 'service_id' => $serviceId,
+        'both_schedulers_succeeded' => $allExited, 'queued_slo_jobs' => $queued,
+        'existing_proposals_for_new_service' => DB::table('slo_proposals')->where('monitored_service_id', $serviceId)->count()], JSON_THROW_ON_ERROR)."\n";
+    exit($allExited && $queued === 1 ? 0 : 1);
+}
+
 if ($mode === 'dispatch-interference') {
     Carbon::setTestNow();
     if (DB::table('monitored_services')->where('name', 'like', 'b5b-interference-check-%')->count() !== 10) {
@@ -616,5 +902,5 @@ if ($mode === 'probe') {
     exit;
 }
 
-fwrite(STDERR, "Usage: php tests/Benchmarks/slo_performance.php seed 40000|100000|250000|500000 | measure | dispatch 1|10|50 | queue 1|10|50 | probe | stage-interference | dispatch-interference | work-interference default|slo-calibration | work-concurrent-interference | work-control | result-interference\n");
+fwrite(STDERR, "Usage: php tests/Benchmarks/slo_performance.php seed 40000|100000|250000|500000 | measure | dispatch 1|10|50 | queue 1|10|50 | probe | stage-interference | dispatch-interference | work-interference default|slo-calibration | work-concurrent-interference | work-control | result-interference | stage-sustained | reset-sustained | run-sustained baseline|concurrent [nightly] | concurrent-dispatch\n");
 exit(2);
