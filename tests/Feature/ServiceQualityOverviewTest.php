@@ -7,8 +7,10 @@ use App\Models\MonitoredService;
 use App\Models\ServiceCheck;
 use App\Models\SloProposal;
 use App\Models\User;
+use App\Services\Baselines\PhaseOneBaselineService;
 use App\Services\ServiceQualityOverview;
 use App\Services\SloProposalService;
+use App\Services\Spc\PhaseTwoEvaluator;
 use Carbon\Carbon;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -16,6 +18,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Livewire\Livewire;
 use Mockery;
+use PHPUnit\Framework\Attributes\DataProvider;
 use RuntimeException;
 use Tests\TestCase;
 
@@ -215,6 +218,84 @@ class ServiceQualityOverviewTest extends TestCase
         $this->assertTrue($component->get('qualityOverviewError'));
         $this->assertFalse($component->get('qualityOverviewLoaded'));
         $this->assertSame([], $component->get('qualityOverview'));
+    }
+
+    public static function independentSloSpcCases(): array
+    {
+        return [
+            'both normal' => [120, false, 'met', 'normal'],
+            'SPC deterioration while SLO met' => [300, false, 'met', 'signal'],
+            'SLO shortfall without SPC signal' => [120, true, 'shortfall', 'normal'],
+            'both deteriorated' => [500, true, 'shortfall', 'signal'],
+        ];
+    }
+
+    #[DataProvider('independentSloSpcCases')]
+    public function test_frozen_slo_and_phase_two_spc_remain_independent_in_overview(
+        int $evaluationLatency, bool $failedCheck, string $expectedSlo, string $expectedSpc,
+    ): void {
+        // Four low-variance points establish SPC limits; the full 28-day cohort
+        // independently gives R Type 7 P99 = 398 ms and a 400-ms SLO objective.
+        for ($day = 0; $day < 28; $day++) {
+            $this->check(Carbon::parse('2026-10-18 00:00:00', 'UTC')->addDays($day)->toDateTimeString(),
+                $day === 27 ? 500 : 100);
+        }
+        foreach ([110, 130, 160] as $hour => $latency) {
+            $this->check('2026-10-18 0'.($hour + 1).':00:00', $latency);
+        }
+        $baselines = app(PhaseOneBaselineService::class);
+        $baseline = $baselines->create($this->service, 'i_chart', '2026-10-18T00:00:00Z',
+            '2026-10-18T04:00:00Z', 'UTC', $this->admin);
+        $baselines->review($baseline, $this->admin, 'Small deterministic reference fixture.', true);
+        $baselines->approve($baseline->fresh(), $this->admin, 'Research fixture only.');
+        $frozenLimits = $baseline->fresh()->parameters;
+
+        $proposals = app(SloProposalService::class);
+        $proposal = $proposals->prepare($this->service, $this->admin);
+        $this->assertEqualsWithDelta(398, $proposal->calibration_payload['measured_p99_ms'], 1e-9);
+        $this->assertSame(400, $proposal->proposed_latency_ms);
+        $proposals->review($proposal, $this->admin, 'Provisional tail and coverage reviewed.', true);
+        $proposals->approve($proposal->fresh(), $this->admin, 'Research objective only.');
+
+        if ($failedCheck) {
+            $failed = $this->check('2026-11-16 19:00:00', 120);
+            $failed->forceFill(['is_success' => false])->save();
+        }
+        $this->check('2026-11-16 20:00:00', $evaluationLatency);
+        $this->travelTo(Carbon::parse('2026-11-17 12:00:00', 'UTC'));
+        app(PhaseTwoEvaluator::class)->evaluate($this->service);
+        $this->actingAs($this->viewer);
+        $overview = app(ServiceQualityOverview::class)->forService($this->service);
+
+        $this->assertSame($expectedSlo, $overview['prospective']['target_status']);
+        $this->assertSame($expectedSpc, $overview['spc']['i_chart']);
+        $this->assertSame($failedCheck ? 2 : 1, $overview['prospective']['sli']['executed_checks']);
+        $this->assertSame($expectedSlo === 'met' ? 100.0 : ($evaluationLatency <= 400 ? 50.0 : 0.0),
+            $overview['prospective']['sli']['combined_latency_success_percent']);
+        $this->assertSame('prospective_after_approval', $overview['sli_basis']);
+        $this->assertSame($frozenLimits, $baseline->fresh()->parameters);
+        $this->assertSame(400, $proposal->fresh()->proposed_latency_ms);
+    }
+
+    public function test_missing_or_incompatible_spc_reference_is_never_displayed_as_normal(): void
+    {
+        $this->actingAs($this->viewer);
+        $overview = app(ServiceQualityOverview::class)->forService($this->service);
+        $this->assertSame('not_configured', $overview['spc']['i_chart']);
+
+        foreach ([100, 110, 130, 160] as $hour => $latency) {
+            $this->check('2026-10-18 0'.$hour.':00:00', $latency);
+        }
+        $baselines = app(PhaseOneBaselineService::class);
+        $baseline = $baselines->create($this->service, 'i_chart', '2026-10-18T00:00:00Z',
+            '2026-10-18T04:00:00Z', 'UTC', $this->admin);
+        $baselines->review($baseline, $this->admin, 'Small deterministic reference fixture.', true);
+        $baselines->approve($baseline->fresh(), $this->admin, 'Research fixture only.');
+        $this->service->update(['url' => 'https://changed.example.test']);
+
+        $changed = app(ServiceQualityOverview::class)->forService($this->service->fresh());
+        $this->assertSame('incompatible', $changed['spc']['i_chart']);
+        $this->assertNull($changed['approved_proposal']);
     }
 
     private function calibrationChecks(): void

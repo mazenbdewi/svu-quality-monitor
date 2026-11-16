@@ -1,0 +1,50 @@
+# Batch 5A — scientific integration and consistency verification
+
+This is a verification record, not a new calibration policy or a production SLO decision. All fixture services, checks, proposals and SPC references are disposable test data. No production observations or approved references were changed.
+
+## Measurement and eligibility
+
+`response_time_ms` is the synthetic application-side HTTP/API check duration measured by a monotonic timer from immediately before the HTTP request until the response is received and the expected HTTP status plus keyword or JSON assertion is evaluated. Caught errors and timeouts also receive an elapsed duration when available. It is **not** browser page-load time, TTFB, or Google load-balancer request latency. Operational warning/critical classifications remain separate from the research SLIs.
+
+For a completed UTC half-open interval `[start, end)`, the SLI and percentile services share `EligibleSyntheticChecks`: only eligible automatic HTTP/API records, excluding manual/diagnostic/synthetic and recorded maintenance, with `checked_at` in the interval and `created_at`/`updated_at` no later than the cutoff. Missing expected monitoring opportunities are counted by the current-cadence coverage policy, not inserted as healthy checks. Historical cadence and maintenance configuration are not versioned.
+
+Let `N` be all executed eligible checks, `S` their successful subset, `V` successful checks with nonnegative non-null latency, and `G` members of `V` at or below the frozen latency objective. Availability is `S/N`, conditional successful-latency SLI is `G/V`, and combined success-and-latency SLI is `G/N`. A zero denominator yields `null`. Thus `G ≤ S ≤ N` and combined SLI cannot exceed availability. A failed check or successful check with missing/invalid latency is never a combined good event.
+
+## Calibration, frozen review and independent evaluation
+
+The `sre-slo-calibration-v1` proposal uses exactly the latest 28 complete institution-local calendar days, stored as UTC `[start, end)`, with `end` as the immutable no-lookahead cutoff. Successful valid durations alone determine P90/P99 by R Type 7 (`h = 1 + (n − 1)p`, linear interpolation between sorted ranks). Each provisional latency guardrail/objective is rounded upward to the next 100 ms, with a 100-ms floor. The proposed **99% combined** target, 20-observation preliminary gate and 95% coverage gate are project research-policy choices, not Google or ISO numerical mandates or validated user-experience standards. P99 tail uncertainty remains unquantified, especially for small samples; calibration compliance is not independent validation.
+
+Automatic preparation may create only a system-attributed Draft after the sample and coverage gates. The proposal stores its period, cutoff, policy, configuration fingerprint, calculations, warnings and digest. Review and approval require authorized human actions; frozen values are immutable. Evaluation can start exactly at the exclusive calibration end. Data before approval are retrospective; prospective windows must start strictly after approval. A window crossing approval is rejected for splitting, overlap with calibration is rejected, and incompatible configuration or inadequate coverage gives `insufficient_evidence`, never a verified pass. Retirement preserves history and does not trigger replacement.
+
+Phase I SPC establishes independently reviewed, frozen I/MR/P reference limits. Phase II compares later eligible points with those limits and does not read SLO objectives. SLO calibration does not write SPC limits or signals. Missing, stale or incompatible SPC references are not described as stable; an SLO pass and an SPC signal can coexist.
+
+## Independent synthetic fixture: expected versus observed
+
+The deterministic calibration fixture has one valid success on each of 28 complete local days, with sorted durations `100, 200, …, 2800` ms. On an already covered day it adds one failed check and one successful check with null latency; manual and maintenance checks are excluded. A check exactly at the exclusive calibration end belongs only to the later interval. Independently, R Type 7 yields P50 `1450`, P90 `2530`, P95 `2665`, P99 `2773` ms; the P90 guardrail is `2600` ms and the provisional combined latency objective `2800` ms. Coverage is `28/28`, while `N=30`, `S=29`, `V=28`, `G=28`: availability `96.6667%`, conditional `100%`, combined `93.3333%`. The application matched these counts, P90/P99, rounded objective and coverage; it retained the warnings that 99% combined is unattainable on this calibration population and that in-sample performance is below target.
+
+After authorized approval, a separate two-day completed evaluation fixture has one successful fast check and one failed check: `N=2`, `S=1`, `V=1`, `G=1`, so availability `50%`, conditional `100%`, combined `50%`, with full `2/2` coverage and an assessable prospective shortfall. Extending the overview to a third complete day without a check gives insufficient prospective coverage, not a pass. Its separately labeled retrospective result must not be mistaken for prospective compliance. Repeated analysis leaves source checks, frozen SLO values and SPC references unchanged.
+
+A second fixture calibrates a 400-ms SLO objective (independent P99 `398` ms) while a separate four-point Phase I I-chart establishes tighter control limits. Later observations yield four independently checked combinations:
+
+| Later evidence | SLO | I-chart SPC |
+| --- | --- | --- |
+| Successful 120 ms | met | normal |
+| Successful 300 ms | met | signal |
+| Failed check plus successful 120 ms | shortfall | normal |
+| Failed check plus successful 500 ms | shortfall | signal |
+
+Missing and configuration-incompatible SPC references are separately verified as `not_configured` and `incompatible`, never normal. Existing tests additionally cover maintenance and manual exclusions, empty denominators, UTC/local boundaries, late record edits, exact cutoff, approval crossing, retired proposals, authorization, immutability and duplicate prevention.
+
+## Reports, limitations and next gate
+
+The existing comprehensive Excel/PDF reports summarize stored checks, incidents, reliability metrics and legacy control charts; they **do not** compute or certify SLI/SLO compliance or Phase I/II research status. A bilingual scope notice now appears in both formats so omission cannot imply a pass. The Performance Analysis quality overview uses the validated analysis services and explicitly labels retrospective/prospective evaluation and insufficient evidence. Research exports remain separate from a future SLO-specific export design.
+
+This batch does not benchmark production-scale query or queue costs (Batch 5B), assess end-user/browser experience, quantify P99 confidence intervals, reconstruct historical configuration or maintenance changes, or validate production rollout. The observed `critical_response_ms < warning_response_ms` inconsistency remains a configuration warning, not a historical reclassification. Before Batch 5B, confirm this verification suite is green on isolated MySQL 8.4 and review its fixture scope; Batch 5B should measure realistic service counts, coverage scans, percentile ranking and queue latency without altering scientific formulas.
+
+MySQL 8.4.8 exposed a frozen-payload integrity defect: its JSON storage can normalize the last binary floating-point digits of a fractional SLI (for example, `96.66666666666667` is read back as `96.66666666666669`). Previously, the digest was computed before insertion, so a genuinely unchanged proposal could fail review. New proposals now freeze a digest of the JSON value read back within the same creation transaction. Repeat preparation compares calculations to 12 decimal places solely to tolerate this storage representation drift; the stored digest and subsequent integrity verification remain exact and no frozen payload is replaced. Existing MySQL proposals with fractional SLIs created before this correction may still fail integrity verification. They must be audited separately before lifecycle use; this batch does not rewrite or silently bless them. A separate MySQL-only test assumption that a research run always has ID `1` was corrected to use its actual ID.
+
+### Pre-deployment historical digest audit (read-only)
+
+No production SLO proposal population was inspected in this batch; no incident is asserted. Before rollout, an authorized operator should use a **read-only database account** and a consistent snapshot to export each existing proposal's ID, creation time, lifecycle status, stored `payload_digest`, and persisted `calibration_payload`. Compute `SHA-256(ResearchSnapshotEncoding::encode(calibration_payload))` with the deployed application code and compare it to the stored digest. A match is strictly intact. For each mismatch, retain the exported evidence and obtain the *trusted original pre-insert payload* from an authenticated backup or creation-time record, if one exists. Only classify it as probable MySQL numeric-representation drift when the original payload hashes exactly to the stored digest, all nonnumeric fields and structural types match, and the numeric differences are limited to database JSON representation at the documented precision. Otherwise classify it as **unresolved integrity mismatch**, not as benign drift. Without a trustworthy original payload, the cause cannot be proven; do not waive `assertIntegrity`, review, approve, retire, evaluate, or automatically rewrite that proposal. Escalate through a separately reviewed, auditable remediation plan. The 12-decimal idempotency comparison is never an integrity-audit substitute.
+
+Final verification after the integrity regression additions: the full application suite passed `620 tests / 3836 assertions` on SQLite; the broader focused scientific/lifecycle/export suite passed `122 tests / 888 assertions` on isolated MySQL 8.4.8. Pint and `git diff --check` passed. The isolated Docker database contained only synthetic data and was removed.

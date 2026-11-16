@@ -31,20 +31,23 @@ class SloProposalService
         }, 3);
     }
 
-    /** Scheduler-only path. The caller must hold the service row lock and verify evidence first. */
+    /** Scheduler-only path. The caller verifies evidence; this method also enforces atomic locking. */
     public function prepareAutomatically(MonitoredService $service): ?SloProposal
     {
-        if (! $service->is_active || ! in_array($service->check_type->value, ['http', 'api'], true)
-            || SloProposal::query()->where('monitored_service_id', $service->id)->exists()) {
-            return null;
-        }
+        return DB::transaction(function () use ($service): ?SloProposal {
+            $service = MonitoredService::query()->lockForUpdate()->findOrFail($service->id);
+            if (! $service->is_active || ! in_array($service->check_type->value, ['http', 'api'], true)
+                || SloProposal::query()->where('monitored_service_id', $service->id)->exists()) {
+                return null;
+            }
 
-        $payload = $this->calibration->propose($service);
-        if ($payload['status'] !== 'provisional_research_only') {
-            return null;
-        }
+            $payload = $this->calibration->propose($service);
+            if ($payload['status'] !== 'provisional_research_only') {
+                return null;
+            }
 
-        return $this->persist($service, $payload, null);
+            return $this->persist($service, $payload, null);
+        }, 3);
     }
 
     /** @param array<string, mixed> $payload */
@@ -57,7 +60,10 @@ class SloProposalService
         $existing = SloProposal::query()->where('identity_digest', $identity)->first();
         if ($existing) {
             self::assertIntegrity($existing);
-            if (! hash_equals($existing->payload_digest, self::digest($payload))) {
+            // MySQL JSON can change the final binary float digits on storage.
+            // Compare research calculations to 12 decimal places, but
+            // never replace the already frozen snapshot.
+            if (! hash_equals(self::comparableDigest($existing->calibration_payload), self::comparableDigest($payload))) {
                 throw new LogicException('Historical calibration differs from the frozen proposal; investigate data provenance.');
             }
 
@@ -78,11 +84,35 @@ class SloProposalService
             'proposed_compliance_percent' => $payload['proposed_combined_compliance_percent'],
             'status' => 'draft', 'created_by' => $actor?->id,
         ]);
+        // Freeze the bytes represented by the database's JSON value, not PHP's
+        // pre-insert float serialization. This remains atomic in the caller's transaction.
+        $storedDigest = self::digest($proposal->fresh()->calibration_payload);
+        if (! hash_equals($proposal->payload_digest, $storedDigest)) {
+            DB::table('slo_proposals')->where('id', $proposal->id)->update(['payload_digest' => $storedDigest]);
+            $proposal->refresh();
+        }
         $this->audit->log('slo.proposal.created', $proposal, 'Provisional SLO research proposal created',
             context: ['service_id' => $service->id, 'policy_version' => $proposal->policy_version,
                 'actor_id' => $actor?->id, 'initiator' => $actor ? 'researcher' : 'scheduled_system'], actor: $actor);
 
         return $proposal;
+    }
+
+    /** Float comparison only for repeat preparation; the stored digest stays exact. */
+    private static function comparableDigest(array $payload): string
+    {
+        $normalize = function (mixed $value) use (&$normalize): mixed {
+            if (is_float($value)) {
+                return round($value, 12);
+            }
+            if (is_array($value)) {
+                return array_map($normalize, $value);
+            }
+
+            return $value;
+        };
+
+        return hash('sha256', ResearchSnapshotEncoding::encode($normalize($payload)));
     }
 
     public function review(SloProposal $proposal, User $actor, string $notes, bool $acknowledgeLimitations): SloProposal

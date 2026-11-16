@@ -286,7 +286,12 @@ class SpcResearchEvaluationTest extends TestCase
         $b = $this->baseline();
         $this->continuous();
         $this->incident(20);
-        Livewire::actingAs($this->admin)->test(SpcResearchMonitoring::class)->set('baselineId', $b->id)->set('periodStart', '2026-09-02T00:00')->set('periodEnd', '2026-09-02T03:00')->call('generateReport')->assertHasNoErrors()->assertSee('primary / earliest')->assertSee('1200')->call('exportReport')->assertFileDownloaded('spc-research-run-1.json');
+        $component = Livewire::actingAs($this->admin)->test(SpcResearchMonitoring::class)
+            ->set('baselineId', $b->id)->set('periodStart', '2026-09-02T00:00')
+            ->set('periodEnd', '2026-09-02T03:00')->call('generateReport')
+            ->assertHasNoErrors()->assertSee('primary / earliest')->assertSee('1200');
+        $run = SpcResearchRun::latest('id')->firstOrFail();
+        $component->call('exportReport')->assertFileDownloaded("spc-research-run-{$run->id}.json");
     }
 
     public function test_viewer_can_view_but_cannot_generate_research_run(): void

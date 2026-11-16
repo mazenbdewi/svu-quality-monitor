@@ -7,6 +7,7 @@ use App\Models\MonitoredService;
 use App\Models\ServiceCheck;
 use App\Models\SpcSignal;
 use App\Models\User;
+use App\Services\AuditLogger;
 use App\Services\Baselines\ResearchSnapshotEncoding;
 use App\Services\SloEvaluationAnalysis;
 use App\Services\SloProposalService;
@@ -19,6 +20,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use InvalidArgumentException;
 use LogicException;
+use RuntimeException;
 use Tests\TestCase;
 
 class SloProposalLifecycleTest extends TestCase
@@ -264,6 +266,66 @@ class SloProposalLifecycleTest extends TestCase
 
         $this->expectException(LogicException::class);
         SloProposalService::assertIntegrity($proposal->fresh());
+    }
+
+    public function test_fractional_persisted_payload_is_strictly_frozen_across_review_approval_retirement_and_evaluation(): void
+    {
+        $this->calibrationChecks();
+        $this->check('2026-11-01 00:10:00', 100, false);
+        $manager = app(SloProposalService::class);
+        $proposal = $manager->prepare($this->service, $this->admin);
+        $this->assertEqualsWithDelta(100 * 28 / 29, $proposal->fresh()->calibration_payload['availability_sli_percent'], 1e-10);
+        SloProposalService::assertIntegrity($proposal->fresh());
+        $this->assertSame($proposal->id, $manager->prepare($this->service, $this->admin)->id);
+        $this->assertSame('reviewed', $manager->review($proposal, $this->admin, 'Research limits acknowledged.', true)->status);
+        $this->assertSame('approved', $manager->approve($proposal->fresh(), $this->admin, 'Research only.')->status);
+        $this->assertSame('retired', $manager->retire($proposal->fresh(), $this->admin, 'Closed research objective.')->status);
+        SloProposalService::assertIntegrity($proposal->fresh());
+        $this->assertDatabaseCount('slo_proposals', 1);
+    }
+
+    public function test_payload_tampering_is_rejected_by_lifecycle_and_evaluation(): void
+    {
+        $this->calibrationChecks();
+        $manager = app(SloProposalService::class);
+        $proposal = $manager->prepare($this->service, $this->admin);
+        $payload = $proposal->calibration_payload;
+        $payload['availability_sli_percent'] = 99.123456789012;
+        DB::table('slo_proposals')->where('id', $proposal->id)->update(['calibration_payload' => json_encode($payload, JSON_THROW_ON_ERROR)]);
+        try {
+            $manager->review($proposal, $this->admin, 'Reviewed.', true);
+            $this->fail('A modified frozen payload must block review.');
+        } catch (LogicException) {
+            $this->assertSame('draft', $proposal->fresh()->status);
+        }
+
+        // Restore only this disposable fixture so the approved evaluation and retirement guards are exercised.
+        DB::table('slo_proposals')->where('id', $proposal->id)->update(['calibration_payload' => json_encode($proposal->calibration_payload, JSON_THROW_ON_ERROR)]);
+        $manager->review($proposal->fresh(), $this->admin, 'Reviewed.', true);
+        $manager->approve($proposal->fresh(), $this->admin, 'Research only.');
+        DB::table('slo_proposals')->where('id', $proposal->id)->update(['calibration_payload' => json_encode($payload, JSON_THROW_ON_ERROR)]);
+        try {
+            $manager->retire($proposal->fresh(), $this->admin, 'Close.');
+            $this->fail('A modified frozen payload must block retirement.');
+        } catch (LogicException) {
+            $this->assertSame('approved', $proposal->fresh()->status);
+        }
+        $this->travelTo(Carbon::parse('2026-11-18 12:00:00', 'UTC'));
+        $this->expectException(LogicException::class);
+        app(SloEvaluationAnalysis::class)->evaluate($proposal->fresh(),
+            Carbon::parse('2026-11-16 00:00:00', 'UTC'), Carbon::parse('2026-11-17 00:00:00', 'UTC'));
+    }
+
+    public function test_failed_creation_audit_rolls_back_the_complete_frozen_proposal(): void
+    {
+        $this->calibrationChecks();
+        $this->mock(AuditLogger::class)->shouldReceive('log')->once()->andThrow(new RuntimeException('Audit unavailable.'));
+        try {
+            app(SloProposalService::class)->prepare($this->service, $this->admin);
+            $this->fail('Audit failure must roll back creation.');
+        } catch (RuntimeException) {
+            $this->assertDatabaseCount('slo_proposals', 0);
+        }
     }
 
     public function test_migration_rollback_refuses_to_drop_retained_research_records(): void

@@ -8,6 +8,7 @@ use App\Exports\Reports\ReportExport;
 use App\Exports\Reports\Sheets\MinitabBucketedChecksSheet;
 use App\Exports\Reports\Sheets\MinitabRawChecksSheet;
 use App\Exports\Reports\Sheets\ServiceChecksSheet;
+use App\Exports\Reports\Sheets\SummarySheet;
 use App\Filament\Pages\ReportsPage;
 use App\Models\ControlChart;
 use App\Models\ControlChartPoint;
@@ -193,6 +194,21 @@ class ReportsExportTest extends TestCase
 
         $this->assertStringStartsWith('%PDF', $content);
         $this->assertNotEmpty($content);
+    }
+
+    public function test_comprehensive_excel_and_pdf_explicitly_limit_slo_research_scope_in_both_locales(): void
+    {
+        foreach (['en', 'ar'] as $locale) {
+            app()->setLocale($locale);
+            $notice = __('monitoring.reports.scope_notice');
+            $rows = (new SummarySheet)->collection()->all();
+            $this->assertContains([__('monitoring.reports.scope_label'), $notice], $rows);
+
+            $report = new ComprehensivePdfReport;
+            $html = view('reports.comprehensive-pdf', ['report' => $report, ...$report->data()])->render();
+            $this->assertStringContainsString(e($notice), $html);
+            $this->assertStringContainsString('SLO', $notice);
+        }
     }
 
     public function test_comprehensive_report_can_be_downloaded_as_pdf(): void

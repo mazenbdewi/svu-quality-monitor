@@ -35,6 +35,7 @@ class SummarySheet implements FromCollection, ShouldAutoSize, WithEvents, WithHe
     {
         $rows = collect([
             [__('monitoring.reports.summary.date_range'), $this->dateRangeLabel()],
+            [__('monitoring.reports.scope_label'), __('monitoring.reports.scope_notice')],
             [__('monitoring.reports.summary.total_services'), MonitoredService::query()->count()],
             [__('monitoring.reports.summary.active_services'), MonitoredService::query()->where('is_active', true)->count()],
             [__('monitoring.reports.summary.total_checks'), $this->checksQuery()->count()],

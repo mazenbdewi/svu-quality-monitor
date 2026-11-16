@@ -1355,6 +1355,8 @@ return [
     ],
 
     'reports' => [
+        'scope_label' => 'Research scope',
+        'scope_notice' => 'This report covers stored checks, incidents, reliability metrics and legacy control-chart summaries. It does not calculate or certify SLI/SLO compliance or Phase I/II SPC research status. Missing results here are not evidence of passing performance; consult the service-quality overview and approved research records separately.',
         'page' => [
             'title' => 'Reports & Export',
             'navigation_label' => 'Reports & Export',

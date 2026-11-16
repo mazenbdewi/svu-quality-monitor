@@ -11,8 +11,11 @@ use App\Models\SloProposal;
 use App\Models\SpcSignal;
 use App\Models\User;
 use App\Services\EligibleSyntheticChecks;
+use App\Services\LatencyPercentileAnalysis;
+use App\Services\ServiceQualityOverview;
 use App\Services\SloAutomaticPreparation;
 use App\Services\SloCalibrationAnalysis;
+use App\Services\SloEvaluationAnalysis;
 use App\Services\SloProposalService;
 use Carbon\Carbon;
 use Database\Seeders\RolesAndPermissionsSeeder;
@@ -237,6 +240,75 @@ class AutomaticSloPreparationTest extends TestCase
 
         $this->job()->failed(new RuntimeException('terminal'));
         $this->assertDatabaseCount('slo_proposals', 0);
+    }
+
+    public function test_deterministic_synthetic_workflow_keeps_calibration_evaluation_and_coverage_distinct(): void
+    {
+        $this->calibrationChecks(); // Independent sorted latencies: 100, 200, ..., 2800 ms.
+        $this->check(Carbon::parse('2026-11-01 00:10:00', 'UTC'), 100, success: false);
+        $this->check(Carbon::parse('2026-11-01 00:20:00', 'UTC'), null);
+        $this->check(Carbon::parse('2026-11-01 00:30:00', 'UTC'), 100, source: ServiceCheck::SOURCE_MANUAL);
+        $this->check(Carbon::parse('2026-11-01 00:40:00', 'UTC'), 100, maintenance: true);
+        $this->check(Carbon::parse('2026-11-14 21:00:00', 'UTC'), 9999); // Exclusive calibration end.
+
+        $latency = app(LatencyPercentileAnalysis::class)->analyze($this->service);
+        foreach (['p50_ms' => 1450, 'p90_ms' => 2530, 'p95_ms' => 2665, 'p99_ms' => 2773] as $metric => $expected) {
+            $this->assertEqualsWithDelta($expected, $latency[$metric], 1e-9);
+        }
+
+        $this->job()->handle(app(SloAutomaticPreparation::class));
+        $proposal = SloProposal::firstOrFail();
+        $payload = $proposal->calibration_payload;
+        $this->assertNull($proposal->created_by);
+        $this->assertSame('provisional_research_only', $payload['status']);
+        $this->assertSame(30, $payload['executed_checks']); // N
+        $this->assertSame(29, $payload['successful_checks']); // S
+        $this->assertSame(28, $payload['successful_with_valid_latency']); // V
+        $this->assertSame(28, $payload['successful_within_proposed_objective']); // G
+        $this->assertEqualsWithDelta(100 * 29 / 30, $payload['availability_sli_percent'], 1e-9);
+        $this->assertEqualsWithDelta(100, $payload['calibration_conditional_successful_latency_percent'], 1e-9);
+        $this->assertEqualsWithDelta(100 * 28 / 30, $payload['calibration_combined_sli_percent'], 1e-9);
+        $this->assertEqualsWithDelta(2530, $payload['measured_p90_ms'], 1e-9);
+        $this->assertEqualsWithDelta(2773, $payload['measured_p99_ms'], 1e-9);
+        $this->assertSame(2800, $proposal->proposed_latency_ms);
+        $this->assertSame(0, $payload['coverage']['missing_opportunities']);
+        $this->assertContains('combined_target_unattainable_given_calibration_availability', $payload['warnings']);
+        $this->assertFalse($payload['calibration_combined_sli_is_independent_evidence']);
+
+        $this->seed(RolesAndPermissionsSeeder::class);
+        $admin = User::factory()->create(['is_active' => true]);
+        $admin->assignRole('administrator');
+        $manager = app(SloProposalService::class);
+        $this->assertSame($proposal->id, $manager->prepare($this->service, $admin)->id);
+        $this->assertDatabaseCount('slo_proposals', 1);
+        $manager->review($proposal, $admin, 'Tail uncertainty and coverage reviewed.', true);
+        $manager->approve($proposal->fresh(), $admin, 'Research-only objective.');
+        $this->check(Carbon::parse('2026-11-16 00:00:00', 'UTC'), 100);
+        $this->check(Carbon::parse('2026-11-17 00:00:00', 'UTC'), 3000, success: false);
+        $beforeChecks = ServiceCheck::query()->orderBy('id')->get()->toArray();
+        $this->travelTo(Carbon::parse('2026-11-19 12:00:00', 'UTC'));
+
+        $evaluation = app(SloEvaluationAnalysis::class)->evaluate($proposal->fresh(),
+            Carbon::parse('2026-11-15 21:00:00', 'UTC'), Carbon::parse('2026-11-17 21:00:00', 'UTC'));
+        $this->assertSame('prospective_after_approval', $evaluation['evaluation_mode']);
+        $this->assertSame('shortfall', $evaluation['target_status']);
+        $this->assertSame(2, $evaluation['sli']['executed_checks']);
+        $this->assertSame(1, $evaluation['sli']['successful_within_objective']);
+        $this->assertSame(50.0, $evaluation['sli']['availability_percent']);
+        $this->assertSame(100.0, $evaluation['sli']['conditional_successful_latency_percent']);
+        $this->assertSame(50.0, $evaluation['sli']['combined_latency_success_percent']);
+        $this->assertSame(0, $evaluation['coverage']['missing_opportunities']);
+
+        $this->actingAs($admin);
+        $overview = app(ServiceQualityOverview::class)->forService($this->service);
+        $this->assertSame('insufficient_evidence', $overview['prospective']['target_status']);
+        $this->assertGreaterThan(0, $overview['prospective']['coverage']['missing_opportunities']);
+        $this->assertSame('post_calibration_retrospective', $overview['sli_basis']);
+        $this->assertSame(0.0, $overview['sli']['combined_latency_success_percent']);
+        $this->assertSame('not_configured', $overview['spc']['i_chart']);
+        $this->assertSame($beforeChecks, ServiceCheck::query()->orderBy('id')->get()->toArray());
+        $this->assertSame(2800, $proposal->fresh()->proposed_latency_ms);
+        $this->assertSame(0, ControlChartBaseline::count() + SpcSignal::count());
     }
 
     private function job(): PrepareAutomaticSloProposal

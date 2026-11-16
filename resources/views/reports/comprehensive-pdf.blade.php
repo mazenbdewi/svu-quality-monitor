@@ -125,6 +125,7 @@
                 </tr>
             </tbody>
         </table>
+        <div class="note">{{ __('monitoring.reports.scope_notice') }}</div>
     </section>
 
     <section class="section">
