@@ -407,6 +407,8 @@ return [
                 'healthy' => 'سليم',
                 'warning' => 'تحذير',
                 'down' => 'متوقف',
+                'disabled' => 'معطّل',
+                'unavailable' => 'غير متاح',
             ],
             'scheduler' => [
                 'title' => 'الفحص التلقائي',
@@ -417,6 +419,12 @@ return [
                 'last_failure' => 'آخر مهمة فاشلة',
                 'pending_jobs' => 'المهام المنتظرة',
                 'failed_jobs' => 'المهام الفاشلة',
+            ],
+            'slo_queue' => [
+                'title' => 'طابور معايرة SLO',
+                'description' => 'نبضة العامل المخصص والمهام المنتظرة؛ توقفه لا يوقف فحوصات المراقبة.',
+                'pending_jobs' => 'مهام SLO المنتظرة',
+                'oldest_pending_seconds' => 'عمر أقدم مهمة منتظرة (ثانية)',
             ],
             'monitoring' => [
                 'title' => 'المراقبة',

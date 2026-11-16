@@ -20,6 +20,8 @@ class SystemHealthService
 
     private const QUEUE_LAST_FAILURE_KEY = 'system-health:queue:last-failure';
 
+    private const SLO_QUEUE_HEARTBEAT_KEY = 'system-health:slo-queue:last-heartbeat';
+
     public function recordSchedulerHeartbeat(): void
     {
         $this->storeTimestamp(self::SCHEDULER_HEARTBEAT_KEY);
@@ -27,14 +29,58 @@ class SystemHealthService
 
     public function recordQueueHeartbeat(): void
     {
-        $lastHeartbeat = $this->timestamp(self::QUEUE_HEARTBEAT_KEY);
+        $this->recordThrottledHeartbeat(self::QUEUE_HEARTBEAT_KEY);
+    }
+
+    public function recordSloQueueHeartbeat(): void
+    {
+        $this->recordThrottledHeartbeat(self::SLO_QUEUE_HEARTBEAT_KEY);
+    }
+
+    private function recordThrottledHeartbeat(string $key): void
+    {
+        $lastHeartbeat = $this->timestamp($key);
         $minimumInterval = (int) config('monitoring.queue.heartbeat_write_interval_seconds', 15);
 
         if ($lastHeartbeat !== null && $lastHeartbeat->diffInSeconds(now()) < $minimumInterval) {
             return;
         }
 
-        $this->storeTimestamp(self::QUEUE_HEARTBEAT_KEY);
+        $this->storeTimestamp($key);
+    }
+
+    /** @return array{status: string, last_heartbeat: ?Carbon, pending_jobs: ?int, oldest_pending_seconds: ?int} */
+    public function sloQueueSnapshot(): array
+    {
+        $enabled = (bool) config('monitoring.slo.automatic_preparation_enabled');
+        $heartbeat = $this->timestamp(self::SLO_QUEUE_HEARTBEAT_KEY);
+        $result = [
+            'status' => $enabled ? $this->statusFor($heartbeat, 'queue') : 'disabled',
+            'last_heartbeat' => $heartbeat,
+            'pending_jobs' => null,
+            'oldest_pending_seconds' => null,
+        ];
+        $connection = config('queue.connections.'.config('queue.default'));
+        if (($connection['driver'] ?? null) !== 'database') {
+            $result['status'] = $enabled ? 'unavailable' : 'disabled';
+
+            return $result;
+        }
+
+        try {
+            $pending = DB::connection($connection['connection'] ?? null)
+                ->table($connection['table'] ?? 'jobs')
+                ->where('queue', 'slo-calibration')
+                ->selectRaw('COUNT(*) as pending_jobs, MIN(created_at) as oldest_created_at')
+                ->first();
+            $result['pending_jobs'] = (int) $pending->pending_jobs;
+            $result['oldest_pending_seconds'] = $pending->oldest_created_at === null
+                ? null : max(0, now()->timestamp - (int) $pending->oldest_created_at);
+        } catch (QueryException) {
+            $result['status'] = $enabled ? 'unavailable' : 'disabled';
+        }
+
+        return $result;
     }
 
     public function recordQueueJobSucceeded(): void

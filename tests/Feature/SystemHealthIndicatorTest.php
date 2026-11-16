@@ -8,15 +8,99 @@ use App\Models\User;
 use App\Services\SystemHealthService;
 use Carbon\Carbon;
 use Database\Seeders\RolesAndPermissionsSeeder;
+use Illuminate\Contracts\Queue\Job as QueueJob;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Queue\Events\JobFailed;
+use Illuminate\Queue\Events\JobProcessed;
+use Illuminate\Queue\Events\Looping;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Event;
 use Livewire\Livewire;
 use Mockery;
+use RuntimeException;
 use Tests\TestCase;
 
 class SystemHealthIndicatorTest extends TestCase
 {
     use RefreshDatabase;
+
+    public function test_slo_only_worker_cannot_mask_a_stopped_monitoring_worker(): void
+    {
+        Cache::flush();
+        Event::dispatch(new Looping('database', 'slo-calibration'));
+        $this->assertFalse(Cache::has('system-health:queue:last-heartbeat'));
+        $this->assertTrue(Cache::has('system-health:slo-queue:last-heartbeat'));
+
+        $sloJob = Mockery::mock(QueueJob::class);
+        $sloJob->shouldReceive('getQueue')->twice()->andReturn('slo-calibration');
+        Event::dispatch(new JobProcessed('database', $sloJob));
+        Event::dispatch(new JobFailed('database', $sloJob, new RuntimeException('synthetic')));
+        $this->assertFalse(Cache::has('system-health:queue:last-success'));
+        $this->assertFalse(Cache::has('system-health:queue:last-failure'));
+
+        Event::dispatch(new Looping('database', 'default'));
+        $this->assertTrue(Cache::has('system-health:queue:last-heartbeat'));
+    }
+
+    public function test_slo_queue_status_exposes_stopped_worker_and_pending_backlog_without_masking_monitoring(): void
+    {
+        config()->set('monitoring.slo.automatic_preparation_enabled', true);
+        config()->set('queue.default', 'database');
+        Cache::flush();
+        DB::table('jobs')->insert([
+            'queue' => 'slo-calibration', 'payload' => '{}', 'attempts' => 0,
+            'reserved_at' => null, 'available_at' => now()->timestamp, 'created_at' => now()->subMinutes(5)->timestamp,
+        ]);
+
+        $snapshot = app(SystemHealthService::class)->sloQueueSnapshot();
+        $this->assertSame('down', $snapshot['status']);
+        $this->assertSame(1, $snapshot['pending_jobs']);
+        $this->assertGreaterThanOrEqual(300, $snapshot['oldest_pending_seconds']);
+        $this->assertSame('down', app(SystemHealthService::class)->queueStatus());
+
+        Event::dispatch(new Looping('database', 'slo-calibration'));
+        $this->assertSame('healthy', app(SystemHealthService::class)->sloQueueSnapshot()['status']);
+        $this->assertSame('down', app(SystemHealthService::class)->queueStatus());
+
+        config()->set('monitoring.slo.automatic_preparation_enabled', false);
+        $this->assertSame('disabled', app(SystemHealthService::class)->sloQueueSnapshot()['status']);
+    }
+
+    public function test_operations_page_labels_slo_worker_state_in_english_and_arabic(): void
+    {
+        $this->seed(RolesAndPermissionsSeeder::class);
+        $operator = User::factory()->create(['is_active' => true]);
+        $operator->assignRole('operator');
+        $this->actingAs($operator);
+        config()->set('queue.default', 'database');
+
+        foreach (['en', 'ar'] as $locale) {
+            app()->setLocale($locale);
+            config()->set('monitoring.slo.automatic_preparation_enabled', false);
+            $this->get(SystemOperationsPage::getUrl())->assertOk()
+                ->assertSee(__('monitoring.operations.health.slo_queue.title'))
+                ->assertSee(__('monitoring.operations.health.statuses.disabled'));
+
+            config()->set('monitoring.slo.automatic_preparation_enabled', true);
+            Cache::forget('system-health:slo-queue:last-heartbeat');
+            $this->get(SystemOperationsPage::getUrl())->assertOk()
+                ->assertSee(__('monitoring.operations.health.slo_queue.pending_jobs'))
+                ->assertSee(__('monitoring.operations.health.statuses.down'));
+        }
+    }
+
+    public function test_monitoring_heartbeat_follows_a_custom_default_queue_name(): void
+    {
+        config()->set('queue.connections.database.queue', 'monitoring-primary');
+        Cache::flush();
+        Event::dispatch(new Looping('database', 'slo-calibration'));
+        Event::dispatch(new Looping('database', 'default'));
+        $this->assertFalse(Cache::has('system-health:queue:last-heartbeat'));
+
+        Event::dispatch(new Looping('database', 'monitoring-primary'));
+        $this->assertTrue(Cache::has('system-health:queue:last-heartbeat'));
+    }
 
     protected function tearDown(): void
     {

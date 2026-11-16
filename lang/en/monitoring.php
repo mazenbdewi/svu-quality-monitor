@@ -407,6 +407,8 @@ return [
                 'healthy' => 'Healthy',
                 'warning' => 'Warning',
                 'down' => 'Down',
+                'disabled' => 'Disabled',
+                'unavailable' => 'Unavailable',
             ],
             'scheduler' => [
                 'title' => 'Automatic checks',
@@ -417,6 +419,12 @@ return [
                 'last_failure' => 'Last failed job',
                 'pending_jobs' => 'Pending jobs',
                 'failed_jobs' => 'Failed jobs',
+            ],
+            'slo_queue' => [
+                'title' => 'SLO calibration queue',
+                'description' => 'Dedicated worker heartbeat and backlog; a stopped worker does not stop monitoring checks.',
+                'pending_jobs' => 'Pending SLO jobs',
+                'oldest_pending_seconds' => 'Oldest pending job age (seconds)',
             ],
             'monitoring' => [
                 'title' => 'Monitoring',

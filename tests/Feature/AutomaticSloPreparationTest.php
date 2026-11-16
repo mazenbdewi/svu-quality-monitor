@@ -10,6 +10,7 @@ use App\Models\ServiceCheck;
 use App\Models\SloProposal;
 use App\Models\SpcSignal;
 use App\Models\User;
+use App\Services\Baselines\ResearchSnapshotEncoding;
 use App\Services\EligibleSyntheticChecks;
 use App\Services\LatencyPercentileAnalysis;
 use App\Services\ServiceQualityOverview;
@@ -23,7 +24,9 @@ use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 use RuntimeException;
 use Tests\TestCase;
 
@@ -36,6 +39,7 @@ class AutomaticSloPreparationTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        config()->set('monitoring.slo.automatic_preparation_enabled', true);
         $this->travelTo(Carbon::parse('2026-11-15 12:00:00', 'UTC'));
         $this->service = MonitoredService::factory()->create([
             'check_type' => 'http', 'is_active' => true, 'created_at' => '2026-10-01 00:00:00',
@@ -50,6 +54,7 @@ class AutomaticSloPreparationTest extends TestCase
         $this->assertNotNull($event);
         $this->assertSame('35 0 * * *', $event->expression);
         $this->assertSame('Asia/Damascus', $event->timezone);
+        $this->assertTrue($event->filtersPass(app()));
 
         $this->calibrationChecks();
         MonitoredService::factory()->create(['check_type' => 'http', 'is_active' => false]);
@@ -63,12 +68,94 @@ class AutomaticSloPreparationTest extends TestCase
                 && $job->timezone === 'Asia/Damascus'
                 && $job->policyVersion === SloCalibrationAnalysis::POLICY_VERSION
                 && $job->configurationFingerprint === app(SloCalibrationAnalysis::class)->configurationFingerprint($this->service, 'Asia/Damascus')
+                && $job->queue === PrepareAutomaticSloProposal::QUEUE
                 && $job->timeout < 60;
         });
         $this->artisan('slo:prepare-due')->assertSuccessful();
         Bus::assertDispatchedTimes(PrepareAutomaticSloProposal::class, 1);
         $this->assertTrue(Cache::has(SloAutomaticPreparation::statusKey($this->service->id)));
         $this->assertDatabaseCount('slo_proposals', 0);
+    }
+
+    public function test_disabling_auto_preparation_blocks_schedule_command_and_pending_job_without_touching_research(): void
+    {
+        $this->calibrationChecks();
+        $pending = $this->job();
+        $event = collect(app(Schedule::class)->events())
+            ->first(fn ($event): bool => str_contains($event->command ?? '', 'slo:prepare-due'));
+        $this->assertNotNull($event);
+
+        config()->set('monitoring.slo.automatic_preparation_enabled', false);
+        $this->assertFalse($event->filtersPass(app()));
+        Bus::fake();
+        $this->artisan('slo:prepare-due')->assertSuccessful();
+        Bus::assertNotDispatched(PrepareAutomaticSloProposal::class);
+        $this->assertNull($pending->handle(app(SloAutomaticPreparation::class)));
+        $this->assertNull(app(SloAutomaticPreparation::class)->prepareOne($this->service->id,
+            $pending->cutoff, $pending->timezone, $pending->policyVersion, $pending->configurationFingerprint));
+        $this->assertNull(app(SloProposalService::class)->prepareAutomatically($this->service));
+        $this->assertDatabaseCount('slo_proposals', 0);
+        $this->assertSame(28, ServiceCheck::count());
+        $this->assertSame(0, AuditLog::where('event', 'slo.proposal.created')->count());
+    }
+
+    public function test_disabling_auto_preparation_does_not_block_human_review_approval_or_evaluation(): void
+    {
+        $this->calibrationChecks();
+        $this->seed(RolesAndPermissionsSeeder::class);
+        $actor = User::factory()->create(['is_active' => true]);
+        $actor->assignRole('administrator');
+        $manager = app(SloProposalService::class);
+        $proposal = $manager->prepare($this->service, $actor);
+        config()->set('monitoring.slo.automatic_preparation_enabled', false);
+
+        $manager->review($proposal, $actor, 'Scientific limitations acknowledged.', true);
+        $manager->approve($proposal->fresh(), $actor, 'Research-only objective.');
+        $this->assertSame('approved', $proposal->fresh()->status);
+        $this->assertSame(1, SloProposal::count());
+        $this->assertNotNull(app(SloEvaluationAnalysis::class)->evaluate($proposal->fresh(),
+            Carbon::parse('2026-11-14 21:00:00', 'UTC'), Carbon::parse('2026-11-15 09:00:00', 'UTC')));
+    }
+
+    public function test_frozen_digest_audit_is_read_only_and_flags_tampering(): void
+    {
+        $this->calibrationChecks();
+        $this->job()->handle(app(SloAutomaticPreparation::class));
+        $proposal = SloProposal::firstOrFail();
+        $original = $proposal->toArray();
+
+        $this->artisan('slo:audit-frozen')->expectsOutput('Frozen SLO proposals checked: 1; verified: 1; mismatches: 0; unverifiable: 0.')->assertSuccessful();
+        $this->assertSame($original, $proposal->fresh()->toArray());
+
+        DB::table('slo_proposals')->where('id', $proposal->id)->update(['payload_digest' => str_repeat('0', 64)]);
+        $tampered = $proposal->fresh()->toArray();
+        $this->artisan('slo:audit-frozen')->expectsOutput('Frozen SLO proposals checked: 1; verified: 0; mismatches: 1; unverifiable: 0.')->assertFailed();
+        $this->assertSame($tampered, $proposal->fresh()->toArray());
+    }
+
+    public function test_frozen_digest_audit_distinguishes_unverifiable_payload_without_disclosing_it(): void
+    {
+        $this->calibrationChecks();
+        $this->job()->handle(app(SloAutomaticPreparation::class));
+        $proposal = SloProposal::firstOrFail();
+        DB::table('slo_proposals')->where('id', $proposal->id)->update([
+            'calibration_payload' => '{}',
+            'payload_digest' => hash('sha256', ResearchSnapshotEncoding::encode([])),
+        ]);
+        $before = $proposal->fresh()->toArray();
+
+        $this->artisan('slo:audit-frozen')
+            ->expectsOutput('Frozen SLO proposals checked: 1; verified: 0; mismatches: 0; unverifiable: 1.')
+            ->assertFailed();
+        $this->assertSame($before, $proposal->fresh()->toArray());
+    }
+
+    public function test_frozen_digest_audit_handles_an_absent_table_without_writing(): void
+    {
+        Schema::shouldReceive('hasTable')->once()->with('slo_proposals')->andReturn(false);
+        $this->artisan('slo:audit-frozen')
+            ->expectsOutput('slo_proposals: absent; no proposal digests to audit.')
+            ->assertSuccessful();
     }
 
     public function test_job_creates_only_one_frozen_provisional_draft_and_preserves_research_data(): void
@@ -187,6 +274,11 @@ class AutomaticSloPreparationTest extends TestCase
         } catch (RuntimeException) {
             $this->assertTrue(Cache::has($key));
         }
+        config()->set('monitoring.slo.automatic_preparation_enabled', false);
+        $this->job()->handle($preparation);
+        $this->assertFalse(Cache::has($key));
+        config()->set('monitoring.slo.automatic_preparation_enabled', true);
+        Cache::put($key, 'pending', 120);
         Log::shouldReceive('error')->once();
         $this->job()->failed(new RuntimeException('terminal'));
         $this->assertFalse(Cache::has($key));

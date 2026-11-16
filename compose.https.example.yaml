@@ -24,3 +24,7 @@ services:
     environment:
       APP_URL: https://${PUBLIC_DOMAIN:?Set your real DNS hostname}
       SESSION_SECURE_COOKIE: "true"
+  slo_queue:
+    environment:
+      APP_URL: https://${PUBLIC_DOMAIN:?Set your real DNS hostname}
+      SESSION_SECURE_COOKIE: "true"

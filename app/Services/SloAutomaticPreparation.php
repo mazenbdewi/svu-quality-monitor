@@ -24,8 +24,12 @@ class SloAutomaticPreparation
     /** @return array{eligible: int, dispatched: int, failed: int} */
     public function dispatchDue(): array
     {
-        $window = $this->latency->window();
         $counts = ['eligible' => 0, 'dispatched' => 0, 'failed' => 0];
+        if (! config('monitoring.slo.automatic_preparation_enabled')) {
+            return $counts;
+        }
+
+        $window = $this->latency->window();
 
         MonitoredService::query()->where('is_active', true)->whereIn('check_type', ['http', 'api'])
             ->whereDoesntHave('sloProposals')->lazyById()->each(function (MonitoredService $service) use ($window, &$counts): void {
@@ -69,6 +73,10 @@ class SloAutomaticPreparation
 
     public function prepareOne(int $serviceId, string $cutoff, string $timezone, string $policyVersion, string $configurationFingerprint): ?SloProposal
     {
+        if (! config('monitoring.slo.automatic_preparation_enabled')) {
+            return null;
+        }
+
         $window = $this->latency->window();
         if ($policyVersion !== SloCalibrationAnalysis::POLICY_VERSION || $timezone !== $window['timezone']
             || $cutoff !== $window['end']->toIso8601String()) {
@@ -77,6 +85,9 @@ class SloAutomaticPreparation
         }
 
         return DB::transaction(function () use ($serviceId, $window, $configurationFingerprint): ?SloProposal {
+            if (! config('monitoring.slo.automatic_preparation_enabled')) {
+                return null;
+            }
             $service = MonitoredService::query()->lockForUpdate()->find($serviceId);
             if (! $service || ! $service->is_active || ! in_array($service->check_type->value, ['http', 'api'], true)
                 || SloProposal::query()->where('monitored_service_id', $serviceId)->exists()

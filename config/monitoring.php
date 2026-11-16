@@ -1,6 +1,10 @@
 <?php
 
 return [
+    'slo' => [
+        // Deployment gate only; reviewed/approved research and read-only evaluation remain available.
+        'automatic_preparation_enabled' => (bool) env('SLO_AUTO_PREPARATION_ENABLED', false),
+    ],
     'spc' => [
         'episode_gap_minutes' => (int) env('SPC_SIGNAL_EPISODE_GAP_MINUTES', 30),
         'association_horizon_minutes' => (int) env('SPC_INCIDENT_ASSOCIATION_HORIZON_MINUTES', 60),

@@ -74,6 +74,35 @@ services:
       - --timeout=60
       - --max-time=3600
 
+  slo_queue:
+    profiles: [slo-preparation]
+    stop_grace_period: 120s
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: app
+    restart: unless-stopped
+    env_file:
+      - .env
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - application_storage:/var/www/html/storage
+    mem_limit: 384m
+    cpus: 1.0
+    command:
+      - php
+      - -d
+      - memory_limit=256M
+      - artisan
+      - queue:work
+      - --queue=slo-calibration
+      - --sleep=3
+      - --tries=3
+      - --timeout=60
+      - --max-time=3600
+
   scheduler:
     stop_grace_period: 120s
     build:

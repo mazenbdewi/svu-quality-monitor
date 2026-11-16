@@ -5,7 +5,8 @@
  * SVU_BENCHMARK_ALLOW=yes DB_CONNECTION=mysql DB_HOST=127.0.0.1 DB_PORT=33071 \
  * DB_DATABASE=svu_b5b_disposable DB_USERNAME=svu_b5b_only DB_PASSWORD=... \
  * SVU_BENCHMARK_SERVER_UUID=... SVU_BENCHMARK_GUARD_TOKEN=... \
- * CACHE_STORE=database QUEUE_CONNECTION=database php tests/Benchmarks/slo_performance.php seed 40000
+ * CACHE_STORE=database QUEUE_CONNECTION=database SLO_AUTO_PREPARATION_ENABLED=true \
+ * php tests/Benchmarks/slo_performance.php seed 40000
  */
 
 use App\Models\MonitoredService;
@@ -369,7 +370,7 @@ if (in_array($mode, ['queue', 'dispatch'], true)) {
     });
     $workerStart = microtime(true);
     Artisan::call('queue:work', [
-        'connection' => 'database', '--stop-when-empty' => true, '--sleep' => 0,
+        'connection' => 'database', '--queue' => 'slo-calibration', '--stop-when-empty' => true, '--sleep' => 0,
         '--tries' => 3, '--timeout' => 60, '--max-time' => 120, '--max-jobs' => $target,
     ]);
     $workerSeconds = microtime(true) - $workerStart;
@@ -403,6 +404,196 @@ if (in_array($mode, ['queue', 'dispatch'], true)) {
     exit;
 }
 
+// A bounded two-worker smoke: one high-volume calibration and ten local-only
+// synthetic HTTP checks. Coordinate worker processes outside this runner.
+if ($mode === 'stage-interference') {
+    Carbon::setTestNow();
+    $assertHostResources();
+    $largest = DB::table('service_checks')->selectRaw('monitored_service_id, COUNT(*) AS n')
+        ->whereIn('monitored_service_id', DB::table('monitored_services')->select('id')->where('name', 'like', 'b5b-bulk-%'))
+        ->groupBy('monitored_service_id')->orderByDesc('n')->first();
+    if (! $largest || (int) $largest->n < 16000 || DB::table('jobs')->exists()
+        || DB::table('monitored_services')->where('name', 'like', 'b5b-interference-check-%')->exists()) {
+        throw new RuntimeException('Expected a freshly seeded 500,000-row disposable fixture and an empty queue.');
+    }
+    DB::table('monitored_services')->where('name', 'b5b-proposal-1')->update(['is_active' => false]);
+    DB::table('monitored_services')->where('name', 'like', 'b5b-queue-%')->update(['is_active' => false]);
+    DB::table('monitored_services')->where('id', $largest->monitored_service_id)
+        ->update(['is_active' => true, 'check_interval_minutes' => 5]);
+    // A recent out-of-window manual check makes the bulk service not due for
+    // operational HTTP checking; it cannot enter the historical calibration.
+    DB::table('service_checks')->insert([
+        'monitored_service_id' => $largest->monitored_service_id, 'checked_at' => now()->utc()->format('Y-m-d H:i:s'),
+        'source' => 'manual', 'check_type' => DB::table('monitored_services')->where('id', $largest->monitored_service_id)->value('check_type'),
+        'is_during_maintenance' => false,
+        'is_success' => true, 'response_time_ms' => 100, 'status_code' => 200,
+        'created_at' => now()->utc()->format('Y-m-d H:i:s'), 'updated_at' => now()->utc()->format('Y-m-d H:i:s'),
+    ]);
+    for ($i = 1; $i <= 10; $i++) {
+        DB::table('monitored_services')->insert([
+            'name' => "b5b-interference-check-{$i}", 'url' => 'http://127.0.0.1:18081/up',
+            'check_type' => 'http', 'check_interval_minutes' => 1, 'is_active' => true,
+            'warning_response_ms' => 1500, 'critical_response_ms' => 3000,
+            'created_at' => now()->utc()->format('Y-m-d H:i:s'), 'updated_at' => now()->utc()->format('Y-m-d H:i:s'),
+        ]);
+    }
+    echo json_encode(['mode' => $mode, 'bulk_service_id' => $largest->monitored_service_id,
+        'bulk_historical_rows' => $largest->n, 'monitoring_services' => 10], JSON_THROW_ON_ERROR)."\n";
+    exit;
+}
+
+if ($mode === 'dispatch-interference') {
+    Carbon::setTestNow();
+    if (DB::table('monitored_services')->where('name', 'like', 'b5b-interference-check-%')->count() !== 10) {
+        throw new RuntimeException('Stage the disposable interference fixture first.');
+    }
+    $started = microtime(true);
+    Artisan::call('slo:prepare-due');
+    $sloOutput = trim(Artisan::output());
+    $sloSeconds = microtime(true) - $started;
+    $started = microtime(true);
+    Artisan::call('services:check-due');
+    $checkSeconds = microtime(true) - $started;
+    echo json_encode(['mode' => $mode, 'slo_dispatch' => $sloOutput,
+        'slo_dispatch_seconds' => round($sloSeconds, 3),
+        'check_dispatch_seconds' => round($checkSeconds, 3),
+        'jobs_by_queue' => DB::table('jobs')->selectRaw('queue, COUNT(*) AS n')->groupBy('queue')->get(),
+        'dispatched_at_unix' => microtime(true)], JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR)."\n";
+    exit;
+}
+
+if ($mode === 'work-concurrent-interference') {
+    if (! function_exists('pcntl_fork')) {
+        throw new RuntimeException('The bounded two-worker probe requires pcntl.');
+    }
+    Carbon::setTestNow();
+    $dispatchStart = microtime(true);
+    Artisan::call('slo:prepare-due');
+    $sloOutput = trim(Artisan::output());
+    $sloDispatchSeconds = microtime(true) - $dispatchStart;
+    $checkStart = microtime(true);
+    Artisan::call('services:check-due');
+    $checkDispatchSeconds = microtime(true) - $checkStart;
+    $pending = DB::table('jobs')->selectRaw('queue, COUNT(*) AS n')->groupBy('queue')->pluck('n', 'queue');
+    if ((int) $pending->get('slo-calibration') !== 1 || (int) $pending->get('default') !== 10) {
+        throw new RuntimeException('Expected exactly one high-volume SLO job and ten local monitoring jobs.');
+    }
+    echo json_encode(['mode' => $mode, 'slo_dispatch' => $sloOutput,
+        'slo_dispatch_seconds' => round($sloDispatchSeconds, 3),
+        'check_dispatch_seconds' => round($checkDispatchSeconds, 3),
+        'all_jobs_enqueued_by_unix' => microtime(true)], JSON_THROW_ON_ERROR)."\n";
+    $children = [];
+    foreach (['slo-calibration', 'default'] as $queueName) {
+        $pid = pcntl_fork();
+        if ($pid === -1) {
+            throw new RuntimeException('Could not start an isolated worker process.');
+        }
+        if ($pid === 0) {
+            DB::disconnect();
+            $argv[2] = $queueName;
+            $mode = 'work-interference';
+            break;
+        }
+        $children[] = $pid;
+    }
+    if ($mode === 'work-concurrent-interference') {
+        $failed = false;
+        foreach ($children as $pid) {
+            pcntl_waitpid($pid, $status);
+            $failed = $failed || ! pcntl_wifexited($status) || pcntl_wexitstatus($status) !== 0;
+        }
+        exit($failed ? 1 : 0);
+    }
+}
+
+if ($mode === 'work-control') {
+    Carbon::setTestNow();
+    if (DB::table('monitored_services')->where('name', 'like', 'b5b-interference-check-%')->count() !== 10
+        || DB::table('jobs')->exists()
+        || DB::table('monitored_services')->where('name', 'like', 'b5b-control-check-%')->exists()) {
+        throw new RuntimeException('Expected the completed isolated interference run before its control.');
+    }
+    DB::table('monitored_services')->where('name', 'like', 'b5b-interference-check-%')->update(['is_active' => false]);
+    DB::table('monitored_services')->whereIn('id', DB::table('slo_proposals')->select('monitored_service_id'))
+        ->update(['is_active' => false]);
+    for ($i = 1; $i <= 10; $i++) {
+        DB::table('monitored_services')->insert([
+            'name' => "b5b-control-check-{$i}", 'url' => 'http://127.0.0.1:18081/up',
+            'check_type' => 'http', 'check_interval_minutes' => 1, 'is_active' => true,
+            'warning_response_ms' => 1500, 'critical_response_ms' => 3000,
+            'created_at' => now()->utc()->format('Y-m-d H:i:s'), 'updated_at' => now()->utc()->format('Y-m-d H:i:s'),
+        ]);
+    }
+    $dispatchStart = microtime(true);
+    Artisan::call('services:check-due');
+    $dispatchSeconds = microtime(true) - $dispatchStart;
+    if (DB::table('jobs')->where('queue', 'default')->count() !== 10) {
+        throw new RuntimeException('Expected exactly ten local control monitoring jobs.');
+    }
+    echo json_encode(['mode' => 'work-control', 'check_dispatch_seconds' => round($dispatchSeconds, 3),
+        'all_jobs_enqueued_by_unix' => microtime(true)], JSON_THROW_ON_ERROR)."\n";
+    $argv[2] = 'default';
+    $mode = 'work-interference';
+}
+
+if ($mode === 'work-interference') {
+    Carbon::setTestNow();
+    $queueName = $argv[2] ?? '';
+    if (! in_array($queueName, ['default', 'slo-calibration'], true)) {
+        throw new InvalidArgumentException('Expected default or slo-calibration queue.');
+    }
+    $events = [];
+    $started = [];
+    $queryTimes = [];
+    DB::listen(function ($query) use (&$queryTimes): void {
+        $queryTimes[] = $query->time;
+    });
+    $usageBefore = getrusage();
+    Queue::before(function ($event) use (&$started): void {
+        $started[$event->job->getJobId()] = microtime(true);
+    });
+    Queue::after(function ($event) use (&$started, &$events): void {
+        $id = $event->job->getJobId();
+        $events[] = ['job_id' => $id, 'started_unix' => $started[$id],
+            'finished_unix' => microtime(true),
+            'execution_ms' => round((microtime(true) - $started[$id]) * 1000, 3)];
+    });
+    Artisan::call('queue:work', ['connection' => 'database', '--queue' => $queueName,
+        '--stop-when-empty' => true, '--sleep' => 0, '--tries' => 3,
+        '--timeout' => 60, '--max-time' => 120, '--max-jobs' => $queueName === 'default' ? 10 : 1]);
+    $usageAfter = getrusage();
+    sort($queryTimes);
+    $queryP95 = null;
+    if ($queryTimes !== []) {
+        $position = .95 * (count($queryTimes) - 1);
+        $lower = (int) floor($position);
+        $upper = (int) ceil($position);
+        $queryP95 = round($queryTimes[$lower] + ($position - $lower) * ($queryTimes[$upper] - $queryTimes[$lower]), 3);
+    }
+    echo json_encode(['mode' => $mode, 'queue' => $queueName, 'events' => $events,
+        'remaining' => DB::table('jobs')->where('queue', $queueName)->count(),
+        'failed' => DB::table('failed_jobs')->count(),
+        'sql_queries' => count($queryTimes), 'sql_query_p95_ms' => $queryP95,
+        'cpu_user_ms' => round(($usageAfter['ru_utime.tv_sec'] - $usageBefore['ru_utime.tv_sec']) * 1000
+            + ($usageAfter['ru_utime.tv_usec'] - $usageBefore['ru_utime.tv_usec']) / 1000, 3),
+        'cpu_system_ms' => round(($usageAfter['ru_stime.tv_sec'] - $usageBefore['ru_stime.tv_sec']) * 1000
+            + ($usageAfter['ru_stime.tv_usec'] - $usageBefore['ru_stime.tv_usec']) / 1000, 3),
+        'peak_php_mb' => round(memory_get_peak_usage(true) / 1048576, 3)], JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR)."\n";
+    exit;
+}
+
+if ($mode === 'result-interference') {
+    Carbon::setTestNow();
+    echo json_encode(['mode' => $mode,
+        'checks' => DB::table('service_checks')->whereIn('monitored_service_id',
+            DB::table('monitored_services')->select('id')->where('name', 'like', 'b5b-interference-check-%'))
+            ->selectRaw('COUNT(*) AS n, SUM(is_success) AS successful')->first(),
+        'drafts' => DB::table('slo_proposals')->where('status', 'draft')->count(),
+        'jobs_by_queue' => DB::table('jobs')->selectRaw('queue, COUNT(*) AS n')->groupBy('queue')->get(),
+        'failed' => DB::table('failed_jobs')->count()], JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR)."\n";
+    exit;
+}
+
 if ($mode === 'probe') {
     $serviceId = DB::table('monitored_services')->where('name', 'b5b-queue-50-1')->value('id');
     if ($serviceId === null) {
@@ -425,5 +616,5 @@ if ($mode === 'probe') {
     exit;
 }
 
-fwrite(STDERR, "Usage: php tests/Benchmarks/slo_performance.php seed 40000|100000|250000|500000 | measure | dispatch 1|10|50 | queue 1|10|50 | probe\n");
+fwrite(STDERR, "Usage: php tests/Benchmarks/slo_performance.php seed 40000|100000|250000|500000 | measure | dispatch 1|10|50 | queue 1|10|50 | probe | stage-interference | dispatch-interference | work-interference default|slo-calibration | work-concurrent-interference | work-control | result-interference\n");
 exit(2);

@@ -46,6 +46,7 @@ app()->afterResolving(Schedule::class, function ($schedule): void {
     $schedule->command('slo:prepare-due')
         ->timezone($timezone)
         ->dailyAt('00:35')
+        ->when(fn (): bool => (bool) config('monitoring.slo.automatic_preparation_enabled'))
         ->withoutOverlapping();
 
     $schedule->command('backup:create --scheduled')

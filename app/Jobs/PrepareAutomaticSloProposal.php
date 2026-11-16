@@ -17,6 +17,8 @@ class PrepareAutomaticSloProposal implements ShouldBeUnique, ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
+    public const QUEUE = 'slo-calibration';
+
     public int $tries = 3;
 
     public int $timeout = 55;
@@ -31,7 +33,9 @@ class PrepareAutomaticSloProposal implements ShouldBeUnique, ShouldQueue
         public readonly string $timezone,
         public readonly string $policyVersion,
         public readonly string $configurationFingerprint,
-    ) {}
+    ) {
+        $this->onQueue(self::QUEUE);
+    }
 
     public function uniqueId(): string
     {
@@ -40,7 +44,9 @@ class PrepareAutomaticSloProposal implements ShouldBeUnique, ShouldQueue
 
     public function handle(SloAutomaticPreparation $preparation): void
     {
-        $preparation->prepareOne($this->serviceId, $this->cutoff, $this->timezone, $this->policyVersion, $this->configurationFingerprint);
+        if (config('monitoring.slo.automatic_preparation_enabled')) {
+            $preparation->prepareOne($this->serviceId, $this->cutoff, $this->timezone, $this->policyVersion, $this->configurationFingerprint);
+        }
         Cache::forget(SloAutomaticPreparation::statusKey($this->serviceId));
     }
 

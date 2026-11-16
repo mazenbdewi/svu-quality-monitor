@@ -26,6 +26,7 @@ use Filament\Tables\Columns\TextColumn;
 use Illuminate\Auth\Events\Login;
 use Illuminate\Queue\Events\JobFailed;
 use Illuminate\Queue\Events\JobProcessed;
+use Illuminate\Queue\Events\Looping;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Queue;
@@ -59,9 +60,17 @@ class AppServiceProvider extends ServiceProvider
                 app(AuditLogger::class)->log('user.logged_in', $event->user, 'User logged in', actor: $event->user);
             }
         });
-        Queue::looping(fn (): mixed => app(SystemHealthService::class)->recordQueueHeartbeat());
-        Queue::after(fn (JobProcessed $event): mixed => app(SystemHealthService::class)->recordQueueJobSucceeded());
-        Queue::failing(fn (JobFailed $event): mixed => app(SystemHealthService::class)->recordQueueJobFailed());
+        Queue::looping(function (Looping $event): void {
+            if ($event->queue === 'slo-calibration') {
+                app(SystemHealthService::class)->recordSloQueueHeartbeat();
+            } elseif ($event->queue === config('queue.connections.database.queue', 'default')) {
+                app(SystemHealthService::class)->recordQueueHeartbeat();
+            }
+        });
+        Queue::after(fn (JobProcessed $event): mixed => ($event->job->getQueue() ?? config('queue.connections.database.queue', 'default')) === config('queue.connections.database.queue', 'default')
+            ? app(SystemHealthService::class)->recordQueueJobSucceeded() : null);
+        Queue::failing(fn (JobFailed $event): mixed => ($event->job->getQueue() ?? config('queue.connections.database.queue', 'default')) === config('queue.connections.database.queue', 'default')
+            ? app(SystemHealthService::class)->recordQueueJobFailed() : null);
         Event::listen(IncidentConfirmed::class, fn (IncidentConfirmed $event) => app(NotificationDispatcher::class)->incident(ServiceIncident::findOrFail($event->incidentId), 'incident_confirmed'));
         Event::listen(IncidentResolved::class, fn (IncidentResolved $event) => app(NotificationDispatcher::class)->incident(ServiceIncident::findOrFail($event->incidentId), 'incident_resolved'));
         Event::listen(SslCertificateExpiring::class, fn (SslCertificateExpiring $event) => app(NotificationDispatcher::class)->ssl(ServiceCheck::with('monitoredService')->findOrFail($event->checkId), $event->threshold));

@@ -34,7 +34,14 @@ class SloProposalService
     /** Scheduler-only path. The caller verifies evidence; this method also enforces atomic locking. */
     public function prepareAutomatically(MonitoredService $service): ?SloProposal
     {
+        if (! config('monitoring.slo.automatic_preparation_enabled')) {
+            return null;
+        }
+
         return DB::transaction(function () use ($service): ?SloProposal {
+            if (! config('monitoring.slo.automatic_preparation_enabled')) {
+                return null;
+            }
             $service = MonitoredService::query()->lockForUpdate()->findOrFail($service->id);
             if (! $service->is_active || ! in_array($service->check_type->value, ['http', 'api'], true)
                 || SloProposal::query()->where('monitored_service_id', $service->id)->exists()) {

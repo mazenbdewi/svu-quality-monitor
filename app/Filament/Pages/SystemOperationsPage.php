@@ -20,6 +20,9 @@ class SystemOperationsPage extends Page
     /** @var array<string, array<string, mixed>> */
     public array $health = [];
 
+    /** @var array<string, mixed> */
+    public array $sloQueue = [];
+
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedCog6Tooth;
 
     protected static ?string $slug = 'system-operations';
@@ -48,6 +51,7 @@ class SystemOperationsPage extends Page
     public function mount(SystemHealthService $systemHealth): void
     {
         $this->health = $systemHealth->snapshot();
+        $this->sloQueue = $systemHealth->sloQueueSnapshot();
     }
 
     public function backupHealth(): array
