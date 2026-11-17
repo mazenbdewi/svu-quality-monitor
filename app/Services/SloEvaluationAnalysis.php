@@ -46,9 +46,14 @@ class SloEvaluationAnalysis
             $sli = $this->indicators->describe($service, $start, $end, $proposal->proposed_latency_ms);
             $coverage = $this->latency->coverageForPeriod($service, $start, $end);
             $currentFingerprint = $this->calibration->configurationFingerprint($service, $this->institutionTimezone->name());
-            $compatible = hash_equals($proposal->configuration_fingerprint, $currentFingerprint);
+            $configurationCompatible = hash_equals($proposal->configuration_fingerprint, $currentFingerprint);
+            $compatible = $configurationCompatible;
             $warnings = [];
-            if (! $compatible) {
+            if (app(FixedMonitoringCadence::class)->referenceIncompatible($service, $proposal->calibration_start, $proposal->calibration_end)) {
+                $compatible = false;
+                $warnings[] = 'monitoring_sampling_regime_incompatible_with_calibration';
+            }
+            if (! $configurationCompatible) {
                 $warnings[] = 'monitoring_configuration_incompatible_with_calibration';
             }
             if ($sli['executed_checks'] === 0) {

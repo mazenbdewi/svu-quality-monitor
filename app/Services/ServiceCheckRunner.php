@@ -5,18 +5,20 @@ namespace App\Services;
 use App\Enums\MonitoringCheckType;
 use App\Events\SslCertificateExpiring;
 use App\Models\MonitoredService;
+use App\Models\MonitoringOpportunity;
 use App\Models\ServiceCheck;
 use App\Monitoring\CheckResult;
 use App\Monitoring\ServiceCheckerRegistry;
 use App\Services\Spc\SafePhaseTwoDispatch;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
+use LogicException;
 
 class ServiceCheckRunner
 {
     public function __construct(private ServiceCheckerRegistry $checkers) {}
 
-    public function run(MonitoredService $service, string $source = ServiceCheck::SOURCE_MANUAL): ServiceCheck
+    public function run(MonitoredService $service, string $source = ServiceCheck::SOURCE_MANUAL, ?int $opportunityId = null, ?string $claimToken = null): ServiceCheck
     {
         $type = $service->check_type instanceof MonitoringCheckType
             ? $service->check_type
@@ -26,7 +28,7 @@ class ServiceCheckRunner
             throw new InvalidArgumentException('Unsupported monitoring check type.');
         }
 
-        return $this->persist($service, $this->checkers->for($type)->check($service), $source, $type);
+        return $this->persist($service, $this->checkers->for($type)->check($service), $source, $type, $opportunityId, $claimToken);
     }
 
     public function persist(
@@ -34,8 +36,16 @@ class ServiceCheckRunner
         CheckResult $result,
         string $source = ServiceCheck::SOURCE_MANUAL,
         ?MonitoringCheckType $type = null,
+        ?int $opportunityId = null,
+        ?string $claimToken = null,
     ): ServiceCheck {
-        return DB::transaction(function () use ($service, $result, $source, $type): ServiceCheck {
+        return DB::transaction(function () use ($service, $result, $source, $type, $opportunityId, $claimToken): ServiceCheck {
+            $opportunity = $opportunityId === null ? null : MonitoringOpportunity::query()->lockForUpdate()->findOrFail($opportunityId);
+            if ($opportunity && ($source !== ServiceCheck::SOURCE_AUTOMATIC || $opportunity->monitored_service_id !== $service->id
+                || $opportunity->status !== 'running' || ! hash_equals((string) $opportunity->claim_token, (string) $claimToken)
+                || $opportunity->epoch->effective_until_utc !== null || ! config('monitoring.fixed_cadence.enabled'))) {
+                throw new LogicException('Monitoring opportunity claim is no longer valid.');
+            }
             $performance = $result->performanceStatus ?? $this->performanceStatus($service, $result);
             $maintenance = app(MaintenanceWindowService::class)->activeWindowFor($service, $result->checkedAt);
             $check = $service->serviceChecks()->create([
@@ -54,6 +64,14 @@ class ServiceCheckRunner
                 'expected_keyword_found' => $result->expectedKeywordFound,
                 'metadata' => $result->metadata,
             ]);
+
+            if ($opportunity) {
+                $opportunity->update([
+                    'status' => 'completed',
+                    'service_check_id' => $check->id,
+                    'completed_at_utc' => now()->utc(),
+                ]);
+            }
 
             app(IncidentDetector::class)->evaluate($service, $check);
             if ($check->check_type === MonitoringCheckType::Ssl->value && $check->is_success && config('monitoring.notifications.ssl.enabled', true)) {

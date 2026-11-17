@@ -84,6 +84,30 @@ class BackgroundExecutionTest extends TestCase
             ->assertSuccessful();
     }
 
+    public function test_failed_dispatch_releases_unique_lock_for_the_next_poll(): void
+    {
+        $service = MonitoredService::factory()->create(['is_active' => true]);
+        $dispatcher = Mockery::mock(Dispatcher::class);
+        $dispatcher->shouldReceive('dispatch')
+            ->twice()
+            ->with(Mockery::on(fn (CheckMonitoredServiceJob $job): bool => $job->monitoredServiceId === $service->id))
+            ->andReturnUsing(function (): void {
+                static $calls = 0;
+                if ($calls++ === 0) {
+                    throw new RuntimeException('Queue unavailable');
+                }
+            });
+        $this->app->instance(Dispatcher::class, $dispatcher);
+
+        $this->artisan(CheckDueMonitoredServices::class)
+            ->expectsOutput('Failed dispatches count: 1')
+            ->assertSuccessful();
+        $this->artisan(CheckDueMonitoredServices::class)
+            ->expectsOutput('Dispatched services count: 1')
+            ->expectsOutput('Duplicate pending jobs count: 0')
+            ->assertSuccessful();
+    }
+
     public function test_unique_job_lock_rejects_a_duplicate_service_check_until_released(): void
     {
         $service = MonitoredService::factory()->create();

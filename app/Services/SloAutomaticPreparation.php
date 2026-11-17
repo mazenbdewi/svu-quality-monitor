@@ -116,6 +116,9 @@ class SloAutomaticPreparation
 
     private function hasMinimumSamples(MonitoredService $service, Carbon $start, Carbon $end): bool
     {
+        if (app(FixedMonitoringCadence::class)->referenceIncompatible($service, $start, $end)) {
+            return false;
+        }
         $minimum = max(2, (int) config('monitoring.spc.exploratory_min_points', 20));
         $maintenance = $this->eligibility->maintenance($service, $start, $end);
 

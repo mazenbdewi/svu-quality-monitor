@@ -1,6 +1,12 @@
 <?php
 
 return [
+    'fixed_cadence' => [
+        // Explicit future UTC cutover; absent/false keeps the legacy scheduler.
+        'enabled' => (bool) env('MONITORING_FIXED_CADENCE_ENABLED', false),
+        'cutover_utc' => env('MONITORING_FIXED_CADENCE_CUTOVER_UTC'),
+        'maximum_slots_per_service_poll' => 120,
+    ],
     'slo' => [
         // Deployment gate only; reviewed/approved research and read-only evaluation remain available.
         'automatic_preparation_enabled' => (bool) env('SLO_AUTO_PREPARATION_ENABLED', false),

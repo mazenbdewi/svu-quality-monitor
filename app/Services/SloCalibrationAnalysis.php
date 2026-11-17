@@ -31,10 +31,17 @@ class SloCalibrationAnalysis
             $combined = $this->roundUp($historical['p99_ms']);
             $start = Carbon::parse($historical['period_start']);
             $end = Carbon::parse($historical['period_end']);
+            $mixedRegime = app(FixedMonitoringCadence::class)->crossesRegime($service, $start, $end);
+            $obsoleteRegime = app(FixedMonitoringCadence::class)->referenceIncompatible($service, $start, $end);
             $sli = $this->indicators->describe($service, $start, $end, $combined);
             $warnings = $historical['configuration_warnings'];
             if ($historical['sample_status'] !== 'analyzable') {
                 $warnings[] = 'insufficient_latency_observations';
+            }
+            if ($mixedRegime) {
+                $warnings[] = 'monitoring_sampling_regime_crosses_calibration_window';
+            } elseif ($obsoleteRegime) {
+                $warnings[] = 'monitoring_sampling_regime_obsolete_at_preparation';
             }
             if (($historical['coverage']['coverage_percent'] ?? 0) < self::MINIMUM_COVERAGE_PERCENT) {
                 $warnings[] = 'insufficient_coverage';
@@ -56,7 +63,7 @@ class SloCalibrationAnalysis
             $warnings[] = 'historical_configuration_and_maintenance_not_versioned';
             $warnings[] = 'user_experience_validation_required';
             $eligible = $historical['sample_status'] === 'analyzable'
-                && ($historical['coverage']['coverage_percent'] ?? 0) >= self::MINIMUM_COVERAGE_PERCENT;
+                && ($historical['coverage']['coverage_percent'] ?? 0) >= self::MINIMUM_COVERAGE_PERCENT && ! $obsoleteRegime;
 
             $proposal = [
                 'policy_version' => self::POLICY_VERSION,

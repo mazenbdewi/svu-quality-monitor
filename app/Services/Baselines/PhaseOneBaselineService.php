@@ -6,6 +6,7 @@ use App\Models\ControlChartBaseline;
 use App\Models\MonitoredService;
 use App\Models\User;
 use App\Services\AuditLogger;
+use App\Services\FixedMonitoringCadence;
 use Carbon\Carbon;
 use DateTimeZone;
 use Illuminate\Auth\Access\AuthorizationException;
@@ -170,7 +171,9 @@ class PhaseOneBaselineService
     {
         $service = MonitoredService::find($baseline->monitored_service_id);
 
-        return $service !== null && hash_equals($baseline->compatibility_fingerprint, $this->configuration->fingerprint($this->configuration->snapshot($service, $baseline->analysis_timezone, $baseline->aggregation_interval, $baseline->method_identifier)));
+        return $service !== null
+            && ! app(FixedMonitoringCadence::class)->referenceIncompatible($service, $baseline->baseline_start, $baseline->baseline_end)
+            && hash_equals($baseline->compatibility_fingerprint, $this->configuration->fingerprint($this->configuration->snapshot($service, $baseline->analysis_timezone, $baseline->aggregation_interval, $baseline->method_identifier)));
     }
 
     private function transition(ControlChartBaseline $baseline, User $actor, callable $change, string $event): ControlChartBaseline

@@ -6,6 +6,7 @@ use App\Jobs\PrepareAutomaticPhaseOneBaseline;
 use App\Models\ControlChartBaseline;
 use App\Models\MonitoredService;
 use App\Models\User;
+use App\Services\FixedMonitoringCadence;
 use App\Services\InstitutionTimezone;
 use Carbon\Carbon;
 use Illuminate\Auth\Access\AuthorizationException;
@@ -79,6 +80,12 @@ class AutomaticPhaseOneBaselineService
 
     private function prepareService(MonitoredService $service, Carbon $end, string $timezone, array $policy, User $actor, array &$result): void
     {
+        $longestStart = $end->copy()->setTimezone($timezone)->subDays(max($policy['window_days']))->startOfDay()->utc();
+        if (app(FixedMonitoringCadence::class)->referenceIncompatible($service, $longestStart, $end)) {
+            $result['unavailable'][] = ['service_id' => $service->id, 'service_name' => $service->name, 'family' => 'i_mr_p', 'reason' => 'monitoring_sampling_regime_incompatible_with_calibration'];
+
+            return;
+        }
         $latency = $this->select($service, 'latency', $end, $timezone, $policy);
         $proportion = $this->select($service, 'p_chart', $end, $timezone, $policy);
 
