@@ -1,0 +1,69 @@
+{
+  "pages": [
+    {
+      "lang": "en",
+      "dir": "ltr",
+      "title": "System Operations - Remediation Rehearsal",
+      "indicators": 3,
+      "overflow": false,
+      "path": "/admin/system-operations"
+    },
+    {
+      "lang": "en",
+      "dir": "ltr",
+      "title": "System Diagnostics - Remediation Rehearsal",
+      "indicators": 3,
+      "overflow": false,
+      "path": "/admin/system-diagnostics"
+    },
+    {
+      "lang": "en",
+      "dir": "ltr",
+      "title": "Reference Performance Setup - Remediation Rehearsal",
+      "indicators": 3,
+      "overflow": false,
+      "path": "/admin/control-chart-baselines"
+    },
+    {
+      "lang": "en",
+      "dir": "ltr",
+      "title": "Analysis Methodology - Remediation Rehearsal",
+      "indicators": 3,
+      "overflow": false,
+      "path": "/admin/analysis-methodology"
+    },
+    {
+      "lang": "ar",
+      "dir": "rtl",
+      "title": "تشغيل النظام - Remediation Rehearsal",
+      "indicators": 3,
+      "overflow": false,
+      "path": "/admin/system-operations"
+    },
+    {
+      "lang": "ar",
+      "dir": "rtl",
+      "title": "تشخيص النظام - Remediation Rehearsal",
+      "indicators": 3,
+      "overflow": false,
+      "path": "/admin/system-diagnostics"
+    },
+    {
+      "lang": "ar",
+      "dir": "rtl",
+      "title": "إعداد الأداء المرجعي - Remediation Rehearsal",
+      "indicators": 3,
+      "overflow": false,
+      "path": "/admin/control-chart-baselines"
+    },
+    {
+      "lang": "ar",
+      "dir": "rtl",
+      "title": "منهجية التحليل - Remediation Rehearsal",
+      "indicators": 3,
+      "overflow": false,
+      "path": "/admin/analysis-methodology"
+    }
+  ],
+  "javascript_exceptions": []
+}

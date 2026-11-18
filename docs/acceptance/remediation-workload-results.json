@@ -1,0 +1,481 @@
+{
+  "fixture": {
+    "services": 20,
+    "historical_checks": 161280,
+    "step_minutes": 5
+  },
+  "scenarios": {
+    "normal_only": {
+      "dispatch": {
+        "normal_dispatch_ms": 974.297,
+        "baseline_dispatch_ms": 0,
+        "normal_depth": 20,
+        "baseline_depth": 0,
+        "baseline_command": null
+      },
+      "report": {
+        "normal_depth": 0,
+        "baseline_depth": 0,
+        "failed_jobs": 0,
+        "normal_checks_completed": 20,
+        "normal_execution_max_ms": 3000,
+        "baseline_runs": 0,
+        "baseline_completed": 0,
+        "services_without_a_new_check": 0,
+        "normal_http_latency_mean_ms": 181.7,
+        "normal_http_latency_max_ms": 3032,
+        "baseline_duration_mean_ms": null,
+        "baseline_duration_max_ms": null,
+        "draft_baselines": 0,
+        "approved_baselines": 0,
+        "active_baselines": 0,
+        "fixed_cadence_enabled": false,
+        "slo_auto_preparation_enabled": false,
+        "baseline_health": {
+          "status": "healthy",
+          "startup_grace": false,
+          "delayed": false,
+          "last_heartbeat": "2026-11-18T13:48:54.000000Z",
+          "pending_jobs": 0,
+          "processing_jobs": 0,
+          "failed_jobs": 0,
+          "oldest_pending_seconds": null,
+          "last_successful_preparation": null,
+          "backlog_limit": 10
+        },
+        "monitoring_opportunities": 0
+      },
+      "timings": {
+        "default": {
+          "count": 20,
+          "mean_ms": 351.23937645,
+          "max_ms": 3306.295985,
+          "p95_ms": 430.840626
+        }
+      },
+      "sampled_resource_peaks": {
+        "normal_worker": {
+          "sampled_cpu_percent_max": 6.99,
+          "sampled_memory_mib_max": 61.34,
+          "samples": 3
+        },
+        "mysql": {
+          "sampled_cpu_percent_max": 24.47,
+          "sampled_memory_mib_max": 604.0,
+          "samples": 3
+        }
+      }
+    },
+    "concurrent": {
+      "dispatch": {
+        "normal_dispatch_ms": 982.314,
+        "baseline_dispatch_ms": 130.944,
+        "normal_depth": 17,
+        "baseline_depth": 5,
+        "baseline_command": "eligible: 20; dispatched: 5; duplicate: 0; skipped: 0; deferred: 15; failed: 0.\nBaseline preparation is delayed by the per-run or backlog limit; deferred services remain eligible for a future fair dispatch."
+      },
+      "report": {
+        "normal_depth": 0,
+        "baseline_depth": 0,
+        "failed_jobs": 0,
+        "normal_checks_completed": 20,
+        "normal_execution_max_ms": 0,
+        "baseline_runs": 5,
+        "baseline_completed": 5,
+        "services_without_a_new_check": 0,
+        "normal_http_latency_mean_ms": 31.4,
+        "normal_http_latency_max_ms": 53,
+        "baseline_duration_mean_ms": 38800,
+        "baseline_duration_max_ms": 44000,
+        "draft_baselines": 15,
+        "approved_baselines": 0,
+        "active_baselines": 0,
+        "fixed_cadence_enabled": false,
+        "slo_auto_preparation_enabled": false,
+        "baseline_health": {
+          "status": "healthy",
+          "startup_grace": false,
+          "delayed": false,
+          "last_heartbeat": "2026-11-18T13:53:54.000000Z",
+          "pending_jobs": 0,
+          "processing_jobs": 0,
+          "failed_jobs": 0,
+          "oldest_pending_seconds": null,
+          "last_successful_preparation": "2026-11-18 13:53:52",
+          "backlog_limit": 10
+        },
+        "monitoring_opportunities": 0
+      },
+      "timings": {
+        "default": {
+          "count": 20,
+          "mean_ms": 171.3272098,
+          "max_ms": 768.506162,
+          "p95_ms": 207.178052
+        },
+        "baseline-preparation": {
+          "count": 5,
+          "mean_ms": 38926.238221,
+          "max_ms": 44397.420353,
+          "p95_ms": 43507.64816
+        }
+      },
+      "sampled_resource_peaks": {
+        "normal_worker": {
+          "sampled_cpu_percent_max": 9.52,
+          "sampled_memory_mib_max": 64.23,
+          "samples": 58
+        },
+        "mysql": {
+          "sampled_cpu_percent_max": 52.87,
+          "sampled_memory_mib_max": 618.4,
+          "samples": 58
+        },
+        "baseline_worker": {
+          "sampled_cpu_percent_max": 52.46,
+          "sampled_memory_mib_max": 138.1,
+          "samples": 58
+        }
+      }
+    },
+    "outage": {
+      "daily_dispatch": {
+        "daily_runs": [
+          {
+            "eligible": 20,
+            "dispatched": 5,
+            "duplicate": 0,
+            "skipped": 0,
+            "deferred": 15,
+            "failed": 0
+          },
+          {
+            "eligible": 20,
+            "dispatched": 5,
+            "duplicate": 5,
+            "skipped": 0,
+            "deferred": 10,
+            "failed": 0
+          },
+          {
+            "eligible": 20,
+            "dispatched": 0,
+            "duplicate": 10,
+            "skipped": 0,
+            "deferred": 10,
+            "failed": 0
+          },
+          {
+            "eligible": 20,
+            "dispatched": 0,
+            "duplicate": 10,
+            "skipped": 0,
+            "deferred": 10,
+            "failed": 0
+          },
+          {
+            "eligible": 20,
+            "dispatched": 0,
+            "duplicate": 10,
+            "skipped": 0,
+            "deferred": 10,
+            "failed": 0
+          },
+          {
+            "eligible": 20,
+            "dispatched": 0,
+            "duplicate": 10,
+            "skipped": 0,
+            "deferred": 10,
+            "failed": 0
+          },
+          {
+            "eligible": 20,
+            "dispatched": 0,
+            "duplicate": 10,
+            "skipped": 0,
+            "deferred": 10,
+            "failed": 0
+          },
+          {
+            "eligible": 20,
+            "dispatched": 0,
+            "duplicate": 10,
+            "skipped": 0,
+            "deferred": 10,
+            "failed": 0
+          },
+          {
+            "eligible": 20,
+            "dispatched": 0,
+            "duplicate": 10,
+            "skipped": 0,
+            "deferred": 10,
+            "failed": 0
+          },
+          {
+            "eligible": 20,
+            "dispatched": 0,
+            "duplicate": 10,
+            "skipped": 0,
+            "deferred": 10,
+            "failed": 0
+          },
+          {
+            "eligible": 20,
+            "dispatched": 0,
+            "duplicate": 10,
+            "skipped": 0,
+            "deferred": 10,
+            "failed": 0
+          },
+          {
+            "eligible": 20,
+            "dispatched": 0,
+            "duplicate": 10,
+            "skipped": 0,
+            "deferred": 10,
+            "failed": 0
+          },
+          {
+            "eligible": 20,
+            "dispatched": 0,
+            "duplicate": 10,
+            "skipped": 0,
+            "deferred": 10,
+            "failed": 0
+          },
+          {
+            "eligible": 20,
+            "dispatched": 0,
+            "duplicate": 10,
+            "skipped": 0,
+            "deferred": 10,
+            "failed": 0
+          },
+          {
+            "eligible": 20,
+            "dispatched": 0,
+            "duplicate": 10,
+            "skipped": 0,
+            "deferred": 10,
+            "failed": 0
+          }
+        ],
+        "depth": 10
+      },
+      "normal_dispatch": {
+        "normal_dispatch_ms": 1145.79,
+        "baseline_dispatch_ms": 0,
+        "normal_depth": 17,
+        "baseline_depth": 10,
+        "baseline_command": null
+      },
+      "report": {
+        "normal_depth": 0,
+        "baseline_depth": 10,
+        "failed_jobs": 0,
+        "normal_checks_completed": 20,
+        "normal_execution_max_ms": 1000,
+        "baseline_runs": 10,
+        "baseline_completed": 0,
+        "services_without_a_new_check": 0,
+        "normal_http_latency_mean_ms": 21.85,
+        "normal_http_latency_max_ms": 34,
+        "baseline_duration_mean_ms": null,
+        "baseline_duration_max_ms": null,
+        "draft_baselines": 0,
+        "approved_baselines": 0,
+        "active_baselines": 0,
+        "fixed_cadence_enabled": false,
+        "slo_auto_preparation_enabled": false,
+        "baseline_health": {
+          "status": "warning",
+          "startup_grace": false,
+          "delayed": true,
+          "last_heartbeat": "2026-11-18T13:54:09.000000Z",
+          "pending_jobs": 10,
+          "processing_jobs": 0,
+          "failed_jobs": 0,
+          "oldest_pending_seconds": 1209606,
+          "last_successful_preparation": null,
+          "backlog_limit": 10
+        },
+        "monitoring_opportunities": 0
+      },
+      "idle_heartbeat_advanced": true
+    },
+    "restart_recovery": {
+      "interrupted": {
+        "normal_depth": 0,
+        "baseline_depth": 10,
+        "failed_jobs": 0,
+        "normal_checks_completed": 20,
+        "normal_execution_max_ms": 1000,
+        "baseline_runs": 10,
+        "baseline_completed": 0,
+        "services_without_a_new_check": 0,
+        "normal_http_latency_mean_ms": 21.85,
+        "normal_http_latency_max_ms": 34,
+        "baseline_duration_mean_ms": null,
+        "baseline_duration_max_ms": null,
+        "draft_baselines": 0,
+        "approved_baselines": 0,
+        "active_baselines": 0,
+        "fixed_cadence_enabled": false,
+        "slo_auto_preparation_enabled": false,
+        "baseline_health": {
+          "status": "warning",
+          "startup_grace": false,
+          "delayed": true,
+          "last_heartbeat": "2026-11-18T13:54:55.000000Z",
+          "pending_jobs": 9,
+          "processing_jobs": 1,
+          "failed_jobs": 0,
+          "oldest_pending_seconds": 1209610,
+          "last_successful_preparation": null,
+          "backlog_limit": 10
+        },
+        "monitoring_opportunities": 0
+      },
+      "report": {
+        "normal_depth": 0,
+        "baseline_depth": 0,
+        "failed_jobs": 0,
+        "normal_checks_completed": 41,
+        "normal_execution_max_ms": 1000,
+        "baseline_runs": 20,
+        "baseline_completed": 20,
+        "services_without_a_new_check": 0,
+        "normal_http_latency_mean_ms": 26.29268292682927,
+        "normal_http_latency_max_ms": 113,
+        "baseline_duration_mean_ms": 38800,
+        "baseline_duration_max_ms": 139000,
+        "draft_baselines": 60,
+        "approved_baselines": 0,
+        "active_baselines": 0,
+        "fixed_cadence_enabled": false,
+        "slo_auto_preparation_enabled": false,
+        "baseline_health": {
+          "status": "healthy",
+          "startup_grace": false,
+          "delayed": false,
+          "last_heartbeat": "2026-11-18T14:06:47.000000Z",
+          "pending_jobs": 0,
+          "processing_jobs": 0,
+          "failed_jobs": 0,
+          "oldest_pending_seconds": null,
+          "last_successful_preparation": "2026-11-18 14:06:46",
+          "backlog_limit": 10
+        },
+        "monitoring_opportunities": 0
+      },
+      "dispatches": [
+        {
+          "normal_dispatch_ms": 0.037,
+          "baseline_dispatch_ms": 130.175,
+          "normal_depth": 0,
+          "baseline_depth": 5,
+          "baseline_command": "eligible: 20; dispatched: 5; duplicate: 0; skipped: 10; deferred: 5; failed: 0.\nBaseline preparation is delayed by the per-run or backlog limit; deferred services remain eligible for a future fair dispatch."
+        },
+        {
+          "normal_dispatch_ms": 0.036,
+          "baseline_dispatch_ms": 124.32,
+          "normal_depth": 0,
+          "baseline_depth": 5,
+          "baseline_command": "eligible: 20; dispatched: 5; duplicate: 0; skipped: 15; deferred: 0; failed: 0."
+        },
+        {
+          "normal_dispatch_ms": 0.033,
+          "baseline_dispatch_ms": 80.269,
+          "normal_depth": 0,
+          "baseline_depth": 0,
+          "baseline_command": "eligible: 20; dispatched: 0; duplicate: 0; skipped: 20; deferred: 0; failed: 0."
+        },
+        {
+          "normal_dispatch_ms": 0.036,
+          "baseline_dispatch_ms": 81.859,
+          "normal_depth": 1,
+          "baseline_depth": 0,
+          "baseline_command": "eligible: 20; dispatched: 0; duplicate: 0; skipped: 20; deferred: 0; failed: 0."
+        }
+      ],
+      "timings": {
+        "default": {
+          "count": 41,
+          "mean_ms": 661.1748340731707,
+          "max_ms": 21323.455255,
+          "p95_ms": 232.997869
+        },
+        "baseline-preparation": {
+          "count": 20,
+          "mean_ms": 33595.29901,
+          "max_ms": 44087.14003,
+          "p95_ms": 39868.361339
+        }
+      },
+      "sampled_resource_peaks": {
+        "normal_worker": {
+          "sampled_cpu_percent_max": 8.2,
+          "sampled_memory_mib_max": 65.13,
+          "samples": 209
+        },
+        "mysql": {
+          "sampled_cpu_percent_max": 72.76,
+          "sampled_memory_mib_max": 631.5,
+          "samples": 209
+        },
+        "baseline_worker": {
+          "sampled_cpu_percent_max": 54.06,
+          "sampled_memory_mib_max": 138.3,
+          "samples": 209
+        }
+      }
+    },
+    "concurrent_schedulers": {
+      "commands": [
+        "eligible: 20; dispatched: 5; duplicate: 5; skipped: 0; deferred: 10; failed: 0.\nBaseline preparation is delayed by the per-run or backlog limit; deferred services remain eligible for a future fair dispatch.",
+        "eligible: 20; dispatched: 5; duplicate: 0; skipped: 0; deferred: 15; failed: 0.\nBaseline preparation is delayed by the per-run or backlog limit; deferred services remain eligible for a future fair dispatch.",
+        "eligible: 20; dispatched: 0; duplicate: 10; skipped: 0; deferred: 10; failed: 0.\nBaseline preparation is delayed by the per-run or backlog limit; deferred services remain eligible for a future fair dispatch.",
+        "eligible: 20; dispatched: 0; duplicate: 10; skipped: 0; deferred: 10; failed: 0.\nBaseline preparation is delayed by the per-run or backlog limit; deferred services remain eligible for a future fair dispatch.",
+        "eligible: 20; dispatched: 0; duplicate: 10; skipped: 0; deferred: 10; failed: 0.\nBaseline preparation is delayed by the per-run or backlog limit; deferred services remain eligible for a future fair dispatch.",
+        "eligible: 20; dispatched: 0; duplicate: 10; skipped: 0; deferred: 10; failed: 0.\nBaseline preparation is delayed by the per-run or backlog limit; deferred services remain eligible for a future fair dispatch.",
+        "eligible: 20; dispatched: 0; duplicate: 10; skipped: 0; deferred: 10; failed: 0.\nBaseline preparation is delayed by the per-run or backlog limit; deferred services remain eligible for a future fair dispatch.",
+        "eligible: 20; dispatched: 0; duplicate: 10; skipped: 0; deferred: 10; failed: 0.\nBaseline preparation is delayed by the per-run or backlog limit; deferred services remain eligible for a future fair dispatch."
+      ],
+      "report": {
+        "normal_depth": 0,
+        "baseline_depth": 10,
+        "failed_jobs": 0,
+        "normal_checks_completed": 0,
+        "normal_execution_max_ms": null,
+        "baseline_runs": 10,
+        "baseline_completed": 0,
+        "services_without_a_new_check": 20,
+        "normal_http_latency_mean_ms": null,
+        "normal_http_latency_max_ms": null,
+        "baseline_duration_mean_ms": null,
+        "baseline_duration_max_ms": null,
+        "draft_baselines": 0,
+        "approved_baselines": 0,
+        "active_baselines": 0,
+        "fixed_cadence_enabled": false,
+        "slo_auto_preparation_enabled": false,
+        "baseline_health": {
+          "status": "warning",
+          "startup_grace": false,
+          "delayed": true,
+          "last_heartbeat": "2026-11-18T14:06:47.000000Z",
+          "pending_jobs": 10,
+          "processing_jobs": 0,
+          "failed_jobs": 0,
+          "oldest_pending_seconds": 1,
+          "last_successful_preparation": null,
+          "backlog_limit": 10
+        },
+        "monitoring_opportunities": 0
+      }
+    }
+  },
+  "evidence_note": "Sanitized acceptance measurements; runtime identifiers and raw resource dumps excluded."
+}

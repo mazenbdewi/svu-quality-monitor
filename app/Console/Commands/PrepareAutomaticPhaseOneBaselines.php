@@ -14,7 +14,22 @@ class PrepareAutomaticPhaseOneBaselines extends Command
     public function handle(AutomaticPhaseOneBaselineService $preparation): int
     {
         $counts = $preparation->dispatchDue();
-        $this->line("Eligible: {$counts['eligible']}; dispatched: {$counts['dispatched']}.");
+        $this->line(implode('; ', [
+            "eligible: {$counts['eligible']}",
+            "dispatched: {$counts['dispatched']}",
+            "duplicate: {$counts['duplicate']}",
+            "skipped: {$counts['skipped']}",
+            "deferred: {$counts['deferred']}",
+            "failed: {$counts['failed']}",
+        ]).'.');
+        if ($counts['deferred'] > 0) {
+            $this->warn('Baseline preparation is delayed by the per-run or backlog limit; deferred services remain eligible for a future fair dispatch.');
+        }
+        if ($counts['failed'] > 0) {
+            $this->error('One or more baseline preparation jobs could not be enqueued.');
+
+            return self::FAILURE;
+        }
 
         return self::SUCCESS;
     }

@@ -2,6 +2,7 @@
 
 namespace App\Jobs;
 
+use App\Models\BaselinePreparationRun;
 use App\Models\User;
 use App\Services\Baselines\AutomaticPhaseOneBaselineService;
 use Illuminate\Bus\Queueable;
@@ -10,6 +11,7 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use Throwable;
 
 class PrepareAutomaticPhaseOneBaseline implements ShouldBeUnique, ShouldQueue
 {
@@ -29,6 +31,7 @@ class PrepareAutomaticPhaseOneBaseline implements ShouldBeUnique, ShouldQueue
         public readonly string $cutoff,
         public readonly string $timezone,
         public readonly string $policyVersion,
+        public readonly ?int $preparationRunId = null,
     ) {
         $this->onQueue('baseline-preparation');
     }
@@ -40,11 +43,46 @@ class PrepareAutomaticPhaseOneBaseline implements ShouldBeUnique, ShouldQueue
 
     public function handle(AutomaticPhaseOneBaselineService $service): void
     {
+        // Pre-upgrade serialized jobs have no promoted run-ID property.
+        $runId = $this->preparationRunId ?? null;
+        $run = $runId === null ? null : BaselinePreparationRun::query()->find($runId);
+        if ($run?->status === 'completed') {
+            return;
+        }
+        $run?->update([
+            'status' => 'processing',
+            'started_at' => $run->started_at ?? now(),
+            'attempts' => $run->attempts + 1,
+            'last_error' => null,
+        ]);
+
         $actor = $this->actorId === null ? null : User::query()->find($this->actorId);
         if ($this->actorId !== null && ! $actor) {
+            $run?->update(['status' => 'completed', 'completed_at' => now()]);
+
             return;
         }
 
-        $service->prepareOne($this->serviceId, $actor, $this->cutoff, $this->timezone, $this->policyVersion);
+        $result = $service->prepareOne($this->serviceId, $actor, $this->cutoff, $this->timezone, $this->policyVersion);
+        $run?->update([
+            'status' => 'completed',
+            'created_drafts' => count($result['created']),
+            'completed_at' => now(),
+        ]);
+    }
+
+    public function failed(?Throwable $exception): void
+    {
+        if (($this->preparationRunId ?? null) === null) {
+            return;
+        }
+
+        BaselinePreparationRun::query()->whereKey($this->preparationRunId)->update([
+            'status' => 'failed',
+            'completed_at' => now(),
+            'last_error' => $exception === null
+                ? 'Queue job failed without an exception.'
+                : 'Preparation failed ('.class_basename($exception).').',
+        ]);
     }
 }

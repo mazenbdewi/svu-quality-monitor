@@ -13,10 +13,27 @@ class BackgroundHealthAlertService
 
     public function check(): void
     {
-        foreach (['scheduler' => $this->health->schedulerStatus(), 'queue' => $this->health->queueStatus()] as $component => $status) {
+        $baseline = $this->health->baselineQueueSnapshot();
+        $statuses = [
+            'scheduler' => ['status' => $this->health->schedulerStatus(), 'alertable' => true],
+            'queue' => ['status' => $this->health->queueStatus(), 'alertable' => true],
+            // A missing heartbeat during the explicit startup grace period
+            // is visible as warning but must not open or close an alert cycle.
+            'baseline_preparation' => [
+                'status' => $baseline['status'],
+                'alertable' => ! $baseline['startup_grace'] || $baseline['delayed'],
+            ],
+        ];
+        foreach ($statuses as $component => $health) {
+            if (! $health['alertable']) {
+                continue;
+            }
+            $status = $health['status'];
             DB::transaction(function () use ($component, $status): void {
                 $state = SystemHealthAlertState::query()->lockForUpdate()->firstOrCreate(['component' => $component], ['status' => 'healthy']);
-                $isProblem = $status === 'down';
+                $isProblem = $component === 'baseline_preparation'
+                    ? in_array($status, ['warning', 'unavailable'], true)
+                    : $status === 'down';
                 if ($isProblem && $state->status !== 'down') {
                     $state->update(['status' => 'down', 'opened_at' => now(), 'resolved_at' => null]);
                     event(new SystemHealthProblemDetected($component, $state->opened_at->toIso8601String()));

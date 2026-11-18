@@ -28,6 +28,7 @@ class SystemDiagnosticsService
             'migrations' => ['database', true, fn () => $this->migrations()],
             'scheduler' => ['background', true, fn () => $this->result($this->health->schedulerStatus())],
             'queue' => ['background', true, fn () => $this->queue()],
+            'baseline_queue' => ['background', true, fn () => $this->baselineQueue()],
             'monitoring' => ['monitoring', false, fn () => $this->monitoring()],
             'backup' => ['backup', false, fn () => $this->backup()],
             'backup_ready' => ['backup', false, fn () => $this->backupReady()],
@@ -102,6 +103,15 @@ class SystemDiagnosticsService
         }
 
         return $this->result($status, $counts);
+    }
+
+    protected function baselineQueue(): array
+    {
+        $snapshot = $this->health->baselineQueueSnapshot();
+        $status = $snapshot['status'] === 'unavailable' ? 'down' : $snapshot['status'];
+        unset($snapshot['status'], $snapshot['startup_grace'], $snapshot['delayed']);
+
+        return $this->result($status, $snapshot);
     }
 
     protected function monitoring(): array

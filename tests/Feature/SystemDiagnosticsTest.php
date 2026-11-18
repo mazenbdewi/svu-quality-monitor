@@ -31,9 +31,10 @@ class SystemDiagnosticsTest extends TestCase
         parent::setUp();
         $this->seed(RolesAndPermissionsSeeder::class);
         User::factory()->create(['is_active' => true])->assignRole('super_admin');
-        config(['queue.default' => 'database', 'queue.failed.database' => 'sqlite', 'backup.directory' => sys_get_temp_dir(), 'diagnostics.minimum_free_bytes' => 0]);
+        config(['queue.default' => 'database', 'queue.failed.database' => config('database.default'), 'backup.directory' => sys_get_temp_dir(), 'diagnostics.minimum_free_bytes' => 0]);
         app(SystemHealthService::class)->recordSchedulerHeartbeat();
         app(SystemHealthService::class)->recordQueueHeartbeat();
+        app(SystemHealthService::class)->recordBaselineQueueHeartbeat();
         $this->mock(BackupService::class)->shouldReceive('health')->andReturn(['status' => 'healthy', 'age' => 1, 'success' => ['finished_at' => now()->toIso8601String()], 'failure' => null]);
     }
 

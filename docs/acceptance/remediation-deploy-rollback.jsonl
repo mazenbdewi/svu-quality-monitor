@@ -1,0 +1,2 @@
+{"at": "2026-11-18T14:17:36.754671+00:00", "event": "rollback_images_started", "warning": "Database is NOT rolled back; maintenance will remain enabled"}
+{"at": "2026-11-18T14:19:39.815919+00:00", "event": "rollback_images_completed", "action": "Keep workers stopped. Review schema compatibility and pre-update backup before artisan up."}

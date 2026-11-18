@@ -1,0 +1,6 @@
+{
+  "cleanup_refused": true,
+  "queue_rows_before": 10,
+  "queue_rows_after": 10,
+  "ledger_rows_after": 10
+}

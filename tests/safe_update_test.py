@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 spec = importlib.util.spec_from_file_location("safe_update", Path(__file__).parents[1] / "scripts/safe-update.py")
 module = importlib.util.module_from_spec(spec)
@@ -28,6 +28,8 @@ class FakeUpdate(module.SafeUpdate):
         self.commands.append(line)
         if self.fail and self.fail in line:
             raise RuntimeError("simulated failure")
+        if "config --format json" in line:
+            return json.dumps({"name": "isolated", "services": {s: {} for s in self.services}})
         if "backup:create" in line:
             return json.dumps({"path": "/private/pre-update", "verified": True})
         if "migrate:status" in line:
@@ -44,6 +46,54 @@ class FakeUpdate(module.SafeUpdate):
 
 
 class UpdateTests(unittest.TestCase):
+    def test_http_readiness_retries_connection_refused_until_nginx_is_ready(self):
+        with tempfile.TemporaryDirectory() as folder:
+            update = FakeUpdate(folder)
+            response = Mock()
+            response.__enter__ = Mock(return_value=Mock(status=200))
+            response.__exit__ = Mock(return_value=False)
+            with patch.object(module.urllib.request, "urlopen", side_effect=[module.urllib.error.URLError("starting"), response]) as request, patch.object(module.time, "sleep"):
+                module.SafeUpdate.http(update)
+            self.assertEqual(request.call_count, 2)
+
+    def test_http_readiness_fails_when_the_grace_expires(self):
+        with tempfile.TemporaryDirectory() as folder:
+            update = FakeUpdate(folder)
+            with patch.object(module.urllib.request, "urlopen", side_effect=module.urllib.error.URLError("unavailable")), patch.object(module.time, "monotonic", side_effect=[0, 31]):
+                with self.assertRaisesRegex(RuntimeError, "Login HTTP check failed"):
+                    module.SafeUpdate.http(update)
+
+    def test_first_upgrade_allows_missing_baseline_worker_but_requires_core_services(self):
+        with tempfile.TemporaryDirectory() as folder:
+            update = FakeUpdate(folder)
+            update.dc = Mock(side_effect=lambda *args: json.dumps({"services": {s: {} for s in update.services}})
+                             if args == ("--profile", "*", "config", "--format", "json") else
+                             "" if args == ("ps", "-q", "baseline_queue") else "container")
+            update.recovery_image = Mock(return_value="sha256:old")
+            update.run = Mock(return_value="ok")
+            update.artisan = Mock(return_value="ok")
+            update.http = Mock()
+            module.SafeUpdate.preflight(update)
+            self.assertNotIn("baseline_queue", update.previous)
+            self.assertEqual(set(update.previous), set(update.required_existing_services))
+
+    def test_active_optional_worker_is_preserved_and_inactive_profile_is_not_enabled(self):
+        for active in [False, True]:
+            with tempfile.TemporaryDirectory() as folder:
+                update = FakeUpdate(folder)
+                definition = {"services": {**{s: {} for s in update.services}, "slo_queue": {"profiles": ["slo-preparation"]}}}
+                update.dc = Mock(side_effect=lambda *args: json.dumps(definition)
+                                 if args == ("--profile", "*", "config", "--format", "json") else
+                                 ("optional-container" if active else "") if args == ("ps", "-q", "slo_queue") else "container")
+                update.recovery_image = Mock(return_value="sha256:old")
+                update.run = Mock(return_value="ok")
+                update.artisan = Mock(return_value="ok")
+                update.http = Mock()
+                module.SafeUpdate.preflight(update)
+                update.dc.assert_any_call("--profile", "*", "config", "--format", "json")
+                self.assertEqual("slo_queue" in update.previous, active)
+                self.assertEqual("slo_queue" in update.workers, active)
+
     def test_workers_leave_maintenance_before_heartbeat_check_while_http_stays_closed(self):
         with tempfile.TemporaryDirectory() as folder:
             update = FakeUpdate(folder)
@@ -110,6 +160,8 @@ class UpdateTests(unittest.TestCase):
                     self.assertIn("--no-deps", command)
                     self.assertNotIn(" db", command)
             self.assertTrue(any("queue:restart" in c for c in commands))
+            self.assertTrue(any("baseline_queue" in c and " up " in c for c in commands))
+            self.assertFalse(any("db:seed" in c for c in commands))
 
     def test_http_failure_rolls_back_images_but_not_database_and_leaves_workers_stopped(self):
         with tempfile.TemporaryDirectory() as folder:

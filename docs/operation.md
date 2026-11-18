@@ -107,3 +107,71 @@ npm run build
 ```bash
 php artisan schedule:list
 ```
+
+
+## Automatic Phase I preparation worker
+
+Keep `MONITORING_FIXED_CADENCE_ENABLED=false` and
+`SLO_AUTO_PREPARATION_ENABLED=false` for this release. Automatic Phase I draft
+preparation runs independently through `baselines:prepare-due` at 00:30 in the
+institution timezone and the dedicated `baseline_queue` service. It creates
+reviewable drafts only. Start it with the normal application Compose services;
+it has no optional profile.
+
+`BASELINE_PREPARATION_BACKLOG_LIMIT` (default 25) bounds retained pending and
+reserved work. The scheduler serializes backlog/dispatch decisions with a durable
+SQL row and commits queue rows, run identities, and its round-robin cursor in one
+transaction. Each invocation enqueues at most five successful unique jobs. Both
+scheduled and researcher-triggered preparation use this path. A worker outage
+cannot grow duplicate jobs after cache lock expiration or on later days.
+
+System Operations and diagnostics show a dedicated heartbeat, pending jobs,
+reserved jobs, retained failures, oldest pending age, last successful draft
+preparation, and backlog limit. A reservation is evidence of ownership, not proof
+that a process is alive; after interruption it may remain reserved until the
+normal queue retry interval (90 seconds by default). The label states this
+limitation. Idle workers continue emitting heartbeats. Default warning thresholds
+are 20 queued/reserved jobs or 3,600 seconds for the oldest pending job; startup
+grace is 180 seconds. Configure these with
+`BASELINE_PREPARATION_BACKLOG_WARNING`,
+`BASELINE_PREPARATION_OLDEST_WARNING_SECONDS`, and
+`BASELINE_PREPARATION_STARTUP_GRACE_SECONDS`.
+
+Existing background-health alerts open a baseline incident for a stale worker,
+excessive backlog, old pending work, or retained failures. They recover when the
+worker and queue return to healthy conditions. Startup grace suppresses a missing
+first-heartbeat alert, while genuine backlog problems remain alertable. Both the
+operations UI and baseline notifications support Arabic and English.
+
+Investigate a delayed queue with:
+
+```bash
+docker compose ps baseline_queue
+docker compose logs --tail=100 baseline_queue
+docker compose exec app php artisan baselines:prepare-due
+docker compose exec app php artisan queue:failed
+docker compose exec app php artisan system:check-background-health
+```
+
+After fixing a failure, retry its specific UUID with `queue:retry <uuid>`. Never
+purge failed jobs or pending work to make a health check green. Keep the dedicated
+worker restart policy enabled: Laravel intentionally exits workers that exceed
+its recycling memory threshold. The container policy restarts them; the SQL queue
+and run ledger preserve work. See [safe-update.md](safe-update.md) before rollback
+with pending baseline jobs.
+
+
+### Known monitoring contention
+
+During isolated backlog recovery, one normal monitoring job took **21.3 seconds**
+while Phase I sample archiving held the same service row. The recovery p95 was
+233 ms; this does not eliminate the observed wait. Budget for this contention
+when draining a baseline backlog and watch normal queue latency alongside the
+baseline worker. These shared-host measurements are not a production latency
+or capacity guarantee. Historical measurements and approved research decisions
+remain intact; do not purge work to reduce the displayed backlog.
+
+Production uses `/var/www/svu-quality-monitor` and HTTP port `8080`. Shared
+`CACHE_STORE=file` is supported through the common `application_storage` volume;
+durable dispatch state and locking use SQL independently of the cache. See
+[safe-update.md](safe-update.md) for the direct upgrade from production `d15905e`.

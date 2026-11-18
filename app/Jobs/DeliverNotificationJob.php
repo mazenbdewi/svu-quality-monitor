@@ -93,6 +93,15 @@ class DeliverNotificationJob implements ShouldQueue
         if (in_array($delivery->event_type, ['telegram_test', 'email_test'], true)) {
             return [config('app.name').' — '.ucfirst($delivery->channel).' test', ['Notification test requested successfully.', 'Server time: '.data_get($delivery->context, 'server_time'), 'Environment: '.data_get($delivery->context, 'environment')]];
         }
+        if (data_get($delivery->context, 'component') === 'baseline_preparation') {
+            $recovered = $delivery->event_type === 'health_resolved';
+            $lines = [__('monitoring.baseline_alerts.'.($recovered ? 'recovered' : 'delayed'))];
+            foreach (['pending_jobs', 'processing_jobs', 'failed_jobs', 'oldest_pending_seconds'] as $field) {
+                $lines[] = __('monitoring.operations.health.baseline_queue.'.$field).': '.(data_get($delivery->context, $field) ?? __('monitoring.operations.health.unavailable'));
+            }
+
+            return [__('monitoring.baseline_alerts.'.($recovered ? 'recovered_title' : 'problem_title')), $lines];
+        }
         $component = ucfirst((string) data_get($delivery->context, 'component'));
 
         return [$delivery->event_type === 'health_resolved' ? '🟢 Background Service Recovered' : '🔴 Background Service Problem', ["Component: {$component}", 'Status: '.($delivery->event_type === 'health_resolved' ? 'Healthy' : 'Down')]];

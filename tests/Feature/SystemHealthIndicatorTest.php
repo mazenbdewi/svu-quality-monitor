@@ -4,7 +4,11 @@ namespace Tests\Feature;
 
 use App\Filament\Pages\SystemOperationsPage;
 use App\Livewire\SystemHealthIndicator;
+use App\Models\BaselinePreparationRun;
+use App\Models\MonitoredService;
+use App\Models\SystemHealthAlertState;
 use App\Models\User;
+use App\Services\BackgroundHealthAlertService;
 use App\Services\SystemHealthService;
 use Carbon\Carbon;
 use Database\Seeders\RolesAndPermissionsSeeder;
@@ -41,6 +45,85 @@ class SystemHealthIndicatorTest extends TestCase
 
         Event::dispatch(new Looping('database', 'default'));
         $this->assertTrue(Cache::has('system-health:queue:last-heartbeat'));
+    }
+
+    public function test_baseline_worker_heartbeat_is_independent_and_idle_safe(): void
+    {
+        Cache::flush();
+        Event::dispatch(new Looping('database', 'baseline-preparation'));
+
+        $this->assertTrue(Cache::has('system-health:baseline-queue:last-heartbeat'));
+        $this->assertFalse(Cache::has('system-health:queue:last-heartbeat'));
+        config()->set('queue.default', 'database');
+        $this->assertSame('healthy', app(SystemHealthService::class)->baselineQueueSnapshot()['status']);
+    }
+
+    public function test_baseline_queue_reports_backlog_processing_failures_age_and_last_success(): void
+    {
+        config()->set('queue.default', 'database');
+        config()->set('monitoring.spc.automatic_baseline.oldest_pending_warning_seconds', 60);
+        app(SystemHealthService::class)->recordBaselineQueueHeartbeat();
+        DB::table('jobs')->insert([
+            ['queue' => 'baseline-preparation', 'payload' => '{}', 'attempts' => 0, 'reserved_at' => null, 'available_at' => now()->timestamp, 'created_at' => now()->subMinutes(5)->timestamp],
+            ['queue' => 'baseline-preparation', 'payload' => '{}', 'attempts' => 1, 'reserved_at' => now()->timestamp, 'available_at' => now()->timestamp, 'created_at' => now()->subMinute()->timestamp],
+        ]);
+        DB::table('failed_jobs')->insert([
+            'uuid' => 'failed-baseline', 'connection' => 'database', 'queue' => 'baseline-preparation',
+            'payload' => '{}', 'exception' => 'synthetic', 'failed_at' => now(),
+        ]);
+        $service = MonitoredService::factory()->create();
+        BaselinePreparationRun::create([
+            'monitored_service_id' => $service->id, 'policy_version' => 'phase1-automatic-v1',
+            'cutoff_at' => now()->startOfDay(), 'analysis_timezone' => 'Asia/Damascus',
+            'status' => 'completed', 'created_drafts' => 3, 'dispatched_at' => now()->subMinute(), 'completed_at' => now(),
+        ]);
+
+        $snapshot = app(SystemHealthService::class)->baselineQueueSnapshot();
+
+        $this->assertSame('warning', $snapshot['status']);
+        $this->assertSame(1, $snapshot['pending_jobs']);
+        $this->assertSame(1, $snapshot['processing_jobs']);
+        $this->assertSame(1, $snapshot['failed_jobs']);
+        $this->assertGreaterThanOrEqual(300, $snapshot['oldest_pending_seconds']);
+        $this->assertNotNull($snapshot['last_successful_preparation']);
+    }
+
+    public function test_baseline_worker_startup_grace_then_unavailable_and_recovery(): void
+    {
+        config()->set('queue.default', 'database');
+        Cache::flush();
+        Carbon::setTestNow('2026-11-18 12:00:00 UTC');
+        $health = app(SystemHealthService::class);
+        $health->expectBaselineQueue();
+        $this->assertSame('warning', $health->baselineQueueStatus());
+
+        Carbon::setTestNow(now()->addSeconds(config('monitoring.spc.automatic_baseline.startup_grace_seconds') + 1));
+        $this->assertSame('unavailable', $health->baselineQueueStatus());
+        $health->recordBaselineQueueHeartbeat();
+        $this->assertSame('healthy', $health->baselineQueueStatus());
+    }
+
+    public function test_startup_grace_suppresses_alert_but_excessive_backlog_alerts_and_recovers(): void
+    {
+        config()->set('queue.default', 'database');
+        config()->set('monitoring.spc.automatic_baseline.oldest_pending_warning_seconds', 60);
+        Cache::flush();
+        $health = app(SystemHealthService::class);
+        $health->expectBaselineQueue();
+        app(BackgroundHealthAlertService::class)->check();
+        $this->assertDatabaseMissing('system_health_alert_states', ['component' => 'baseline_preparation']);
+
+        $health->recordBaselineQueueHeartbeat();
+        DB::table('jobs')->insert([
+            'queue' => 'baseline-preparation', 'payload' => '{}', 'attempts' => 0,
+            'reserved_at' => null, 'available_at' => now()->timestamp, 'created_at' => now()->subMinutes(5)->timestamp,
+        ]);
+        app(BackgroundHealthAlertService::class)->check();
+        $this->assertSame('down', SystemHealthAlertState::where('component', 'baseline_preparation')->sole()->status);
+
+        DB::table('jobs')->where('queue', 'baseline-preparation')->delete();
+        app(BackgroundHealthAlertService::class)->check();
+        $this->assertSame('healthy', SystemHealthAlertState::where('component', 'baseline_preparation')->sole()->status);
     }
 
     public function test_slo_queue_status_exposes_stopped_worker_and_pending_backlog_without_masking_monitoring(): void
@@ -80,6 +163,8 @@ class SystemHealthIndicatorTest extends TestCase
             config()->set('monitoring.slo.automatic_preparation_enabled', false);
             $this->get(SystemOperationsPage::getUrl())->assertOk()
                 ->assertSee(__('monitoring.operations.health.slo_queue.title'))
+                ->assertSee(__('monitoring.operations.health.baseline_queue.title'))
+                ->assertSee(__('monitoring.operations.health.baseline_queue.pending_jobs'))
                 ->assertSee(__('monitoring.operations.health.statuses.disabled'));
 
             config()->set('monitoring.slo.automatic_preparation_enabled', true);
@@ -196,6 +281,7 @@ class SystemHealthIndicatorTest extends TestCase
         ];
         $systemHealth = Mockery::mock(SystemHealthService::class);
         $systemHealth->shouldReceive('snapshot')->once()->andReturn($snapshot);
+        $systemHealth->shouldReceive('baselineQueueSnapshot')->once()->andReturn(['status' => 'warning']);
         $this->app->instance(SystemHealthService::class, $systemHealth);
 
         Livewire::test(SystemHealthIndicator::class)

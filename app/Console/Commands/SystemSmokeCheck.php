@@ -31,7 +31,11 @@ class SystemSmokeCheck extends Command
             $admin = User::where('is_active', true)->role('super_admin')->get()->contains(fn ($u) => $u->canAccessPanel(Filament::getPanel('admin')) && $u->can('users.view'));
             $checks = ['database' => true, 'schema' => $tables, 'migrations' => $pending === [], 'cache' => $cache, 'storage' => $storage, 'active_super_admin' => $admin];
             if (! $this->option('static')) {
-                $checks += ['scheduler' => $health->schedulerStatus() === 'healthy', 'queue' => $health->queueStatus() === 'healthy'];
+                $checks += [
+                    'scheduler' => $health->schedulerStatus() === 'healthy',
+                    'queue' => $health->queueStatus() === 'healthy',
+                    'baseline_queue' => $health->baselineQueueStatus() === 'healthy',
+                ];
             }
             $this->line(json_encode($checks));
 

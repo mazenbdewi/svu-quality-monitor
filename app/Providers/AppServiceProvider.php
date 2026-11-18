@@ -61,7 +61,9 @@ class AppServiceProvider extends ServiceProvider
             }
         });
         Queue::looping(function (Looping $event): void {
-            if ($event->queue === 'slo-calibration') {
+            if ($event->queue === 'baseline-preparation') {
+                app(SystemHealthService::class)->recordBaselineQueueHeartbeat();
+            } elseif ($event->queue === 'slo-calibration') {
                 app(SystemHealthService::class)->recordSloQueueHeartbeat();
             } elseif ($event->queue === config('queue.connections.database.queue', 'default')) {
                 app(SystemHealthService::class)->recordQueueHeartbeat();

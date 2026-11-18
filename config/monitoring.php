@@ -25,6 +25,10 @@ return [
         'automatic_baseline' => [
             'version' => 'phase1-automatic-v1',
             'maximum_jobs_per_run' => 5,
+            'backlog_limit' => (int) env('BASELINE_PREPARATION_BACKLOG_LIMIT', 25),
+            'backlog_warning' => (int) env('BASELINE_PREPARATION_BACKLOG_WARNING', 20),
+            'oldest_pending_warning_seconds' => (int) env('BASELINE_PREPARATION_OLDEST_WARNING_SECONDS', 3600),
+            'startup_grace_seconds' => (int) env('BASELINE_PREPARATION_STARTUP_GRACE_SECONDS', 180),
             'window_days' => [14, 21, 28],
             'minimum_i_observations' => 20,
             'minimum_mr_pairs' => 20,

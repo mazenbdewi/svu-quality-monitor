@@ -16,6 +16,7 @@ use App\Services\ReliabilityMetricCalculator;
 use App\Services\ServiceCheckRunner;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
@@ -201,10 +202,13 @@ class MonitoringEngineTest extends TestCase
     public function test_check_config_is_encrypted_and_legacy_services_default_to_http(): void
     {
         $service = MonitoredService::factory()->create(['check_config' => ['headers' => ['Authorization' => 'Bearer top-secret']]]);
-        $raw = DB::table('monitored_services')->whereKey($service->id)->value('check_config');
+        $raw = DB::table('monitored_services')->where('id', $service->id)->value('check_config');
 
         $this->assertSame(MonitoringCheckType::Http, $service->check_type);
-        $this->assertStringNotContainsString('top-secret', (string) $raw);
+        $this->assertIsString($raw);
+        $this->assertNotEmpty($raw);
+        $this->assertStringNotContainsString('top-secret', $raw);
+        $this->assertSame('Bearer top-secret', json_decode(Crypt::decryptString($raw), true)['headers']['Authorization']);
         $this->assertSame('Bearer top-secret', $service->fresh()->check_config['headers']['Authorization']);
     }
 

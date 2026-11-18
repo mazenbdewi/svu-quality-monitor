@@ -224,7 +224,7 @@ class AutomaticPhaseOneBaselineTest extends TestCase
 
         $counts = app(AutomaticPhaseOneBaselineService::class)->dispatchDue();
 
-        $this->assertSame(['eligible' => 2, 'dispatched' => 2], $counts);
+        $this->assertSame(['eligible' => 2, 'dispatched' => 2, 'duplicate' => 0, 'skipped' => 0, 'deferred' => 0, 'failed' => 0], $counts);
         Queue::assertPushed(PrepareAutomaticPhaseOneBaseline::class, 2);
         Queue::assertPushed(PrepareAutomaticPhaseOneBaseline::class, fn (PrepareAutomaticPhaseOneBaseline $job): bool => $job->serviceId === $api->id
             && $job->actorId === null
@@ -247,7 +247,7 @@ class AutomaticPhaseOneBaselineTest extends TestCase
 
         $counts = app(AutomaticPhaseOneBaselineService::class)->dispatchDue();
 
-        $this->assertSame(['eligible' => 7, 'dispatched' => 5], $counts);
+        $this->assertSame(['eligible' => 7, 'dispatched' => 5, 'duplicate' => 0, 'skipped' => 0, 'deferred' => 2, 'failed' => 0], $counts);
         Queue::assertPushed(PrepareAutomaticPhaseOneBaseline::class, 5);
         Queue::assertPushed(PrepareAutomaticPhaseOneBaseline::class,
             fn (PrepareAutomaticPhaseOneBaseline $job): bool => $job->queue === 'baseline-preparation');
@@ -274,7 +274,7 @@ class AutomaticPhaseOneBaselineTest extends TestCase
 
         Queue::fake();
         $counts = app(AutomaticPhaseOneBaselineService::class)->dispatchDue();
-        $this->assertSame(['eligible' => 1, 'dispatched' => 0], $counts);
+        $this->assertSame(['eligible' => 1, 'dispatched' => 0, 'duplicate' => 0, 'skipped' => 1, 'deferred' => 0, 'failed' => 0], $counts);
         Queue::assertNothingPushed();
     }
 

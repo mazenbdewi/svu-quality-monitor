@@ -20,7 +20,12 @@ class SlaCalculator
         $effectiveStart = $service->created_at->greaterThan($periodStart) ? $service->created_at->copy() : $periodStart->copy();
         $effectiveEnd = now()->lessThan($periodEnd) ? now()->copy() : $periodEnd->copy();
 
-        $target = $service->sla_enabled ? (string) $service->sla_target_percent : null;
+        // A nullable target means the SLA is not configured even if a legacy
+        // record has the enable flag set. Keep it null; an empty string is not
+        // a valid value for a strict DECIMAL column in MySQL.
+        $target = $service->sla_enabled && $service->sla_target_percent !== null
+            ? (string) $service->sla_target_percent
+            : null;
         if (! $target || $effectiveEnd->lte($effectiveStart)) {
             return $this->store($service, $periodStart, $periodEnd, $target, 0, 0, 0, null, null, null, null, $target ? 'no_data' : 'not_configured', $analysisTimezone);
         }

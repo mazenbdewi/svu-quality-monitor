@@ -20,7 +20,9 @@ class ControlChartBaselineSample extends Model
     protected static function booted(): void
     {
         static::creating(function (self $sample) {
-            $baseline = ControlChartBaseline::findOrFail($sample->control_chart_baseline_id);
+            // Membership can contain thousands of rows. The append guard
+            // needs only the seal, not the full archived JSON for every row.
+            $baseline = ControlChartBaseline::query()->select(['id', 'sealed_at'])->findOrFail($sample->control_chart_baseline_id);
             if ($baseline->sealed_at !== null) {
                 throw new LogicException('Sealed membership cannot be extended.');
             }

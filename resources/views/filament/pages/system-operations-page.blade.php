@@ -30,6 +30,18 @@
             </x-filament::section>
         @endforeach
         <x-filament::section>
+            <x-slot name="heading">{{ __('monitoring.operations.health.baseline_queue.title') }}</x-slot>
+            <x-slot name="description">{{ __('monitoring.operations.health.baseline_queue.description') }}</x-slot>
+            <x-filament::badge :color="match ($baselineQueue['status']) { 'healthy' => 'success', 'warning' => 'warning', default => 'danger' }">{{ __('monitoring.operations.health.statuses.'.$baselineQueue['status']) }}</x-filament::badge>
+            <dl class="mt-4 space-y-3 text-sm">
+                <div class="flex flex-wrap justify-between gap-2"><dt>{{ __('monitoring.operations.health.last_heartbeat') }}</dt><dd><bdi>{{ $formatTime($baselineQueue['last_heartbeat']) }}</bdi></dd></div>
+                @foreach (['pending_jobs', 'processing_jobs', 'failed_jobs', 'oldest_pending_seconds', 'backlog_limit'] as $field)
+                    <div class="flex flex-wrap justify-between gap-2"><dt>{{ __('monitoring.operations.health.baseline_queue.'.$field) }}</dt><dd><bdi>{{ $formatCount($baselineQueue[$field]) }}</bdi></dd></div>
+                @endforeach
+                <div class="flex flex-wrap justify-between gap-2"><dt>{{ __('monitoring.operations.health.baseline_queue.last_successful_preparation') }}</dt><dd><bdi>{{ $formatTime($baselineQueue['last_successful_preparation']) }}</bdi></dd></div>
+            </dl>
+        </x-filament::section>
+        <x-filament::section>
             <x-slot name="heading">{{ __('monitoring.operations.health.slo_queue.title') }}</x-slot>
             <x-slot name="description">{{ __('monitoring.operations.health.slo_queue.description') }}</x-slot>
             <x-filament::badge :color="match ($sloQueue['status']) { 'healthy' => 'success', 'warning' => 'warning', 'disabled' => 'gray', default => 'danger' }">{{ __('monitoring.operations.health.statuses.'.$sloQueue['status']) }}</x-filament::badge>

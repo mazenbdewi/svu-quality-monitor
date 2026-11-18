@@ -88,6 +88,18 @@ class SlaCalculatorTest extends TestCase
         $this->assertSame(1, $service->slaMetrics()->count());
     }
 
+    public function test_enabled_sla_without_a_target_remains_unconfigured_and_null_at_rest(): void
+    {
+        $service = $this->service(['sla_target_percent' => null]);
+        $metric = $this->calculate($service, '2026-09-01', '2026-09-02');
+
+        $this->assertSame('not_configured', $metric->status);
+        $this->assertNull($metric->target_percent);
+        $this->assertNull($metric->availability_percent);
+        $this->assertDatabaseHas('sla_metrics', ['id' => $metric->id, 'target_percent' => null]);
+        $this->assertNull($service->fresh()->sla_target_percent);
+    }
+
     private function service(array $attributes = []): MonitoredService
     {
         return MonitoredService::factory()->create(array_merge(['sla_enabled' => true, 'sla_target_percent' => '99.90', 'created_at' => '2026-09-01 00:00:00'], $attributes));

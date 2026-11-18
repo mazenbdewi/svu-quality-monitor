@@ -13,7 +13,8 @@ use App\Services\Baselines\PhaseOneBaselineService;
 use App\Services\ServiceCheckRunner;
 use App\Services\Spc\SafePhaseTwoDispatch;
 use Database\Seeders\RolesAndPermissionsSeeder;
-use Illuminate\Foundation\Testing\DatabaseMigrations;
+use Illuminate\Foundation\Testing\DatabaseTruncation;
+use Illuminate\Foundation\Testing\RefreshDatabaseState;
 use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
@@ -22,8 +23,31 @@ use Tests\TestCase;
 
 class PhaseTwoDispatchIsolationTest extends TestCase
 {
-    // Real commits in isolated in-memory SQLite, so afterCommit callbacks actually execute.
-    use DatabaseMigrations;
+    // Real commits are required to exercise after-commit callbacks. Truncation
+    // preserves the current schema on both SQLite and MySQL. Migration
+    // upgrade/rollback is exercised separately in an empty isolated schema.
+    use DatabaseTruncation;
+
+    protected function beforeTruncatingDatabase(): void
+    {
+        if (config('database.connections.'.config('database.default').'.database') === ':memory:') {
+            RefreshDatabaseState::$migrated = false;
+        }
+    }
+
+    protected function tearDown(): void
+    {
+        // DatabaseTruncation prepares the next test but does not clean up
+        // after the final method in this class. Remove its committed fixture
+        // so later transactional tests never inherit it on persistent DBs.
+        $this->truncateDatabaseTables();
+
+        if (config('database.connections.'.config('database.default').'.database') === ':memory:') {
+            RefreshDatabaseState::$migrated = false;
+        }
+
+        parent::tearDown();
+    }
 
     public function test_failed_post_commit_evaluation_cannot_undo_checks_or_incident_state(): void
     {

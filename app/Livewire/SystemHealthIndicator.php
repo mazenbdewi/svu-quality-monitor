@@ -23,6 +23,7 @@ class SystemHealthIndicator extends Component
         $this->health = [
             'scheduler' => $snapshot['scheduler'],
             'queue' => $snapshot['queue'],
+            'baseline_queue' => $systemHealth->baselineQueueSnapshot(),
         ];
     }
 

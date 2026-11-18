@@ -3,16 +3,21 @@
 namespace App\Services\Baselines;
 
 use App\Jobs\PrepareAutomaticPhaseOneBaseline;
+use App\Models\BaselinePreparationRun;
 use App\Models\ControlChartBaseline;
 use App\Models\MonitoredService;
 use App\Models\User;
 use App\Services\FixedMonitoringCadence;
 use App\Services\InstitutionTimezone;
+use App\Services\SystemHealthService;
 use Carbon\Carbon;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Str;
+use Illuminate\Support\Testing\Fakes\QueueFake;
 
 /** Deterministic orchestration around the validated Phase I population/statistics engine. */
 class AutomaticPhaseOneBaselineService
@@ -43,44 +48,179 @@ class AutomaticPhaseOneBaselineService
     public function dispatch(User $actor): int
     {
         $this->authorize($actor);
-        $policy = $this->policy();
-        $timezone = $this->institutionTimezone->name();
-        $cutoff = now($timezone)->startOfDay()->utc()->startOfSecond()->toIso8601String();
-        $count = 0;
 
-        foreach (MonitoredService::query()->whereIn('check_type', ['http', 'api'])->lazyById() as $service) {
-            PrepareAutomaticPhaseOneBaseline::dispatch($service->id, $actor->id, $cutoff, $timezone, $policy['version']);
-            $count++;
-        }
-
-        return $count;
+        return $this->dispatchDue($actor)['dispatched'];
     }
 
-    /** Dispatch incomplete automatic I/MR/P sets. Existing lifecycle decisions are never replaced. */
-    public function dispatchDue(): array
+    /**
+     * Dispatch incomplete automatic I/MR/P sets fairly. Existing lifecycle
+     * decisions are never replaced.
+     *
+     * @return array{eligible: int, dispatched: int, duplicate: int, skipped: int, deferred: int, failed: int}
+     */
+    public function dispatchDue(?User $actor = null): array
     {
+        if ($actor !== null) {
+            $this->authorize($actor);
+        }
+        $connection = config('queue.connections.'.config('queue.default'));
+        // Atomic enqueue is essential: an external broker cannot commit with
+        // the ledger. This deployment uses the application database queue.
+        if (! Queue::getFacadeRoot() instanceof QueueFake
+            && (($connection['driver'] ?? null) !== 'database'
+                || ($connection['connection'] ?? config('database.default')) !== config('database.default')
+                || ($connection['after_commit'] ?? false))) {
+            throw new \LogicException('Baseline dispatch requires the application database queue with after_commit=false.');
+        }
+
+        return DB::transaction(function () use ($actor): array {
+            $scheduler = DB::table('baseline_preparation_scheduler')->where('id', 1)->lockForUpdate()->first();
+            if ($scheduler === null) {
+                throw new \LogicException('Baseline scheduler state is missing; apply the migration.');
+            }
+
+            return $this->dispatchLocked($actor, (int) $scheduler->last_service_id);
+        }, 3);
+    }
+
+    private function dispatchLocked(?User $actor, int $cursor): array
+    {
+        app(SystemHealthService::class)->expectBaselineQueue();
         $policy = $this->policy();
         $timezone = $this->institutionTimezone->name();
-        $cutoff = now($timezone)->startOfDay()->utc()->startOfSecond()->toIso8601String();
-        $counts = ['eligible' => 0, 'dispatched' => 0];
-        $maximum = max(1, (int) ($policy['maximum_jobs_per_run'] ?? 5));
+        $cutoff = now($timezone)->startOfDay()->utc()->startOfSecond();
+        $counts = ['eligible' => 0, 'dispatched' => 0, 'duplicate' => 0, 'skipped' => 0, 'deferred' => 0, 'failed' => 0];
+        $maximum = min(5, max(1, (int) ($policy['maximum_jobs_per_run'] ?? 5)));
+        $backlogLimit = max(1, (int) ($policy['backlog_limit'] ?? 25));
+        $queueState = $this->baselineQueueState();
+        $backlog = $queueState['backlog'];
 
-        foreach (MonitoredService::query()->where('is_active', true)->whereIn('check_type', ['http', 'api'])->lazyById() as $service) {
+        // Resume after the last successful enqueue, wrapping once. A deleted
+        // cursor target is harmless, and new services join the same rotation.
+        $services = MonitoredService::query()
+            ->where('is_active', true)
+            ->whereIn('check_type', ['http', 'api'])
+            ->orderByRaw('CASE WHEN id > ? THEN 0 ELSE 1 END', [$cursor])
+            ->orderBy('id')
+            ->get();
+
+        foreach ($services as $service) {
             $counts['eligible']++;
             $complete = ControlChartBaseline::query()
                 ->where('monitored_service_id', $service->id)
                 ->where('selection_policy_version', $policy['version'])
                 ->whereIn('chart_type', ['i_chart', 'mr_chart', 'p_chart'])
                 ->distinct()->count('chart_type') === 3;
-            if ($complete || $counts['dispatched'] >= $maximum) {
+            if ($complete) {
+                $counts['skipped']++;
+
                 continue;
             }
 
-            PrepareAutomaticPhaseOneBaseline::dispatch($service->id, null, $cutoff, $timezone, $policy['version']);
-            $counts['dispatched']++;
+            $alreadyQueued = BaselinePreparationRun::query()
+                ->where('monitored_service_id', $service->id)
+                ->where('policy_version', $policy['version'])
+                ->where(function ($query) use ($cutoff): void {
+                    $query->whereIn('status', ['pending', 'processing'])
+                        ->orWhere('cutoff_at', $cutoff);
+                })
+                ->exists();
+            if ($alreadyQueued || isset($queueState['services'][$service->id])) {
+                $counts['duplicate']++;
+
+                continue;
+            }
+
+            if ($counts['dispatched'] >= $maximum || $backlog >= $backlogLimit) {
+                $counts['deferred']++;
+
+                continue;
+            }
+
+            try {
+                $run = DB::transaction(function () use ($service, $policy, $cutoff, $timezone, $actor): ?BaselinePreparationRun {
+                    $run = BaselinePreparationRun::query()->firstOrCreate([
+                        'monitored_service_id' => $service->id,
+                        'policy_version' => $policy['version'],
+                        'cutoff_at' => $cutoff,
+                    ], [
+                        'analysis_timezone' => $timezone,
+                        'status' => 'pending',
+                        'dispatched_at' => now(),
+                    ]);
+                    if (! $run->wasRecentlyCreated) {
+                        return null;
+                    }
+
+                    $queued = Queue::push(new PrepareAutomaticPhaseOneBaseline(
+                        $service->id,
+                        $actor?->id,
+                        $cutoff->toIso8601String(),
+                        $timezone,
+                        $policy['version'],
+                        $run->id,
+                    ), '', 'baseline-preparation');
+                    if ($queued === false) {
+                        throw new \RuntimeException('Baseline queue rejected the job.');
+                    }
+
+                    DB::table('baseline_preparation_scheduler')->where('id', 1)
+                        ->update(['last_service_id' => $service->id]);
+
+                    return $run;
+                }, 3);
+
+                if ($run === null) {
+                    $counts['duplicate']++;
+                } else {
+                    $counts['dispatched']++;
+                    $backlog++;
+                }
+            } catch (\Throwable $exception) {
+                $counts['failed']++;
+                Log::error('Automatic Phase I baseline dispatch failed.', [
+                    'service_id' => $service->id,
+                    'policy_version' => $policy['version'],
+                    'exception_class' => $exception::class,
+                ]);
+            }
         }
 
         return $counts;
+    }
+
+    /** @return array{backlog: int, services: array<int, true>} */
+    private function baselineQueueState(): array
+    {
+        $active = BaselinePreparationRun::query()->whereIn('status', ['pending', 'processing'])->get(['id', 'monitored_service_id']);
+        $identities = $active->mapWithKeys(fn ($run): array => ['run:'.$run->id => true])->all();
+        $services = $active->filter(fn ($run): bool => $run->monitored_service_id !== null)
+            ->mapWithKeys(fn ($run): array => [$run->monitored_service_id => true])->all();
+        $connection = config('queue.connections.'.config('queue.default'));
+        if (($connection['driver'] ?? null) === 'database') {
+            // Inspect JSON and scalar serialized fields only. Never unserialize
+            // queue payloads in the scheduler. Include legacy and retried jobs,
+            // which may have no active ledger row, in duplicate/backlog checks.
+            $jobs = DB::connection($connection['connection'] ?? null)
+                ->table($connection['table'] ?? 'jobs')->where('queue', 'baseline-preparation')
+                ->get(['id', 'payload']);
+            foreach ($jobs as $job) {
+                $data = json_decode($job->payload, true);
+                $command = $data['data']['command'] ?? '';
+                $runId = null;
+                if (($data['data']['commandName'] ?? null) === PrepareAutomaticPhaseOneBaseline::class) {
+                    if (preg_match('/s:9:"serviceId";i:(\d+);/', $command, $match)) {
+                        $services[(int) $match[1]] = true;
+                    }
+                    if (preg_match('/s:16:"preparationRunId";i:(\d+);/', $command, $match)) {
+                        $runId = (int) $match[1];
+                    }
+                }
+                $identities[$runId === null ? 'job:'.$job->id : 'run:'.$runId] = true;
+            }
+        }
+
+        return ['backlog' => count($identities), 'services' => $services];
     }
 
     /** @return array{created: array, existing: array, unavailable: array, cutoff: string, policy_version: string} */
@@ -98,7 +238,7 @@ class AutomaticPhaseOneBaselineService
         if (! $localEnd->equalTo($localEnd->copy()->startOfDay()) || $end->gt(now($timezone)->startOfDay()->utc())) {
             throw new \LogicException('The queued automatic Phase I cutoff is not a completed local-day boundary.');
         }
-        $service = MonitoredService::query()->whereIn('check_type', ['http', 'api'])->find($serviceId);
+        $service = MonitoredService::query()->where('is_active', true)->whereIn('check_type', ['http', 'api'])->find($serviceId);
         $result = ['created' => [], 'existing' => [], 'unavailable' => [], 'cutoff' => $end->toIso8601String(), 'policy_version' => $policy['version']];
         if ($service) {
             $this->prepareService($service, $end, $timezone, $policy, $actor, $result);

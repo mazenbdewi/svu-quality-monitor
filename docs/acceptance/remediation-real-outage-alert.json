@@ -1,0 +1,1 @@
+{"queue":{"status":"unavailable","startup_grace":false,"delayed":true,"last_heartbeat":"2026-11-18T14:06:47.000000Z","pending_jobs":10,"processing_jobs":0,"failed_jobs":0,"oldest_pending_seconds":404,"last_successful_preparation":null,"backlog_limit":10},"alert":"down"}

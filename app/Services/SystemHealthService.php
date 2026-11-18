@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\BaselinePreparationRun;
 use App\Models\MonitoredService;
 use App\Models\ServiceCheck;
 use Carbon\Carbon;
@@ -22,6 +23,10 @@ class SystemHealthService
 
     private const SLO_QUEUE_HEARTBEAT_KEY = 'system-health:slo-queue:last-heartbeat';
 
+    private const BASELINE_QUEUE_HEARTBEAT_KEY = 'system-health:baseline-queue:last-heartbeat';
+
+    private const BASELINE_QUEUE_EXPECTED_KEY = 'system-health:baseline-queue:expected-since';
+
     public function recordSchedulerHeartbeat(): void
     {
         $this->storeTimestamp(self::SCHEDULER_HEARTBEAT_KEY);
@@ -35,6 +40,90 @@ class SystemHealthService
     public function recordSloQueueHeartbeat(): void
     {
         $this->recordThrottledHeartbeat(self::SLO_QUEUE_HEARTBEAT_KEY);
+    }
+
+    public function recordBaselineQueueHeartbeat(): void
+    {
+        $this->expectBaselineQueue();
+        $this->recordThrottledHeartbeat(self::BASELINE_QUEUE_HEARTBEAT_KEY);
+    }
+
+    public function expectBaselineQueue(): void
+    {
+        if ($this->timestamp(self::BASELINE_QUEUE_EXPECTED_KEY) === null) {
+            $this->storeTimestamp(self::BASELINE_QUEUE_EXPECTED_KEY);
+        }
+    }
+
+    /** @return array<string, mixed> */
+    public function baselineQueueSnapshot(): array
+    {
+        $heartbeat = $this->timestamp(self::BASELINE_QUEUE_HEARTBEAT_KEY);
+        $expectedSince = $this->timestamp(self::BASELINE_QUEUE_EXPECTED_KEY);
+        $status = $this->baselineHeartbeatStatus($heartbeat, $expectedSince);
+        $result = [
+            'status' => $status,
+            'startup_grace' => $heartbeat === null && $status === 'warning',
+            'delayed' => false,
+            'last_heartbeat' => $heartbeat,
+            'pending_jobs' => null,
+            'processing_jobs' => null,
+            'failed_jobs' => null,
+            'oldest_pending_seconds' => null,
+            'last_successful_preparation' => null,
+            'backlog_limit' => (int) config('monitoring.spc.automatic_baseline.backlog_limit', 25),
+        ];
+        $connection = config('queue.connections.'.config('queue.default'));
+        if (($connection['driver'] ?? null) !== 'database') {
+            $result['status'] = 'unavailable';
+
+            return $result;
+        }
+
+        try {
+            $jobs = DB::connection($connection['connection'] ?? null)
+                ->table($connection['table'] ?? 'jobs')
+                ->where('queue', 'baseline-preparation');
+            $pending = (clone $jobs)->whereNull('reserved_at')->count();
+            $processing = (clone $jobs)->whereNotNull('reserved_at')->count();
+            $oldest = (clone $jobs)->whereNull('reserved_at')->min('created_at');
+            $failed = config('queue.failed');
+            $failedJobs = ($failed['driver'] ?? null) === 'database-uuids'
+                ? DB::connection($failed['database'] ?? null)
+                    ->table($failed['table'] ?? 'failed_jobs')
+                    ->where('queue', 'baseline-preparation')
+                    ->count()
+                : null;
+
+            $result['pending_jobs'] = $pending;
+            $result['processing_jobs'] = $processing;
+            $result['failed_jobs'] = $failedJobs;
+            $result['oldest_pending_seconds'] = $oldest === null ? null : max(0, now()->timestamp - (int) $oldest);
+            $result['last_successful_preparation'] = BaselinePreparationRun::query()
+                ->where('status', 'completed')
+                ->where('created_drafts', '>', 0)
+                ->max('completed_at');
+
+            $warningBacklog = max(1, (int) config('monitoring.spc.automatic_baseline.backlog_warning', 20));
+            $warningAge = max(1, (int) config('monitoring.spc.automatic_baseline.oldest_pending_warning_seconds', 3600));
+            $result['delayed'] = (
+                ($pending + $processing) >= $warningBacklog
+                || ($result['oldest_pending_seconds'] !== null && $result['oldest_pending_seconds'] >= $warningAge)
+                || ($failedJobs !== null && $failedJobs > 0)
+            );
+            if ($result['status'] === 'healthy' && $result['delayed']) {
+                $result['status'] = 'warning';
+            }
+        } catch (QueryException) {
+            $result['status'] = 'unavailable';
+        }
+
+        return $result;
+    }
+
+    public function baselineQueueStatus(): string
+    {
+        return $this->baselineQueueSnapshot()['status'];
     }
 
     private function recordThrottledHeartbeat(string $key): void
@@ -176,6 +265,22 @@ class SystemHealthService
         }
 
         return 'down';
+    }
+
+    private function baselineHeartbeatStatus(?Carbon $heartbeat, ?Carbon $expectedSince): string
+    {
+        if ($heartbeat !== null) {
+            $status = $this->statusFor($heartbeat, 'queue');
+
+            return $status === 'down' ? 'unavailable' : $status;
+        }
+
+        $grace = max(0, (int) config('monitoring.spc.automatic_baseline.startup_grace_seconds', 180));
+        if ($expectedSince !== null && $expectedSince->diffInSeconds(now(), false) <= $grace) {
+            return 'warning';
+        }
+
+        return 'unavailable';
     }
 
     /**

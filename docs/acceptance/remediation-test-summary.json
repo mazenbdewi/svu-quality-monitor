@@ -1,0 +1,26 @@
+{
+  "sqlite": {
+    "name": "phpunit.xml",
+    "tests": "642",
+    "assertions": "3951",
+    "errors": "0",
+    "failures": "0",
+    "skipped": "0",
+    "time": "139.331018",
+    "scheduling_tests": 11,
+    "scientific_tests": 301,
+    "authorization_security_tests": 133
+  },
+  "mysql": {
+    "name": "phpunit.xml",
+    "tests": "642",
+    "assertions": "3951",
+    "errors": "0",
+    "failures": "0",
+    "skipped": "0",
+    "time": "334.181121",
+    "scheduling_tests": 11,
+    "scientific_tests": 301,
+    "authorization_security_tests": 133
+  }
+}

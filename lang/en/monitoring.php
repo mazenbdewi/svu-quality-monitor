@@ -1,6 +1,12 @@
 <?php
 
 return [
+    'baseline_alerts' => [
+        'problem_title' => 'Phase I preparation delayed or unavailable',
+        'recovered_title' => 'Phase I preparation recovered',
+        'delayed' => 'Review the dedicated baseline worker and backlog. Pending work is retained; draft preparation may be delayed.',
+        'recovered' => 'The dedicated baseline worker is healthy and the backlog is below the warning thresholds.',
+    ],
     'related_pages' => 'Monitoring records',
     'spc_research' => [
         'no_exceedance' => 'No estimated limit exceedance',
@@ -426,6 +432,16 @@ return [
                 'pending_jobs' => 'Pending SLO jobs',
                 'oldest_pending_seconds' => 'Oldest pending job age (seconds)',
             ],
+            'baseline_queue' => [
+                'title' => 'Phase I baseline preparation queue',
+                'description' => 'Dedicated draft-preparation worker heartbeat and bounded backlog. It never approves or activates a baseline.',
+                'pending_jobs' => 'Pending preparation jobs',
+                'processing_jobs' => 'Reserved preparation jobs (may be processing)',
+                'failed_jobs' => 'Failed preparation jobs',
+                'oldest_pending_seconds' => 'Oldest pending job age (seconds)',
+                'last_successful_preparation' => 'Last successful preparation',
+                'backlog_limit' => 'Configured backlog limit',
+            ],
             'monitoring' => [
                 'title' => 'Monitoring',
                 'last_success' => 'Last successful automatic check',
@@ -446,6 +462,11 @@ return [
                 'down' => 'Unavailable',
             ],
             'indicator' => [
+                'baseline_queue' => [
+                    'healthy' => 'Baseline worker is healthy',
+                    'warning' => 'Baseline preparation is delayed or starting',
+                    'unavailable' => 'Baseline worker is unavailable',
+                ],
                 'title' => 'Background runtime health',
                 'scheduler' => [
                     'healthy' => 'Automatic checks are running',

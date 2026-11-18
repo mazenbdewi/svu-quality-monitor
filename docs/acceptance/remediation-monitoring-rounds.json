@@ -1,0 +1,32 @@
+[
+  {
+    "dispatch_ms": 1319.893420999506,
+    "exit_code": 0,
+    "dispatched_service_count": 20
+  },
+  {
+    "dispatch_ms": 478.78687499996886,
+    "exit_code": 0,
+    "dispatched_service_count": 0
+  },
+  {
+    "dispatch_ms": 881.1991100001251,
+    "exit_code": 0,
+    "dispatched_service_count": 0
+  },
+  {
+    "dispatch_ms": 485.8317600001101,
+    "exit_code": 0,
+    "dispatched_service_count": 0
+  },
+  {
+    "dispatch_ms": 563.1941640003788,
+    "exit_code": 0,
+    "dispatched_service_count": 0
+  },
+  {
+    "dispatch_ms": 542.9183259993806,
+    "exit_code": 0,
+    "dispatched_service_count": 1
+  }
+]

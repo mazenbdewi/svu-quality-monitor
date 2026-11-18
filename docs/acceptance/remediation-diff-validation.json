@@ -1,0 +1,11 @@
+{
+  "tracked_diff_check": "passed",
+  "new_text_files_checked": 34,
+  "new_file_whitespace_check": "passed",
+  "dependencies_unchanged": true,
+  "optional_worker_profile_discovery": "real Compose model and 14 deployment tests passed",
+  "checkpoint": "Pre-commit closure review",
+  "review_parent": "58a097fef92b42080b0809becd33279be88cfa62",
+  "manifest_files": 71,
+  "sanitized_evidence": true
+}

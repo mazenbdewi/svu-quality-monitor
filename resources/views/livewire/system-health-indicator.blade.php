@@ -8,7 +8,7 @@
 @endphp
 
 <div wire:poll.60s="refreshHealth" style="display: flex; flex-shrink: 0; align-items: center; gap: 4px" aria-label="{{ __('monitoring.operations.health.indicator.title') }}">
-    @foreach (['scheduler', 'queue'] as $componentName)
+    @foreach (['scheduler', 'queue', 'baseline_queue'] as $componentName)
         @php
             $componentHealth = $health[$componentName];
             $status = $componentHealth['status'];

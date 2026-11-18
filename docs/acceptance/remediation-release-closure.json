@@ -1,0 +1,20 @@
+{
+  "production_commit": "d15905ede05f0323f49ec2e1b5a79514282e6340",
+  "remediation_parent": "58a097fef92b42080b0809becd33279be88cfa62",
+  "production_is_ancestor": true,
+  "production_migrations_identical_to_rehearsal_base": true,
+  "production_has_required_backup_smoke_tools_and_volumes": true,
+  "production_old_smoke_does_not_require_baseline_worker": true,
+  "direct_upgrade_confirmation": "Source/prerequisite review, supported by first-upgrade deployment tests; Docker rehearsal began from 58a097f.",
+  "focused_checks": {
+    "shared_file_cache": "passed: 1 test, 8 assertions",
+    "no_manual_phase_i_action": "passed: 1 test, 5 assertions",
+    "deployment_tests": "passed: 14 tests"
+  },
+  "application_code_changed_during_closure": false,
+  "full_acceptance_suite_repeated": false,
+  "feature_flags_disabled": true,
+  "npm_dependencies_changed": false,
+  "evidence_sanitized": true,
+  "runtime_artifacts_in_manifest": false
+}
