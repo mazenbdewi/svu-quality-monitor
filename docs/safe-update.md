@@ -64,6 +64,12 @@ Phase I outputs are drafts. No user-accessible manual Phase I calibration-period
 selection is registered. Fixed Cadence and automatic SLO preparation remain off;
 npm remediation is a separate batch.
 
+For an air-gapped production Docker daemon, use the complete build, checksum,
+transfer, import and `--prebuilt` procedure in
+[offline-deployment.md](offline-deployment.md). Prebuilt validation fails before
+maintenance if any required or active optional worker image is absent, has the
+wrong platform/ID, or does not carry the expected release identity.
+
 ## Sequence
 
 1. Check Docker, compose syntax, current app/DB/schema/cache/storage/heartbeats,
@@ -77,8 +83,10 @@ npm remediation is a separate batch.
    fails closed when a prior image is missing; it never substitutes a mutable
    latest tag that may already refer to new code. Preserve images before manual builds.
 3. Mandatory verified pre-update backup. Failure aborts before build/migrations.
-4. Build app/scheduler/queue/baseline_queue/web and active optional workers with old web still online. Build failure leaves
-   the running release online. Show pending migrations from the new image.
+4. In online mode, build app/scheduler/queue/baseline_queue/web and active
+   optional workers with old web still online. Build failure leaves the running
+   release online. In prebuilt mode, use only the validated and pinned local
+   images. Show pending migrations from the selected new app image.
 5. Enable maintenance, signal `queue:restart`, stop scheduler/queue/baseline_queue and active optional workers gracefully
    (120-second grace vs current 60-second job timeout). Increase grace if adding
    longer tasks. External writers must already be controlled by the operator.
@@ -127,7 +135,9 @@ logs, no invented human audit actor.
 
 Dry-run performs only preflight and prints image IDs/steps; it does not build,
 backup, migrate, stop containers or create update-state files. The smoke cache
-probe briefly writes and deletes a uniquely named cache entry.
+probe briefly writes and deletes a uniquely named cache entry. With `--prebuilt`,
+dry-run also validates the manifest, local image IDs, architecture and labels,
+without tagging images or contacting a registry.
 
 ## Verification
 

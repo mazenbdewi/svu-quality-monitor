@@ -92,6 +92,11 @@ RUN npm run build
 # --------------------------------------------------
 FROM php-base AS app
 
+ARG SVU_RELEASE_ID=unknown
+LABEL org.opencontainers.image.revision="${SVU_RELEASE_ID}" \
+      org.svu-quality-monitor.release="${SVU_RELEASE_ID}" \
+      org.svu-quality-monitor.role="application"
+
 RUN apt-get update && apt-get install -y --no-install-recommends libncurses6 && rm -rf /var/lib/apt/lists/*
 COPY --from=mysql-tools /usr/bin/mysql /usr/local/bin/mysql
 COPY --from=mysql-tools /usr/bin/mysqldump /usr/local/bin/mysqldump
@@ -130,6 +135,11 @@ CMD ["php-fpm"]
 # Nginx web server
 # --------------------------------------------------
 FROM nginx:1.28-alpine AS web
+
+ARG SVU_RELEASE_ID=unknown
+LABEL org.opencontainers.image.revision="${SVU_RELEASE_ID}" \
+      org.svu-quality-monitor.release="${SVU_RELEASE_ID}" \
+      org.svu-quality-monitor.role="web"
 
 WORKDIR /var/www/html
 

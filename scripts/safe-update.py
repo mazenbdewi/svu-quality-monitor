@@ -6,6 +6,7 @@ import fcntl
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import sys
@@ -22,6 +23,9 @@ class SafeUpdate:
         self.args = args
         self.compose = ["docker", "compose", "-f", str(Path(args.compose).resolve())]
         self.state = Path(args.state).resolve()
+        self.prebuilt_path = Path(args.prebuilt).resolve() if getattr(args, "prebuilt", None) else None
+        self.prebuilt_manifest = None
+        self.definition = None
         self.offline = False
         self.previous = {}
         self.workers = ("scheduler", "queue", "baseline_queue")
@@ -66,6 +70,7 @@ class SafeUpdate:
         self.run(["docker", "info", "--format", "{{.ServerVersion}}"], 30)
         self.dc("config", "--quiet")
         definition = json.loads(self.dc("--profile", "*", "config", "--format", "json"))
+        self.definition = definition
         # Preserve enabled optional workers without activating inactive profiles.
         profiles = set(os.environ.get("COMPOSE_PROFILES", "").split(","))
         optional = []
@@ -76,6 +81,8 @@ class SafeUpdate:
                 optional.append(name)
         self.services = (*self.services, *optional)
         self.workers = (*self.workers, *optional)
+        if self.prebuilt_path:
+            self.prebuilt_manifest = self.validate_prebuilt_images()
         self.artisan("system:smoke-check")
         self.dc("exec", "-T", "app", "php", "-r", 'require "vendor/autoload.php"; $app=require "bootstrap/app.php"; $app->make(Illuminate\\Contracts\\Console\\Kernel::class)->bootstrap(); exit(config("app.maintenance.driver") === "file" ? 0 : 1);')
         self.http()
@@ -92,6 +99,109 @@ class SafeUpdate:
                 # absence is valid only before the first upgraded deployment.
                 continue
             self.previous[service] = self.recovery_image(container)
+
+    @staticmethod
+    def normalize_platform(os_name, architecture):
+        aliases = {"x86_64": "amd64", "aarch64": "arm64"}
+
+        return os_name + "/" + aliases.get(architecture, architecture)
+
+    def image_metadata(self, image):
+        try:
+            inspected = json.loads(self.run(["docker", "image", "inspect", image]))
+        except (RuntimeError, json.JSONDecodeError):
+            raise RuntimeError("Required prebuilt image is unavailable: " + image) from None
+        if len(inspected) != 1:
+            raise RuntimeError("Required prebuilt image is ambiguous: " + image)
+        record = inspected[0]
+
+        return {
+            "id": record.get("Id"),
+            "platform": self.normalize_platform(record.get("Os", ""), record.get("Architecture", "")),
+            "labels": (record.get("Config") or {}).get("Labels") or {},
+        }
+
+    def validate_prebuilt_images(self):
+        try:
+            manifest = json.loads(self.prebuilt_path.read_text())
+        except (OSError, json.JSONDecodeError):
+            raise RuntimeError("Prebuilt image manifest is missing or invalid") from None
+        release = manifest.get("release")
+        platform = manifest.get("platform")
+        images = manifest.get("services")
+        if manifest.get("schema") != 1 or not isinstance(images, dict):
+            raise RuntimeError("Unsupported prebuilt image manifest schema")
+        if not isinstance(release, str) or not re.fullmatch(r"[0-9a-f]{40}", release):
+            raise RuntimeError("Prebuilt manifest release must be a full lowercase Git commit")
+        host = self.run(["docker", "info", "--format", "{{.OSType}}/{{.Architecture}}"], 30)
+        host_parts = host.split("/", 1)
+        if len(host_parts) != 2:
+            raise RuntimeError("Docker host platform is unavailable")
+        host_platform = self.normalize_platform(*host_parts)
+        if platform != host_platform:
+            raise RuntimeError(f"Prebuilt platform {platform!r} does not match Docker host {host_platform!r}")
+        for service in self.services:
+            entry = images.get(service)
+            if not isinstance(entry, dict) or not entry.get("image") or not entry.get("id"):
+                raise RuntimeError("Prebuilt manifest is missing required service: " + service)
+            if not isinstance(entry["image"], str) or entry["image"].startswith("-") \
+                    or re.search(r"\s", entry["image"]):
+                raise RuntimeError("Prebuilt image reference is invalid for service: " + service)
+            if not isinstance(entry["id"], str) or not re.fullmatch(r"sha256:[0-9a-f]{64}", entry["id"]):
+                raise RuntimeError("Prebuilt image ID is invalid for service: " + service)
+            metadata = self.image_metadata(entry["image"])
+            if metadata["id"] != entry["id"]:
+                raise RuntimeError("Prebuilt image ID mismatch for service: " + service)
+            if metadata["platform"] != platform:
+                raise RuntimeError("Prebuilt image platform mismatch for service: " + service)
+            labels = metadata["labels"]
+            if labels.get("org.opencontainers.image.revision") != release \
+                    or labels.get("org.svu-quality-monitor.release") != release:
+                raise RuntimeError("Prebuilt release identity mismatch for service: " + service)
+            expected_role = "web" if service == "web" else "application"
+            if labels.get("org.svu-quality-monitor.role") != expected_role:
+                raise RuntimeError("Prebuilt image role mismatch for service: " + service)
+
+        return manifest
+
+    def write_release_override(self, release):
+        pinned = self.run_dir / "release-images.json"
+        pinned.write_text(json.dumps({"services": release}))
+        self.compose += ["-f", str(pinned)]
+
+    def pin_prebuilt_images(self):
+        release = {}
+        for service in self.services:
+            expected = self.prebuilt_manifest["services"][service]
+            metadata = self.image_metadata(expected["image"])
+            if metadata["id"] != expected["id"]:
+                raise RuntimeError("Prebuilt image changed after validation: " + service)
+            tag = "svu-release-" + service + ":" + self.run_dir.name.lower()
+            self.run(["docker", "tag", expected["id"], tag])
+            release[service] = {"image": tag}
+        self.write_release_override(release)
+        self.event(
+            "prebuilt_images_pinned",
+            release=self.prebuilt_manifest["release"],
+            platform=self.prebuilt_manifest["platform"],
+            image_ids={service: self.prebuilt_manifest["services"][service]["id"] for service in self.services},
+        )
+
+    def build_and_pin_images(self):
+        self.dc("build", *self.services)
+        release = {}
+        definition = json.loads(self.dc("--profile", "*", "config", "--format", "json"))
+        for service in self.services:
+            config = definition["services"][service]
+            image = config.get("image") or definition["name"] + "-" + service
+            tag = "svu-release-" + service + ":" + self.run_dir.name.lower()
+            self.run(["docker", "tag", image, tag])
+            release[service] = {"image": tag}
+        self.write_release_override(release)
+        self.event("build_completed", release_images=release)
+
+    def pull_never(self):
+        return ("--pull", "never") if self.prebuilt_path else ()
 
     def recovery_image(self, container):
         # Docker stores may expose config or manifest digests. Try both immutable
@@ -115,20 +225,21 @@ class SafeUpdate:
             self.artisan("down", "--retry=60")
         except Exception:
             # File-based maintenance is a preflight requirement. No Laravel/DB boot needed.
-            self.dc("run", "--rm", "--no-deps", "--entrypoint", "php", "app", "-r",
+            self.dc("run", *self.pull_never(), "--rm", "--no-deps", "--entrypoint", "php", "app", "-r",
                     '$p="storage/framework/down"; $t=$p.".recovery"; $data=json_encode(["time"=>time(),"status"=>503,"retry"=>60]); if(file_put_contents($t,$data)===false || !rename($t,$p)) exit(1);')
         self.dc("stop", "-t", "120", *self.workers)
         self.dc("rm", "-f", "baseline_queue")
         override = self.run_dir / "previous-images.json"
         override.write_text(json.dumps({"services": {name: {"image": tag} for name, tag in self.previous.items()}}))
-        self.run(self.compose + ["-f", str(override), "up", "-d", "--no-deps", "--no-build", "--force-recreate", "app"])
-        self.run(self.compose + ["-f", str(override), "up", "-d", "--no-deps", "--no-build", "--force-recreate", "web"])
+        self.run(self.compose + ["-f", str(override), "up", *self.pull_never(), "-d", "--no-deps", "--no-build", "--force-recreate", "app"])
+        self.run(self.compose + ["-f", str(override), "up", *self.pull_never(), "-d", "--no-deps", "--no-build", "--force-recreate", "web"])
         self.event("rollback_images_completed", action="Keep workers stopped. Review schema compatibility and pre-update backup before artisan up.")
 
     def execute(self):
         self.preflight()
         if self.args.dry_run:
-            self.event("dry_run_passed", previous_images=self.previous, steps=["pre-update backup", "build", "pending migrations", "maintenance and drain", "migrate", "switch app/scheduler/queue/baseline_queue/web", "worker heartbeat smoke and HTTP", "failure: old images with maintenance retained and baseline jobs preserved"])
+            image_step = "validate and pin prebuilt local images" if self.prebuilt_path else "build and pin images"
+            self.event("dry_run_passed", previous_images=self.previous, steps=["pre-update backup", image_step, "pending migrations", "maintenance and drain", "migrate", "switch app/scheduler/queue/baseline_queue/web", "worker heartbeat smoke and HTTP", "failure: old images with maintenance retained and baseline jobs preserved"])
             return
         os.umask(0o077)
         self.state.mkdir(mode=0o700, parents=True, exist_ok=True)
@@ -143,30 +254,20 @@ class SafeUpdate:
                 self.previous[service] = tag
             self.event("update_started", previous_images=self.previous)
             try:
+                if self.prebuilt_path:
+                    self.stage = "prebuilt_pin"
+                    self.pin_prebuilt_images()
                 self.stage = "backup"
                 backup = self.artisan("backup:create", "--pre-update")
                 result = json.loads(backup.splitlines()[-1])
                 if not result.get("verified"):
                     raise RuntimeError("Pre-update backup was not verified")
                 self.event("backup_created", path=result["path"])
-                self.stage = "build"
-                self.dc("build", *self.services)
-                # Freeze the new build too: unrelated rebuilds must not change
-                # one-off migrations or containers midway through a deployment.
-                release = {}
-                definition = json.loads(self.dc("--profile", "*", "config", "--format", "json"))
-                for service in self.services:
-                    config = definition["services"][service]
-                    image = config.get("image") or definition["name"] + "-" + service
-                    tag = "svu-release-" + service + ":" + self.run_dir.name.lower()
-                    self.run(["docker", "tag", image, tag])
-                    release[service] = {"image": tag}
-                pinned = self.run_dir / "release-images.json"
-                pinned.write_text(json.dumps({"services": release}))
-                self.compose += ["-f", str(pinned)]
-                self.event("build_completed", release_images=release)
+                if not self.prebuilt_path:
+                    self.stage = "build"
+                    self.build_and_pin_images()
                 self.stage = "migration_status"
-                pending = self.dc("run", "--rm", "--no-deps", "--entrypoint", "php", "app", "artisan", "migrate:status", "--no-ansi")
+                pending = self.dc("run", *self.pull_never(), "--rm", "--no-deps", "--entrypoint", "php", "app", "artisan", "migrate:status", "--no-ansi")
                 self.event("migration_status", status=pending)
                 self.stage = "maintenance_and_drain"
                 self.artisan("down", "--retry=60")
@@ -174,11 +275,11 @@ class SafeUpdate:
                 self.artisan("queue:restart")
                 self.dc("stop", "-t", "120", *self.workers)
                 self.stage = "migration"
-                self.dc("run", "--rm", "--no-deps", "--entrypoint", "php", "app", "artisan", "migrate", "--force")
+                self.dc("run", *self.pull_never(), "--rm", "--no-deps", "--entrypoint", "php", "app", "artisan", "migrate", "--force")
                 self.event("migration_completed")
                 self.stage = "recreate"
-                self.dc("up", "-d", "--no-deps", "--no-build", "--force-recreate", "app", *self.workers)
-                self.dc("up", "-d", "--no-deps", "--no-build", "--force-recreate", "web")
+                self.dc("up", *self.pull_never(), "-d", "--no-deps", "--no-build", "--force-recreate", "app", *self.workers)
+                self.dc("up", *self.pull_never(), "-d", "--no-deps", "--no-build", "--force-recreate", "web")
                 new = {s: self.run(["docker", "inspect", "--format", "{{.Image}}", self.dc("ps", "-q", s)]) for s in self.services}
                 self.event("containers_switched", new_images=new)
                 self.stage = "clear_caches"
@@ -221,6 +322,7 @@ def main():
     parser.add_argument("--compose", default="compose.yaml")
     parser.add_argument("--state", default="update-state")
     parser.add_argument("--url", required=True, help="Trusted base URL served by this deployment")
+    parser.add_argument("--prebuilt", metavar="MANIFEST", help="Use validated local images from a prebuilt release manifest; never build or pull release images")
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
     try:

@@ -5,6 +5,15 @@
 .env.*
 !.env.example
 !.env.docker.example
+.npmrc
+.netrc
+.aws
+.ssh
+auth.json
+*.key
+*.pem
+*.p12
+*.pfx
 
 vendor
 node_modules

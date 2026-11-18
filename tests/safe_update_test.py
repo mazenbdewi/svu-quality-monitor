@@ -12,8 +12,20 @@ spec.loader.exec_module(module)
 
 
 class FakeUpdate(module.SafeUpdate):
-    def __init__(self, path, fail=None, dry=False):
-        super().__init__(argparse.Namespace(compose="compose.yaml", state=path, url="http://localhost", dry_run=dry))
+    release = "570e9f831fa5cf57df60450ad8033ee99a2eef6a"
+    image_id = "sha256:" + "1" * 64
+
+    def __init__(self, path, fail=None, dry=False, prebuilt=False):
+        manifest = Path(path) / "prebuilt-images.json" if prebuilt else None
+        if manifest:
+            manifest.parent.mkdir(parents=True, exist_ok=True)
+            manifest.write_text(json.dumps({
+                "schema": 1,
+                "release": self.release,
+                "platform": "linux/amd64",
+                "services": {service: {"image": "offline/" + service + ":release", "id": self.image_id} for service in module.SafeUpdate.services},
+            }))
+        super().__init__(argparse.Namespace(compose="compose.yaml", state=path, url="http://localhost", dry_run=dry, prebuilt=str(manifest) if manifest else None))
         self.commands = []
         self.fail = fail
 
@@ -21,6 +33,8 @@ class FakeUpdate(module.SafeUpdate):
         self.commands.append("preflight")
         if self.fail == "preflight":
             raise RuntimeError("preflight")
+        if self.prebuilt_path:
+            self.prebuilt_manifest = self.validate_prebuilt_images()
         self.previous = {s: "sha256:old" for s in self.services}
 
     def run(self, command, timeout=3600):
@@ -28,6 +42,21 @@ class FakeUpdate(module.SafeUpdate):
         self.commands.append(line)
         if self.fail and self.fail in line:
             raise RuntimeError("simulated failure")
+        if line == "docker info --format {{.OSType}}/{{.Architecture}}":
+            return "linux/x86_64"
+        if line.startswith("docker image inspect offline/"):
+            service = line.split("offline/", 1)[1].split(":", 1)[0]
+            role = "web" if service == "web" else "application"
+            return json.dumps([{
+                "Id": self.image_id,
+                "Os": "linux",
+                "Architecture": "amd64",
+                "Config": {"Labels": {
+                    "org.opencontainers.image.revision": self.release,
+                    "org.svu-quality-monitor.release": self.release,
+                    "org.svu-quality-monitor.role": role,
+                }},
+            }])
         if "config --format json" in line:
             return json.dumps({"name": "isolated", "services": {s: {} for s in self.services}})
         if "backup:create" in line:
@@ -46,6 +75,95 @@ class FakeUpdate(module.SafeUpdate):
 
 
 class UpdateTests(unittest.TestCase):
+    def test_prebuilt_manifest_validates_ids_platform_release_and_roles(self):
+        with tempfile.TemporaryDirectory() as folder:
+            update = FakeUpdate(folder, prebuilt=True)
+            manifest = update.validate_prebuilt_images()
+            self.assertEqual(manifest["release"], FakeUpdate.release)
+            self.assertEqual(set(manifest["services"]), set(update.services))
+
+    def test_prebuilt_manifest_rejects_missing_optional_worker(self):
+        with tempfile.TemporaryDirectory() as folder:
+            update = FakeUpdate(folder, prebuilt=True)
+            update.services = (*update.services, "slo_queue")
+            with self.assertRaisesRegex(RuntimeError, "missing required service: slo_queue"):
+                update.validate_prebuilt_images()
+
+    def test_prebuilt_manifest_rejects_wrong_id_architecture_and_release(self):
+        cases = [
+            ("id", "Prebuilt image ID mismatch"),
+            ("platform", "Prebuilt image platform mismatch"),
+            ("release", "Prebuilt release identity mismatch"),
+        ]
+        for field, message in cases:
+            with self.subTest(field=field), tempfile.TemporaryDirectory() as folder:
+                update = FakeUpdate(folder, prebuilt=True)
+                original = update.run
+
+                def altered(command, timeout=3600):
+                    result = original(command, timeout)
+                    if command[:3] == ["docker", "image", "inspect"]:
+                        record = json.loads(result)
+                        if field == "id":
+                            record[0]["Id"] = "sha256:" + "2" * 64
+                        elif field == "platform":
+                            record[0]["Architecture"] = "arm64"
+                        else:
+                            record[0]["Config"]["Labels"]["org.svu-quality-monitor.release"] = "0" * 40
+                        return json.dumps(record)
+                    return result
+
+                update.run = altered
+                with self.assertRaisesRegex(RuntimeError, message):
+                    update.validate_prebuilt_images()
+
+    def test_prebuilt_manifest_rejects_malformed_image_identity_before_inspection(self):
+        with tempfile.TemporaryDirectory() as folder:
+            update = FakeUpdate(folder, prebuilt=True)
+            manifest = json.loads(update.prebuilt_path.read_text())
+            manifest["services"]["app"] = {"image": "--help", "id": "not-an-image-id"}
+            update.prebuilt_path.write_text(json.dumps(manifest))
+            with self.assertRaisesRegex(RuntimeError, "image reference is invalid"):
+                update.validate_prebuilt_images()
+
+    def test_prebuilt_missing_image_fails_before_backup_or_maintenance(self):
+        with tempfile.TemporaryDirectory() as folder:
+            update = FakeUpdate(folder, "docker image inspect offline/app", prebuilt=True)
+            with self.assertRaises(RuntimeError):
+                update.execute()
+            self.assertFalse(any("backup:create" in command or "artisan down" in command or "stop -t" in command for command in update.commands))
+
+    def test_prebuilt_success_skips_build_and_forbids_pulls(self):
+        with tempfile.TemporaryDirectory() as folder:
+            update = FakeUpdate(folder, prebuilt=True)
+            update.execute()
+            self.assertFalse(any(" build " in command for command in update.commands))
+            self.assertIn("prebuilt_images_pinned", update.commands)
+            self.assertLess(update.commands.index("prebuilt_images_pinned"), next(i for i, command in enumerate(update.commands) if "backup:create" in command))
+            release_commands = [command for command in update.commands if " run " in command or " up " in command]
+            self.assertTrue(release_commands)
+            self.assertTrue(all("--pull never" in command for command in release_commands))
+            self.assertFalse(any("docker pull" in command for command in update.commands))
+
+    def test_prebuilt_rollback_uses_only_local_images(self):
+        with tempfile.TemporaryDirectory() as folder:
+            update = FakeUpdate(folder, "http", prebuilt=True)
+            with self.assertRaises(RuntimeError):
+                update.execute()
+            compose_runs = [command for command in update.commands if " run " in command or " up " in command]
+            self.assertTrue(compose_runs)
+            self.assertTrue(all("--pull never" in command for command in compose_runs))
+            self.assertIn("rollback_images_completed", update.commands)
+
+    def test_prebuilt_dry_run_validates_without_building_pinning_or_writing_state(self):
+        with tempfile.TemporaryDirectory() as folder:
+            state = Path(folder) / "state"
+            update = FakeUpdate(str(state), dry=True, prebuilt=True)
+            update.execute()
+            self.assertIn("dry_run_passed", update.commands)
+            self.assertFalse(any("docker tag" in command or " build " in command for command in update.commands))
+            self.assertFalse((state / ".lock").exists())
+
     def test_http_readiness_retries_connection_refused_until_nginx_is_ready(self):
         with tempfile.TemporaryDirectory() as folder:
             update = FakeUpdate(folder)
@@ -162,6 +280,8 @@ class UpdateTests(unittest.TestCase):
             self.assertTrue(any("queue:restart" in c for c in commands))
             self.assertTrue(any("baseline_queue" in c and " up " in c for c in commands))
             self.assertFalse(any("db:seed" in c for c in commands))
+            self.assertTrue(any(" build " in c for c in commands))
+            self.assertFalse(any("--pull never" in c for c in commands))
 
     def test_http_failure_rolls_back_images_but_not_database_and_leaves_workers_stopped(self):
         with tempfile.TemporaryDirectory() as folder:
