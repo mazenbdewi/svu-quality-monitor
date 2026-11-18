@@ -62,9 +62,13 @@ class ControlChartCalculator
         $latencySufficiency = $checks->isEmpty() ? 'no_data' : ($checks->count() < 2 ? 'insufficient' : ($checks->count() < $minimum || $buckets->sum('missing_count') > 0 ? 'preliminary' : 'analyzable'));
         $pSufficiency = $binaryChecks->isEmpty() ? 'no_data' : ($binaryChecks->count() < 2 ? 'insufficient' : ($binaryChecks->count() < $minimum || $buckets->sum('missing_count') > 0 ? 'preliminary' : 'analyzable'));
         $problematicCount = $binaryChecks->filter(fn (ServiceCheck $check): bool => $check->is_problematic)->count();
+        $successfulCount = $binaryChecks->where('is_success', true)->count();
         $summary = [
             'eligible_count' => $binaryChecks->count(),
+            'successful_count' => $successfulCount,
+            'failed_count' => $binaryChecks->where('is_success', false)->count(),
             'latency_count' => $checks->count(),
+            'successful_without_valid_latency' => max(0, $successfulCount - $checks->count()),
             'problematic_count' => $problematicCount,
             'problematic_percent' => $binaryChecks->count() ? 100 * $problematicCount / $binaryChecks->count() : null,
             'mean_latency' => $checks->avg('response_time_ms'),

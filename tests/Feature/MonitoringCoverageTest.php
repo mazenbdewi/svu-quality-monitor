@@ -37,6 +37,10 @@ class MonitoringCoverageTest extends TestCase
         $this->assertSame(1, $result['missing_checks']);
         $this->assertSame(66.67, $result['coverage_percent']);
         $this->assertSame('insufficient_coverage', $result['status']);
+        $this->assertSame('historical_estimate_current_service_interval_v1', $result['basis']);
+        $this->assertSame('first_recorded_automatic_observation_within_or_before_window', $result['effective_start_policy']);
+        $this->assertFalse($result['exact_opportunity_ledger']);
+        $this->assertContains('historical_interval_changes_not_reconstructible', $result['limitations']);
     }
 
     public function test_no_automatic_history_is_unknown_not_healthy(): void

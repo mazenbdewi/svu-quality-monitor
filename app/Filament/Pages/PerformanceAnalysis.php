@@ -2,10 +2,8 @@
 
 namespace App\Filament\Pages;
 
-use App\Filament\Resources\ControlChartBaselines\ControlChartBaselineResource;
 use App\Models\MonitoredService;
 use App\Models\SloProposal;
-use App\Services\Baselines\PhaseOneBaselineService;
 use App\Services\ControlChartCalculator;
 use App\Services\InstitutionTimezone;
 use App\Services\MonitoringCoverageCalculator;
@@ -110,39 +108,6 @@ class PerformanceAnalysis extends Page
                     ->native(false)
                     ->live(),
             ]);
-    }
-
-    protected function getHeaderActions(): array
-    {
-        return [
-            Action::make('create_baseline_from_period')
-                ->label(__('performance_analysis.create_baseline'))
-                ->icon(Heroicon::OutlinedBeaker)
-                ->url(fn (): string => $this->baselineCreationUrl())
-                ->visible(fn (): bool => Gate::allows(PhaseOneBaselineService::PERMISSION) && $this->baselineCreationUrl() !== '#'),
-        ];
-    }
-
-    private function baselineCreationUrl(): string
-    {
-        if (! $this->serviceId || ! Gate::allows(PhaseOneBaselineService::PERMISSION)) {
-            return '#';
-        }
-
-        try {
-            $period = $this->resolvedPeriod();
-            if ($period === null) {
-                return '#';
-            }
-
-            return ControlChartBaselineResource::getUrl('index', [
-                'prefill_service' => $this->serviceId,
-                'prefill_start' => $period[0]->toDateTimeString(),
-                'prefill_end' => $period[1]->toDateTimeString(),
-            ]);
-        } catch (ValidationException|\InvalidArgumentException) {
-            return '#';
-        }
     }
 
     public function mount(): void
@@ -316,7 +281,9 @@ class PerformanceAnalysis extends Page
                 : ($coverage['status'] === 'insufficient_coverage' ? 'insufficient' : ($chartSummary['eligible_count'] < $minimum ? 'preliminary' : 'sufficient'));
             $this->summaryCache = [
                 'state' => $state, 'service' => $service, 'start' => $period[0], 'end' => $period[1],
-                'eligible_count' => $chartSummary['eligible_count'], 'latency_count' => $chartSummary['latency_count'],
+                'eligible_count' => $chartSummary['eligible_count'], 'successful_count' => $chartSummary['successful_count'],
+                'failed_count' => $chartSummary['failed_count'], 'latency_count' => $chartSummary['latency_count'],
+                'successful_without_valid_latency' => $chartSummary['successful_without_valid_latency'],
                 'problematic_count' => $chartSummary['problematic_count'], 'problematic_percent' => $chartSummary['problematic_percent'],
                 'mean_latency' => $chartSummary['mean_latency'], 'coverage' => $coverage,
                 'missing_buckets' => $chartSummary['missing_buckets'], 'buckets' => $chartSummary['buckets'],
@@ -506,7 +473,9 @@ class PerformanceAnalysis extends Page
 
         return [
             'state' => $state, 'service' => $service, 'start' => $start, 'end' => $end,
-            'eligible_count' => $binary->count(), 'latency_count' => $latency->count(),
+            'eligible_count' => $binary->count(), 'successful_count' => $binary->where('is_success', true)->count(),
+            'failed_count' => $binary->where('is_success', false)->count(), 'latency_count' => $latency->count(),
+            'successful_without_valid_latency' => max(0, $binary->where('is_success', true)->count() - $latency->count()),
             'problematic_count' => $binary->filter(fn ($check): bool => $check->is_problematic)->count(),
             'problematic_percent' => $binary->count() ? 100 * $binary->filter(fn ($check): bool => $check->is_problematic)->count() / $binary->count() : null,
             'mean_latency' => $latency->avg('response_time_ms'), 'coverage' => $coverage,

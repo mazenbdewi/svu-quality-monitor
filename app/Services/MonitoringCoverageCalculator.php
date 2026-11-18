@@ -39,6 +39,14 @@ class MonitoringCoverageCalculator
             'missing_checks' => 0,
             'coverage_percent' => null,
             'status' => 'no_data',
+            'basis' => 'historical_estimate_current_service_interval_v1',
+            'effective_start_policy' => 'first_recorded_automatic_observation_within_or_before_window',
+            'exact_opportunity_ledger' => false,
+            'limitations' => [
+                'historical_interval_changes_not_reconstructible',
+                'legacy_expected_opportunities_are_estimated',
+                'pre_observation_opportunities_not_in_exploratory_denominator',
+            ],
         ];
         if ($first === null || $start->gte($end)) {
             return $result;

@@ -4,9 +4,9 @@ R4A implements explicit, versioned Phase I research references for I, MR and P. 
 
 ## Selecting a Phase I period
 
-A researcher selects one service, chart, historical interval, timezone and P aggregation (hourly or daily). Select a period for substantive reasons: comparable endpoint, measurement protocol and operating conditions, representative time coverage, and a reviewable distribution and signal history. A 30-day window does not become a baseline merely because it exists or has elapsed. No scheduler or command approves baselines.
+The current prospective policy is `phase1-automatic-v1`. Researchers cannot select a service period, chart family, cutoff, timezone or subgroup interval from the UI. The scheduled system uses the latest 14 complete institution-local calendar days and expands deterministically to 21 then 28 days only when the predefined quantity thresholds are not met. It prepares I, MR and hourly P drafts. Statistical signals are retained for review and never steer selection toward a more favourable window. The scheduler never reviews, approves or activates a baseline.
 
-The UI's Create Phase I Baseline action is separate from exploratory calculation. Calendar input is interpreted in the selected timezone, defaulting to the R3 analysis timezone; explicit-offset service inputs preserve their instants. UTC is retained in storage and exports. Boundaries have one-second resolution and are half-open `[start,end)`. Date-only end is exclusive: an entire September ends October 1 at local midnight. Require `start < data_cutoff <= baseline_end <= creation_time`. The UI uses end as cutoff; the service also accepts an earlier explicit cutoff, recorded as partial. Future periods are rejected instead of silently called completed.
+Calendar boundaries are interpreted in the institution timezone and retained as UTC, with half-open `[start,end)` semantics and a cutoff equal to the completed local-day boundary. Existing records produced by the superseded manual workflow remain frozen research records; they are not reclassified, recalculated or deleted. Their recorded policy/context distinguishes them from automatic candidates.
 
 ## Schema and version identity
 

@@ -4,6 +4,7 @@ return [
     'prepare_automatically' => 'Prepare Reference Performance Automatically',
     'automatic_policy_summary' => 'The application will use the latest 14 complete institution-local calendar days, expanding deterministically to 21 and then 28 days only when project sample-adequacy thresholds are not met. It prepares eligible I/MR and hourly P drafts for every HTTP/API service. Dates, cutoff, chart families, subgroup interval, and sample sizes cannot be selected. Signals never influence window selection, and nothing is approved or activated automatically.',
     'automatic_page_intro' => 'Phase I reference candidates are prepared by one predefined, versioned research policy. Researchers review the resulting Draft records; they do not select analysis parameters.',
+    'scheduled_page_intro' => 'Phase I candidates are prepared by the scheduled system policy. This page is for authorized review and lifecycle decisions; it does not expose period or parameter selection.',
     'automatic_created' => 'Prepared :created Draft candidates; :existing identical candidates already existed; :unavailable service/chart families had no eligible observations.',
     'automatic_queued' => 'Automatic preparation was queued for :count eligible HTTP/API services.',
     'automatic_review_required' => 'Review the selected period, coverage, missing opportunities, exclusions, adequacy, warnings, and statistical signals independently before any lifecycle decision.',

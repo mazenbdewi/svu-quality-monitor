@@ -6,6 +6,7 @@ use App\Filament\Resources\ControlCharts\ControlChartResource;
 use App\Models\ControlChart;
 use App\Models\MonitoredService;
 use App\Models\User;
+use Carbon\Carbon;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -16,6 +17,7 @@ class ControlChartViewPageTest extends TestCase
 
     public function test_control_chart_view_page_renders_for_an_authenticated_user(): void
     {
+        $this->travelTo(Carbon::parse('2026-11-18 05:30:00', 'UTC'));
         config(['app.env' => 'local']);
 
         $service = MonitoredService::factory()->create(['name' => 'SVU Portal']);

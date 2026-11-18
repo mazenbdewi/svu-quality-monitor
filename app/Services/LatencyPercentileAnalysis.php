@@ -170,7 +170,13 @@ class LatencyPercentileAnalysis
             'missing_opportunities' => max(0, $expected - $covered),
             'coverage_percent' => $expected ? 100 * $covered / $expected : null,
             'status' => $expected === 0 ? 'no_expected_opportunities' : ($covered === 0 ? 'no_data' : ($covered < $expected ? 'insufficient_coverage' : 'observed')),
-            'basis' => 'current_service_cadence_and_recorded_maintenance',
+            'basis' => 'historical_estimate_current_service_interval_v1',
+            'effective_start_policy' => 'max_window_start_and_service_created_at',
+            'exact_opportunity_ledger' => false,
+            'limitations' => [
+                'historical_interval_changes_not_reconstructible',
+                'legacy_expected_opportunities_are_estimated',
+            ],
         ];
     }
 }

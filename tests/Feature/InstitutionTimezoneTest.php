@@ -98,6 +98,7 @@ class InstitutionTimezoneTest extends TestCase
             'reliability:calculate' => ['10 0 * * *', '2026-09-26 21:10:00'],
             'sla:calculate' => ['20 0 * * *', '2026-09-26 21:20:00'],
             'control-charts:calculate' => ['25 0 * * *', '2026-09-26 21:25:00'],
+            'baselines:prepare-due' => ['30 0 * * *', '2026-09-26 21:30:00'],
             'slo:prepare-due' => ['35 0 * * *', '2026-09-26 21:35:00'],
             'backup:create' => ['0 2 * * *', '2026-09-26 23:00:00'],
             'backup:cleanup' => ['0 3 * * *', '2026-09-27 00:00:00'],
@@ -118,6 +119,6 @@ class InstitutionTimezoneTest extends TestCase
         }
         $heartbeat = $events->first(fn ($e) => $e->description === 'system-health:scheduler-heartbeat');
         $this->assertSame('* * * * *', $heartbeat->expression);
-        $this->assertCount(10, $events);
+        $this->assertCount(11, $events);
     }
 }

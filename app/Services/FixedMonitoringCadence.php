@@ -197,6 +197,7 @@ class FixedMonitoringCadence
         return [
             'basis' => 'fixed_utc_slot_ledger_v1', 'period_start' => $start->toIso8601String(),
             'period_end' => $end->toIso8601String(), 'boundary' => '[start,end)',
+            'exact_opportunity_ledger' => true,
             'due' => $due, 'completed' => $completed, 'missed' => (int) ($counts->missed ?? 0),
             'failed' => (int) ($counts->failed ?? 0), 'cancelled' => (int) ($counts->cancelled ?? 0),
             'pending' => (int) ($counts->pending ?? 0), 'accounting_complete' => ! $backlog && $scopeCompatible,

@@ -74,6 +74,34 @@ services:
       - --timeout=60
       - --max-time=3600
 
+  baseline_queue:
+    stop_grace_period: 120s
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: app
+    restart: unless-stopped
+    env_file:
+      - .env
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - application_storage:/var/www/html/storage
+    mem_limit: 256m
+    cpus: 0.5
+    command:
+      - php
+      - -d
+      - memory_limit=192M
+      - artisan
+      - queue:work
+      - --queue=baseline-preparation
+      - --sleep=5
+      - --tries=3
+      - --timeout=60
+      - --max-time=3600
+
   slo_queue:
     profiles: [slo-preparation]
     stop_grace_period: 120s

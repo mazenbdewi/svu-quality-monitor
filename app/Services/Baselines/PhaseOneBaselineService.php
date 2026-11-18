@@ -24,6 +24,22 @@ class PhaseOneBaselineService
     public function create(MonitoredService $service, string $type, string $from, string $to, string $timezone, User $actor, string $aggregation = 'hourly', ?string $cutoff = null, ?string $draftSetId = null, ?array $automaticPolicy = null): ControlChartBaseline
     {
         $this->authorize($actor);
+
+        return $this->createDraft($service, $type, $from, $to, $timezone, $actor, $aggregation, $cutoff, $draftSetId, $automaticPolicy);
+    }
+
+    /** Scheduler-only entry point. It can create a Draft, never a reviewed or approved reference. */
+    public function createAutomatically(MonitoredService $service, string $type, string $from, string $to, string $timezone, string $aggregation, string $cutoff, string $draftSetId, array $automaticPolicy): ControlChartBaseline
+    {
+        if (($automaticPolicy['version'] ?? null) !== 'phase1-automatic-v1') {
+            throw new LogicException('Only the versioned automatic Phase I policy may use the system entry point.');
+        }
+
+        return $this->createDraft($service, $type, $from, $to, $timezone, null, $aggregation, $cutoff, $draftSetId, $automaticPolicy);
+    }
+
+    private function createDraft(MonitoredService $service, string $type, string $from, string $to, string $timezone, ?User $actor, string $aggregation = 'hourly', ?string $cutoff = null, ?string $draftSetId = null, ?array $automaticPolicy = null): ControlChartBaseline
+    {
         if (! in_array($type, ['i_chart', 'mr_chart', 'p_chart'], true) || ! in_array($aggregation, ['hourly', 'daily'], true)) {
             $this->invalid('Only I/MR/P with hourly/daily subgroup policy are supported.');
         }
@@ -72,7 +88,7 @@ class PhaseOneBaselineService
                     'outlier_policy' => 'no_discretionary_exclusions',
                     'automatic_policy' => $automaticPolicy,
                 ],
-                'created_by' => $actor->id, 'created_at' => $created,
+                'created_by' => $actor?->id, 'created_at' => $created,
             ]);
             foreach ($captured['samples'] as $sample) {
                 $baseline->samples()->create($sample);
@@ -209,12 +225,13 @@ class PhaseOneBaselineService
         return hash('sha256', ResearchSnapshotEncoding::encode($samples));
     }
 
-    private function record(string $event, ControlChartBaseline $baseline, User $actor): void
+    private function record(string $event, ControlChartBaseline $baseline, ?User $actor): void
     {
         $this->audit->log('baseline.'.$event, $baseline, 'Phase I baseline '.$event, context: [
             'baseline_id' => $baseline->id, 'version' => $baseline->version, 'service_id' => $baseline->monitored_service_id,
             'chart_type' => $baseline->chart_type, 'baseline_start' => $baseline->baseline_start->toIso8601String(), 'baseline_end' => $baseline->baseline_end->toIso8601String(),
-            'status' => $baseline->status, 'actor_id' => $actor->id,
+            'status' => $baseline->status, 'actor_id' => $actor?->id,
+            'initiator' => $actor ? 'authorized_user' : 'scheduled_system',
         ], after: ['review_notes' => $baseline->review_notes, 'decision_reason' => $baseline->decision_reason, 'effective_from' => $baseline->effective_from?->toIso8601String(), 'effective_to' => $baseline->effective_to?->toIso8601String()], actor: $actor);
     }
 

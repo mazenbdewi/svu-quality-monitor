@@ -56,10 +56,39 @@ class AutomaticPhaseOneBaselineService
         return $count;
     }
 
-    /** @return array{created: array, existing: array, unavailable: array, cutoff: string, policy_version: string} */
-    public function prepareOne(int $serviceId, User $actor, string $cutoff, string $timezone, string $policyVersion): array
+    /** Dispatch incomplete automatic I/MR/P sets. Existing lifecycle decisions are never replaced. */
+    public function dispatchDue(): array
     {
-        $this->authorize($actor);
+        $policy = $this->policy();
+        $timezone = $this->institutionTimezone->name();
+        $cutoff = now($timezone)->startOfDay()->utc()->startOfSecond()->toIso8601String();
+        $counts = ['eligible' => 0, 'dispatched' => 0];
+        $maximum = max(1, (int) ($policy['maximum_jobs_per_run'] ?? 5));
+
+        foreach (MonitoredService::query()->where('is_active', true)->whereIn('check_type', ['http', 'api'])->lazyById() as $service) {
+            $counts['eligible']++;
+            $complete = ControlChartBaseline::query()
+                ->where('monitored_service_id', $service->id)
+                ->where('selection_policy_version', $policy['version'])
+                ->whereIn('chart_type', ['i_chart', 'mr_chart', 'p_chart'])
+                ->distinct()->count('chart_type') === 3;
+            if ($complete || $counts['dispatched'] >= $maximum) {
+                continue;
+            }
+
+            PrepareAutomaticPhaseOneBaseline::dispatch($service->id, null, $cutoff, $timezone, $policy['version']);
+            $counts['dispatched']++;
+        }
+
+        return $counts;
+    }
+
+    /** @return array{created: array, existing: array, unavailable: array, cutoff: string, policy_version: string} */
+    public function prepareOne(int $serviceId, ?User $actor, string $cutoff, string $timezone, string $policyVersion): array
+    {
+        if ($actor) {
+            $this->authorize($actor);
+        }
         $policy = $this->policy();
         if ($policyVersion !== $policy['version'] || $timezone !== $this->institutionTimezone->name()) {
             throw new \LogicException('The queued automatic Phase I policy context is no longer current.');
@@ -78,8 +107,15 @@ class AutomaticPhaseOneBaselineService
         return $result;
     }
 
-    private function prepareService(MonitoredService $service, Carbon $end, string $timezone, array $policy, User $actor, array &$result): void
+    private function prepareService(MonitoredService $service, Carbon $end, string $timezone, array $policy, ?User $actor, array &$result): void
     {
+        $existing = $this->automaticTypes($service->id, $policy['version']);
+        if ($existing->count() === 3) {
+            array_push($result['existing'], ...$existing->values()->all());
+
+            return;
+        }
+
         $longestStart = $end->copy()->setTimezone($timezone)->subDays(max($policy['window_days']))->startOfDay()->utc();
         if (app(FixedMonitoringCadence::class)->referenceIncompatible($service, $longestStart, $end)) {
             $result['unavailable'][] = ['service_id' => $service->id, 'service_name' => $service->name, 'family' => 'i_mr_p', 'reason' => 'monitoring_sampling_regime_incompatible_with_calibration'];
@@ -93,7 +129,16 @@ class AutomaticPhaseOneBaselineService
             // Serialize the duplicate check and version allocation before any
             // candidate in this service set is written.
             $service = MonitoredService::query()->lockForUpdate()->findOrFail($service->id);
-            $draftSetId = (string) Str::uuid();
+            $existing = $this->automaticTypes($service->id, $policy['version']);
+            array_push($result['existing'], ...$existing->values()->all());
+            if ($existing->count() === 3) {
+                return;
+            }
+            // A recovered chart remains part of the original automatic set.
+            // Lifecycle status is deliberately irrelevant: rejected/retired
+            // members are preserved and never replaced or reactivated.
+            $draftSetId = $existing->first(fn (ControlChartBaseline $baseline): bool => filled($baseline->draft_set_id))?->draft_set_id
+                ?? (string) Str::uuid();
             $plans = [];
             if ($latency['included'] > 0) {
                 $plans[] = ['type' => 'i_chart', 'selection' => $latency];
@@ -110,10 +155,13 @@ class AutomaticPhaseOneBaselineService
             foreach ($plans as $plan) {
                 $type = $plan['type'];
                 $selection = $plan['selection'];
+                if ($existing->has($type)) {
+                    continue;
+                }
                 $identity = $this->identity($service, $type, $policy['version'], $selection['start'], $end, $timezone);
-                $existing = ControlChartBaseline::query()->where('automatic_identity', $identity)->first();
-                if ($existing) {
-                    $result['existing'][] = $existing;
+                $sameWindow = ControlChartBaseline::query()->where('automatic_identity', $identity)->first();
+                if ($sameWindow) {
+                    $result['existing'][] = $sameWindow;
 
                     continue;
                 }
@@ -133,21 +181,30 @@ class AutomaticPhaseOneBaselineService
                     'warnings' => $assessment['warnings'],
                     'selection_guard' => 'quantity_only_no_stability_search',
                 ];
-                $baseline = $this->engine->create(
-                    $service,
-                    $type,
-                    $selection['start']->toIso8601String(),
-                    $end->toIso8601String(),
-                    $timezone,
-                    $actor,
-                    'hourly',
-                    $end->toIso8601String(),
-                    $draftSetId,
-                    $trace,
-                );
+                $baseline = $actor
+                    ? $this->engine->create(
+                        $service, $type, $selection['start']->toIso8601String(), $end->toIso8601String(), $timezone,
+                        $actor, 'hourly', $end->toIso8601String(), $draftSetId, $trace,
+                    )
+                    : $this->engine->createAutomatically(
+                        $service, $type, $selection['start']->toIso8601String(), $end->toIso8601String(), $timezone,
+                        'hourly', $end->toIso8601String(), $draftSetId, $trace,
+                    );
                 $result['created'][] = $baseline;
             }
         }, 3);
+    }
+
+    private function automaticTypes(int $serviceId, string $policyVersion)
+    {
+        return ControlChartBaseline::query()
+            ->where('monitored_service_id', $serviceId)
+            ->where('selection_policy_version', $policyVersion)
+            ->whereIn('chart_type', ['i_chart', 'mr_chart', 'p_chart'])
+            ->orderByDesc('id')
+            ->get()
+            ->unique('chart_type')
+            ->keyBy('chart_type');
     }
 
     private function select(MonitoredService $service, string $family, Carbon $end, string $timezone, array $policy): array

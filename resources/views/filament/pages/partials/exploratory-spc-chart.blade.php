@@ -4,7 +4,7 @@
     $description = __('performance_analysis.charts.'.$chartKey.'.description');
 @endphp
 
-<article class="rounded-xl border p-4" wire:key="exploratory-chart-{{ $chartKey }}">
+<article class="rounded-xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-900 sm:p-5" wire:key="exploratory-chart-{{ $chartKey }}">
     <h3 class="text-base font-semibold">{{ $title }}</h3>
     <p class="mt-1 text-sm text-gray-500">{{ $description }}</p>
     @if ($chart['sufficiency'] !== 'analyzable')
@@ -14,7 +14,7 @@
         <p class="mt-2 text-sm text-gray-500">{{ __('performance_analysis.visualization_downsampled') }}</p>
     @endif
     <div x-data="historicalSpcChart(@js($chartKey))" x-init="init()" class="mt-4">
-        <div wire:ignore class="h-[360px] w-full">
+        <div wire:ignore class="h-[300px] w-full sm:h-[380px] xl:h-[420px]">
             <canvas x-ref="canvas" role="img" aria-label="{{ $title }}"></canvas>
         </div>
     </div>

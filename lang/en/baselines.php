@@ -20,4 +20,13 @@ return [
     'deleted' => ':count baseline(s) deleted.',
     'delete_changed' => 'The baseline changed or no longer exists. Refresh and try again.',
     'delete_protected' => 'This baseline has monitoring or research history and cannot be deleted.',
+    'list_start' => 'Phase I start', 'list_end' => 'Phase I end',
+    'statuses' => [
+        'draft' => 'Draft', 'reviewed' => 'Reviewed', 'approved' => 'Approved', 'rejected' => 'Rejected', 'retired' => 'Retired',
+    ],
+    'chart_types' => [
+        'i_chart' => 'Individual values chart (I)',
+        'mr_chart' => 'Moving range chart (MR)',
+        'p_chart' => 'Problematic-check proportion chart (P)',
+    ],
 ];

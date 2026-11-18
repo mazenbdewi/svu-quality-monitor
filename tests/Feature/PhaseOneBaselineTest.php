@@ -4,7 +4,6 @@ namespace Tests\Feature;
 
 use App\Exports\Baselines\PhaseOneBaselineExport;
 use App\Filament\Resources\ControlChartBaselines\ControlChartBaselineResource;
-use App\Filament\Resources\ControlChartBaselines\Pages\ListControlChartBaselines;
 use App\Filament\Resources\ControlChartBaselines\Pages\ViewControlChartBaseline;
 use App\Models\AuditLog;
 use App\Models\ControlChart;
@@ -397,17 +396,19 @@ class PhaseOneBaselineTest extends TestCase
         $this->assertSame(4, count($sheets[3]->array()));
     }
 
-    public function test_admin_can_generate_review_and_approve_through_ui(): void
+    public function test_admin_can_review_and_approve_a_prepared_draft_through_ui(): void
     {
         InstitutionSetting::current()->update(['timezone' => 'UTC']);
         $this->fixture();
-        Livewire::actingAs($this->admin)->test(ListControlChartBaselines::class)
-            ->mountAction('create_phase_one_baseline')->fillForm([
-                'service_id' => $this->service->id, 'baseline_start' => '2026-09-01 00:00:00',
-                'baseline_end' => '2026-09-01 04:00:00', 'analysis_timezone' => 'UTC', 'aggregation_interval' => 'hourly', 'metrics' => ['latency'],
-            ])->call('checkBaselineQuality')->callMountedAction()->assertHasNoActionErrors();
-        $baseline = ControlChartBaseline::firstOrFail();
-        $component = Livewire::test(ViewControlChartBaseline::class, ['record' => $baseline->id]);
+        $baseline = $this->engine->create(
+            $this->service,
+            'i_chart',
+            '2026-09-01 00:00:00',
+            '2026-09-01 04:00:00',
+            'UTC',
+            $this->admin,
+        );
+        $component = Livewire::actingAs($this->admin)->test(ViewControlChartBaseline::class, ['record' => $baseline->id]);
         $component->callAction('review_baseline', data: ['notes' => 'Reviewed distribution, configuration, signals and missing periods.', 'acknowledge' => true])->assertHasNoActionErrors();
         $this->assertSame('reviewed', $baseline->fresh()->status);
         $component->callAction('approve_baseline', data: ['reason' => 'Accepted as study reference with explicit limitations.'])->assertHasNoActionErrors();

@@ -24,6 +24,7 @@ return [
          */
         'automatic_baseline' => [
             'version' => 'phase1-automatic-v1',
+            'maximum_jobs_per_run' => 5,
             'window_days' => [14, 21, 28],
             'minimum_i_observations' => 20,
             'minimum_mr_pairs' => 20,

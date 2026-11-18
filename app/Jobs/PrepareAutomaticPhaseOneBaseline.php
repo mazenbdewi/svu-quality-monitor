@@ -17,7 +17,7 @@ class PrepareAutomaticPhaseOneBaseline implements ShouldBeUnique, ShouldQueue
 
     public int $tries = 3;
 
-    public int $timeout = 75;
+    public int $timeout = 55;
 
     public int $uniqueFor = 3600;
 
@@ -25,11 +25,13 @@ class PrepareAutomaticPhaseOneBaseline implements ShouldBeUnique, ShouldQueue
 
     public function __construct(
         public readonly int $serviceId,
-        public readonly int $actorId,
+        public readonly ?int $actorId,
         public readonly string $cutoff,
         public readonly string $timezone,
         public readonly string $policyVersion,
-    ) {}
+    ) {
+        $this->onQueue('baseline-preparation');
+    }
 
     public function uniqueId(): string
     {
@@ -38,9 +40,11 @@ class PrepareAutomaticPhaseOneBaseline implements ShouldBeUnique, ShouldQueue
 
     public function handle(AutomaticPhaseOneBaselineService $service): void
     {
-        $actor = User::query()->find($this->actorId);
-        if ($actor) {
-            $service->prepareOne($this->serviceId, $actor, $this->cutoff, $this->timezone, $this->policyVersion);
+        $actor = $this->actorId === null ? null : User::query()->find($this->actorId);
+        if ($this->actorId !== null && ! $actor) {
+            return;
         }
+
+        $service->prepareOne($this->serviceId, $actor, $this->cutoff, $this->timezone, $this->policyVersion);
     }
 }

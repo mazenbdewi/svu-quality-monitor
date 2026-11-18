@@ -6,37 +6,25 @@ use App\Exports\Baselines\PhaseOneBaselineExport;
 use App\Filament\Resources\ControlChartBaselines\Pages\ListControlChartBaselines;
 use App\Filament\Resources\ControlChartBaselines\Pages\ViewControlChartBaseline;
 use App\Models\ControlChartBaseline;
-use App\Models\MonitoredService;
-use App\Services\Baselines\AutomaticPhaseOneBaselineService;
 use App\Services\Baselines\DeletePhaseOneBaseline;
 use App\Services\Baselines\PhaseOneBaselineService;
-use App\Services\Baselines\PhaseOneBaselineSubmission;
 use App\Services\InstitutionTimezone;
 use BackedEnum;
+use Carbon\Carbon;
 use Filament\Actions\Action;
 use Filament\Actions\ViewAction;
-use Filament\Forms\Components\CheckboxList;
-use Filament\Forms\Components\DateTimePicker;
-use Filament\Forms\Components\Hidden;
-use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\Toggle;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Infolists\Components\ViewEntry;
 use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
-use Filament\Schemas\Components\Section;
-use Filament\Schemas\Components\Text;
-use Filament\Schemas\Components\Utilities\Get;
-use Filament\Schemas\Components\Utilities\Set;
-use Filament\Schemas\Components\View;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
-use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\Gate;
-use Illuminate\Validation\ValidationException;
+use Illuminate\Support\HtmlString;
 use Maatwebsite\Excel\Facades\Excel;
 use UnitEnum;
 
@@ -101,93 +89,40 @@ class ControlChartBaselineResource extends Resource
     public static function table(Table $table): Table
     {
         return $table->defaultSort('id', 'desc')->columns([
-            TextColumn::make('monitoredService.name')->label(__('baselines.service')),
-            TextColumn::make('chart_type')->label(__('baselines.chart')),
-            TextColumn::make('version')->label(__('baselines.version')),
-            TextColumn::make('status')->label(__('baselines.status'))->badge(),
-            TextColumn::make('baseline_start')->label(__('baselines.start'))->dateTime(),
-            TextColumn::make('baseline_end')->label(__('baselines.end'))->dateTime(),
-            TextColumn::make('selection_policy_version')->label(__('baseline_creation.policy_version'))->placeholder('—'),
-            TextColumn::make('review_context.sufficiency')->label(__('baselines.sufficiency')),
+            TextColumn::make('monitoredService.name')->label(__('baselines.service'))->searchable()->wrap(),
+            TextColumn::make('chart_type')->label(__('baselines.chart'))
+                ->formatStateUsing(fn (string $state): string => __('baselines.chart_types.'.$state))->wrap(),
+            TextColumn::make('version')->label(__('baselines.version'))->alignCenter(),
+            TextColumn::make('status')->label(__('baselines.status'))->badge()->alignCenter()
+                ->formatStateUsing(fn (string $state): string => __('baselines.statuses.'.$state))
+                ->color(fn (string $state): string => match ($state) {
+                    'approved' => 'success', 'rejected', 'retired' => 'danger', 'reviewed' => 'info', default => 'warning',
+                }),
+            TextColumn::make('baseline_start')->label(__('baselines.list_start'))->alignCenter()->html()
+                ->formatStateUsing(fn ($state): HtmlString => static::localDateTime($state)),
+            TextColumn::make('baseline_end')->label(__('baselines.list_end'))->alignCenter()->html()
+                ->formatStateUsing(fn ($state): HtmlString => static::localDateTime($state)),
         ])->recordActions([ViewAction::make(), static::deleteBaselineAction()])->recordUrl(fn ($record) => static::getUrl('view', ['record' => $record]));
+    }
+
+    private static function localDateTime(mixed $value): HtmlString
+    {
+        $local = Carbon::parse($value)->setTimezone(app(InstitutionTimezone::class)->name());
+
+        return new HtmlString(e($local->format('Y-m-d')).'<br><span class="text-xs text-gray-500">'.e($local->format('H:i:s')).'</span>');
     }
 
     public static function infolist(Schema $schema): Schema
     {
         return $schema->components([
             TextEntry::make('monitoredService.name')->label(__('baselines.service')),
-            TextEntry::make('chart_type')->label(__('baselines.chart')),
+            TextEntry::make('chart_type')->label(__('baselines.chart'))
+                ->formatStateUsing(fn (string $state): string => __('baselines.chart_types.'.$state)),
             TextEntry::make('version')->label(__('baselines.version')),
-            TextEntry::make('status')->label(__('baselines.status')),
+            TextEntry::make('status')->label(__('baselines.status'))
+                ->formatStateUsing(fn (string $state): string => __('baselines.statuses.'.$state)),
             ViewEntry::make('phase_one_review')->hiddenLabel()->view('filament.baselines.review')->columnSpanFull(),
         ]);
-    }
-
-    public static function generateAction(): Action
-    {
-        return Action::make('create_phase_one_baseline')->label(__('baseline_creation.create'))->visible(fn () => static::canManage())
-            ->modalSubmitActionLabel(__('baseline_creation.create'))
-            ->modalSubmitAction(fn (Action $action, $livewire) => $action->disabled(fn () => ! $livewire->canConfirmBaseline()))
-            ->beforeFormValidated(fn ($livewire) => $livewire->guardBaselineAvailability())
-            ->schema([
-                View::make('filament.baselines.creation-help'),
-                Text::make(fn () => __('baseline_creation.step_service')),
-                Select::make('service_id')->label(__('baselines.service'))->options(fn () => MonitoredService::whereIn('check_type', ['http', 'api'])->orderBy('name')->pluck('name', 'id'))->default(fn ($livewire) => $livewire->baselinePrefill('service_id'))->required()->searchable()->native(false)->live()->rules(['exists:monitored_services,id'])
-                    ->afterStateUpdated(fn (Get $get, Set $set, $livewire) => $livewire->baselineServiceChanged($get, $set)),
-                Text::make(fn (Get $get) => ($id = $get('service_id')) ? __('baseline_creation.current_reference', ['count' => ControlChartBaseline::where('monitored_service_id', $id)->where('status', 'approved')->count()]) : ''),
-                Text::make(fn () => __('baseline_creation.step_period')),
-                Text::make(fn (Get $get, $livewire) => $livewire->baselineRangeMessage($get)),
-                Text::make(fn () => __('baseline_creation.period_help', ['timezone' => app(InstitutionTimezone::class)->name()])),
-                DateTimePicker::make('baseline_start')->label(__('baselines.start'))->default(fn ($livewire) => $livewire->baselinePrefill('baseline_start'))->required()->seconds(true)->live(debounce: 400)
-                    ->afterStateUpdated(fn (Get $get, Set $set, $livewire) => $livewire->baselinePeriodChanged($get, $set)),
-                DateTimePicker::make('baseline_end')->label(__('baselines.end'))->default(fn ($livewire) => $livewire->baselinePrefill('baseline_end'))->required()->after('baseline_start')->seconds(true)->live(debounce: 400)
-                    ->maxDate(fn () => now(app(InstitutionTimezone::class)->name())->format('Y-m-d\TH:i:s'))
-                    ->afterStateUpdated(fn (Get $get, Set $set, $livewire) => $livewire->baselinePeriodChanged($get, $set)),
-                Hidden::make('manual_cutoff')->default(false)->dehydrated(false),
-                Section::make(__('baseline_creation.advanced'))->collapsible()->collapsed()->schema([
-                    DateTimePicker::make('data_cutoff')->label(__('baseline_creation.cutoff'))->default(fn ($livewire) => $livewire->baselinePrefill('data_cutoff'))->helperText(__('baseline_creation.cutoff_help'))->seconds(true)->live(debounce: 400)
-                        ->afterStateUpdated(fn (Get $get, Set $set, $livewire) => $livewire->baselinePeriodChanged($get, $set, true)),
-                ]),
-                Select::make('analysis_timezone')->label(__('baselines.timezone'))->options(array_combine(\DateTimeZone::listIdentifiers(), \DateTimeZone::listIdentifiers()))->searchable()->default(fn () => app(InstitutionTimezone::class)->name())->disabled()->dehydrated()->required(),
-                Text::make(fn (Get $get, $livewire) => $livewire->baselineAvailability($get)['message']),
-                CheckboxList::make('metrics')->label(__('baseline_creation.metrics'))->options([
-                    'latency' => __('baseline_creation.latency'), 'problematic' => __('baseline_creation.problematic'),
-                ])
-                    ->descriptions(fn (Get $get, $livewire) => collect(['latency', 'problematic'])->mapWithKeys(function ($metric) use ($get, $livewire) {
-                        $count = $livewire->baselineAvailability($get)[$metric];
-
-                        return [$metric => $count > 0 ? __('baseline_creation.'.$metric.'_count', ['count' => $count]) : __('baseline_creation.'.$metric.'_unavailable')];
-                    })->all())
-                    ->default(fn ($livewire) => $livewire->baselinePrefill('metrics') ?? [])->required()->minItems(1)->live()
-                    ->afterStateUpdated(fn ($livewire) => $livewire->invalidateBaselinePreview())
-                    ->disableOptionWhen(fn (string $value, Get $get, $livewire) => ($livewire->baselineAvailability($get)[$value] ?? 0) === 0),
-                Select::make('aggregation_interval')->label(__('baselines.aggregation'))->options(['hourly' => __('baseline_creation.hourly'), 'daily' => __('baseline_creation.daily')])->default(fn ($livewire) => $livewire->baselinePrefill('aggregation_interval') ?? 'hourly')->required()
-                    ->live()->afterStateUpdated(fn ($livewire) => $livewire->invalidateBaselinePreview())
-                    ->visible(fn (Get $get) => in_array('problematic', $get('metrics') ?? [], true)),
-                View::make('filament.baselines.quality-preview'),
-            ])->action(function (array $data, $livewire) {
-                abort_unless(static::canManage(), 403);
-                try {
-                    $baselines = app(PhaseOneBaselineSubmission::class)->create($data, app(InstitutionTimezone::class)->name(), auth()->user());
-                } catch (AuthorizationException $e) {
-                    throw $e;
-                } catch (ValidationException $e) {
-                    Notification::make()->danger()->title(__('baseline_creation.failed_title'))->body(collect($e->errors())->flatten()->implode(' '))->send();
-                    $prefix = $livewire->baselineErrorPath();
-                    throw ValidationException::withMessages(collect($e->errors())->mapWithKeys(fn ($messages, $field) => [$prefix.'.'.$field => $messages])->all());
-                } catch (\Throwable $e) {
-                    report($e);
-                    Notification::make()->danger()->title(__('baseline_creation.failed_title'))->body(__('baseline_creation.failed'))->persistent()->send();
-
-                    return;
-                }
-                Notification::make()->success()->title(__('baseline_creation.created', ['count' => count($baselines)]))->send();
-                if (collect($baselines)->contains(fn ($row) => $row->review_context['sufficiency'] !== 'analyzable')) {
-                    Notification::make()->warning()->title(__('baseline_creation.limited'))->send();
-                }
-
-                return redirect(static::getUrl('index'));
-            });
     }
 
     public static function lifecycleActions(): array
@@ -210,36 +145,6 @@ class ControlChartBaselineResource extends Resource
                     return Excel::download(new PhaseOneBaselineExport($record), 'baseline-'.$record->id.'-v'.$record->version.'.xlsx');
                 }),
         ];
-    }
-
-    public static function automaticGenerateAction(): Action
-    {
-        return Action::make('prepare_reference_performance_automatically')
-            ->label(__('baseline_creation.prepare_automatically'))
-            ->icon(Heroicon::OutlinedSparkles)
-            ->visible(fn (): bool => static::canManage())
-            ->requiresConfirmation()
-            ->modalHeading(__('baseline_creation.prepare_automatically'))
-            ->modalDescription(__('baseline_creation.automatic_policy_summary'))
-            ->modalSubmitActionLabel(__('baseline_creation.prepare_automatically'))
-            ->action(function () {
-                abort_unless(static::canManage(), 403);
-                try {
-                    $count = app(AutomaticPhaseOneBaselineService::class)->dispatch(auth()->user());
-                } catch (AuthorizationException $e) {
-                    throw $e;
-                } catch (\Throwable $e) {
-                    report($e);
-                    Notification::make()->danger()->title(__('baseline_creation.failed_title'))->body(__('baseline_creation.failed'))->persistent()->send();
-
-                    return null;
-                }
-
-                Notification::make()->success()->title(__('baseline_creation.automatic_queued', ['count' => $count]))
-                    ->body(__('baseline_creation.automatic_review_required'))->send();
-
-                return redirect(static::getUrl('index'));
-            });
     }
 
     public static function deleteBaselineAction(bool $redirect = false): Action

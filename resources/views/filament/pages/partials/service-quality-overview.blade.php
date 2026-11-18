@@ -68,6 +68,11 @@
             / {{ number_format($latency['coverage']['expected_opportunities']) }}
             · {{ __('slo_overview.valid_latency_observations') }}: {{ number_format($latency['latency_observations']) }}
         </p>
+        @if (! ($latency['coverage']['exact_opportunity_ledger'] ?? false))
+            <p class="rounded-lg bg-warning-50 p-3 text-sm text-warning-800 dark:bg-warning-950/30 dark:text-warning-300">
+                {{ __('performance_analysis.coverage_estimate_notice') }}
+            </p>
+        @endif
         @if ($latency['sample_status'] !== 'analyzable' || $latency['coverage']['status'] !== 'observed')
             <p role="status" class="text-warning-700 dark:text-warning-400">{{ __('slo_overview.data_quality_warning') }}</p>
         @endif

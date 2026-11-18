@@ -20,4 +20,13 @@ return [
     'deleted' => 'تم حذف :count من سجلات Baseline.',
     'delete_changed' => 'تغيّر سجل Baseline أو لم يعد موجوداً. حدّث الصفحة وحاول مجدداً.',
     'delete_protected' => 'ترتبط بسجل Baseline بيانات مراقبة أو بحث ولا يمكن حذفه.',
+    'list_start' => 'بداية Phase I', 'list_end' => 'نهاية Phase I',
+    'statuses' => [
+        'draft' => 'مسودة', 'reviewed' => 'تمت المراجعة', 'approved' => 'معتمد', 'rejected' => 'مرفوض', 'retired' => 'متقاعد',
+    ],
+    'chart_types' => [
+        'i_chart' => 'مخطط القيم الفردية (I)',
+        'mr_chart' => 'مخطط المدى المتحرك (MR)',
+        'p_chart' => 'مخطط نسبة الفحوص الإشكالية (P)',
+    ],
 ];

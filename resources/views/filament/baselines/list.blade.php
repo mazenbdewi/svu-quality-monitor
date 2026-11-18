@@ -1,16 +1,12 @@
 <x-filament-panels::page>
     <x-filament::section>
-        @if (app()->runningUnitTests())
-            @include('filament.baselines.creation-help')
-            <p>{{ __('baseline_creation.group_help') }}</p>
-            <p>{{ __('baseline_creation.legacy') }}</p>
-        @else
-            <p>{{ __('baseline_creation.automatic_page_intro') }}</p>
-            <p>{{ __('baseline_creation.automatic_policy_summary') }}</p>
-        @endif
+        <p>{{ __('baseline_creation.scheduled_page_intro') }}</p>
+        <p class="mt-2 text-sm text-gray-600 dark:text-gray-300">{{ __('baseline_creation.automatic_policy_summary') }}</p>
         @unless(\App\Filament\Resources\ControlChartBaselines\ControlChartBaselineResource::canManage())
             <p>{{ __('baseline_creation.permission') }}</p>
         @endunless
     </x-filament::section>
-    {{ $this->content }}
+    <div class="[&_.fi-ta-cell]:py-2 [&_.fi-ta-text]:text-sm">
+        {{ $this->content }}
+    </div>
 </x-filament-panels::page>

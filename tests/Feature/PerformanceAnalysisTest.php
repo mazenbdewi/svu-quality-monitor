@@ -117,6 +117,8 @@ class PerformanceAnalysisTest extends TestCase
         $summary = $component->viewData('summary');
         $this->assertSame('insufficient', $summary['state']);
         $this->assertSame(2, $summary['eligible_count']);
+        $this->assertSame(2, $summary['successful_count']);
+        $this->assertSame(0, $summary['failed_count']);
         $this->assertSame(2, $summary['latency_count']);
         $this->assertSame(1, $summary['problematic_count']);
         $this->assertEquals(50.0, $summary['problematic_percent']);
@@ -216,6 +218,20 @@ class PerformanceAnalysisTest extends TestCase
         $this->assertSame(229.0, $displayPoints[array_key_last($displayPoints)]['value']);
     }
 
+    public function test_visualization_cap_never_hides_statistical_signals(): void
+    {
+        config(['monitoring.spc.visualization_max_points' => 100]);
+        $points = [];
+        for ($index = 0; $index < 130; $index++) {
+            $points[] = ['value' => (float) $index, 'is_out_of_control' => true];
+        }
+        $method = new \ReflectionMethod(PerformanceAnalysis::class, 'visualizationPoints');
+        $display = $method->invoke(Livewire::actingAs($this->viewer)->test(PerformanceAnalysis::class)->instance(), $points);
+
+        $this->assertCount(130, $display);
+        $this->assertNotContains(false, array_column($display, 'is_out_of_control'));
+    }
+
     public function test_page_renders_exploratory_chart_sections(): void
     {
         $this->check('2026-10-13 21:00:00');
@@ -227,7 +243,9 @@ class PerformanceAnalysisTest extends TestCase
             ->assertSee('Response Time')
             ->assertSee('Problematic Checks')
             ->assertSee('canvas')
-            ->assertSee('Exploratory analysis');
+            ->assertSee('Exploratory analysis')
+            ->assertSee('pointStyle', false)
+            ->assertSee(__('performance_analysis.point_signal'));
     }
 
     public function test_read_only_p_chart_keeps_subgroup_specific_limits(): void

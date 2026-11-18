@@ -263,6 +263,7 @@ class FixedMonitoringCadenceTest extends TestCase
         $this->assertSame(1, $coverage['due']);
         $this->assertSame(100.0, $coverage['completion_percent']);
         $this->assertSame('fixed_utc_slot_ledger_v1', $coverage['basis']);
+        $this->assertTrue($coverage['exact_opportunity_ledger']);
     }
 
     public function test_cross_cutover_calibration_is_incompatible_without_changing_prior_data(): void

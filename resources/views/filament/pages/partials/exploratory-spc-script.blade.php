@@ -33,6 +33,8 @@
                                     pointBackgroundColor: colors,
                                     pointBorderColor: colors,
                                     pointRadius: points.map((point) => point.is_out_of_control ? 6 : 3),
+                                    pointStyle: points.map((point) => point.is_out_of_control ? 'triangle' : 'circle'),
+                                    pointBorderWidth: points.map((point) => point.is_out_of_control ? 2 : 1),
                                     pointHoverRadius: 8,
                                     borderWidth: 2,
                                     tension: 0,
@@ -82,6 +84,8 @@
                                     rtl: @js(app()->getLocale() === 'ar'),
                                     textDirection: @js(app()->getLocale() === 'ar' ? 'rtl' : 'ltr'),
                                     callbacks: {
+                                        title: (items) => labels[items[0]?.dataIndex] || '',
+                                        label: (item) => `${item.dataset.label}: ${item.formattedValue}`,
                                         afterBody: (items) => {
                                             const point = points[items[0]?.dataIndex];
 
@@ -89,7 +93,9 @@
                                                 return [];
                                             }
 
-                                            const details = [];
+                                            const details = [
+                                                `${@js(__('performance_analysis.tooltip_status'))}: ${point.is_out_of_control ? @js(__('performance_analysis.point_signal')) : @js(__('performance_analysis.point_normal'))}`,
+                                            ];
                                             if (point.sample_size !== null && point.sample_size !== undefined) {
                                                 details.push(`${@js(__('performance_analysis.tooltip_sample_size'))}: ${point.sample_size}`);
                                             }
@@ -103,8 +109,22 @@
                                 },
                             },
                             scales: {
-                                x: {ticks: {maxRotation: 45, minRotation: 0, autoSkip: true, maxTicksLimit: 20}},
-                                y: {beginAtZero: true},
+                                x: {
+                                    ticks: {
+                                        maxRotation: 0,
+                                        minRotation: 0,
+                                        autoSkip: true,
+                                        maxTicksLimit: 12,
+                                        callback(value) {
+                                            const label = this.getLabelForValue(value);
+                                            const parts = String(label).split(' ');
+
+                                            return parts.length > 1 ? [parts[0], parts[1]] : label;
+                                        },
+                                    },
+                                    grid: {display: false},
+                                },
+                                y: {beginAtZero: true, grid: {color: 'rgba(148, 163, 184, 0.18)'}},
                             },
                         },
                     });

@@ -43,6 +43,11 @@ app()->afterResolving(Schedule::class, function ($schedule): void {
         ->dailyAt('00:25')
         ->withoutOverlapping();
 
+    $schedule->command('baselines:prepare-due')
+        ->timezone($timezone)
+        ->dailyAt('00:30')
+        ->withoutOverlapping();
+
     $schedule->command('slo:prepare-due')
         ->timezone($timezone)
         ->dailyAt('00:35')

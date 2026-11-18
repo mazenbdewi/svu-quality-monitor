@@ -52,21 +52,18 @@ class Task4NavigationTest extends TestCase
         $this->assertSame($group, AnalysisMethodologyPage::getNavigationGroup());
     }
 
-    public function test_performance_page_links_to_selected_service_and_shows_baseline_action_only_to_managers(): void
+    public function test_performance_page_never_exposes_manual_baseline_preparation(): void
     {
-        $this->actingAs($this->admin)
-            ->get(PerformanceAnalysis::getUrl(['service' => $this->service->id]))
-            ->assertOk()
-            ->assertSee(__('performance_analysis.create_baseline'))
-            ->assertSee('prefill_service='.$this->service->id);
-
-        $this->actingAs($this->viewer)
-            ->get(PerformanceAnalysis::getUrl(['service' => $this->service->id]))
-            ->assertOk()
-            ->assertDontSee(__('performance_analysis.create_baseline'));
+        foreach ([$this->admin, $this->viewer] as $user) {
+            $this->actingAs($user)
+                ->get(PerformanceAnalysis::getUrl(['service' => $this->service->id]))
+                ->assertOk()
+                ->assertDontSee(__('performance_analysis.create_baseline'))
+                ->assertDontSee('prefill_service='.$this->service->id);
+        }
     }
 
-    public function test_prefilled_baseline_entry_opens_existing_action_without_writing(): void
+    public function test_prefill_query_does_not_expose_a_manual_creation_action_or_write(): void
     {
         $start = '2026-10-01 00:00:00';
         $end = '2026-10-07 00:00:00';
@@ -77,12 +74,9 @@ class Task4NavigationTest extends TestCase
             'prefill_end' => $end,
         ])->actingAs($this->admin)->test(ListControlChartBaselines::class);
 
-        $this->assertSame($this->service->id, $page->instance()->baselinePrefill('service_id'));
-        $page->mountAction('create_phase_one_baseline');
-        $this->assertSame($this->service->id, $page->get('mountedActions.0.data.service_id'));
-        $this->assertSame('2026-10-01 03:00:00', $page->get('mountedActions.0.data.baseline_start'));
-        $this->assertSame('2026-10-07 03:00:00', $page->get('mountedActions.0.data.baseline_end'));
-        $this->assertSame('2026-10-07 03:00:00', $page->get('mountedActions.0.data.data_cutoff'));
+        $page->assertDontSee(__('baseline_creation.create'))
+            ->assertDontSee(__('baseline_creation.prepare_automatically'));
+        $this->assertFalse(method_exists($page->instance(), 'baselinePrefill'));
         $this->assertSame(0, ControlChartBaseline::count());
     }
 
@@ -96,5 +90,18 @@ class Task4NavigationTest extends TestCase
             ]))
             ->assertOk()
             ->assertDontSee(__('baseline_creation.create'));
+    }
+
+    public function test_baseline_status_and_chart_labels_are_localized_without_changing_internal_values(): void
+    {
+        foreach (['en', 'ar'] as $locale) {
+            app()->setLocale($locale);
+            foreach (['draft', 'reviewed', 'approved', 'rejected', 'retired'] as $status) {
+                $this->assertNotSame('baselines.statuses.'.$status, __('baselines.statuses.'.$status));
+            }
+            foreach (['i_chart', 'mr_chart', 'p_chart'] as $type) {
+                $this->assertNotSame('baselines.chart_types.'.$type, __('baselines.chart_types.'.$type));
+            }
+        }
     }
 }

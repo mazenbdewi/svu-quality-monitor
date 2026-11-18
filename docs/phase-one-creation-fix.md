@@ -1,5 +1,9 @@
 # Phase I creation and researcher workflow review
 
+> Historical review only. The manual creation UI described here has been
+> superseded by scheduled `phase1-automatic-v1` draft preparation and is no
+> longer accessible through routes, Livewire actions, or prefill parameters.
+
 Review date: 2026-10-03 (Asia/Damascus). No deployment, production migration, commit, push or Pilot start was performed.
 
 ## Reproduction and scope of the diagnosis

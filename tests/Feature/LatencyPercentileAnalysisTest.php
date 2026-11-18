@@ -52,6 +52,9 @@ class LatencyPercentileAnalysisTest extends TestCase
         $this->assertSame('insufficient_data', $result['sample_status']);
         $this->assertGreaterThan(0, $result['coverage']['missing_opportunities']);
         $this->assertSame('insufficient_coverage', $result['coverage']['status']);
+        $this->assertSame('historical_estimate_current_service_interval_v1', $result['coverage']['basis']);
+        $this->assertSame('max_window_start_and_service_created_at', $result['coverage']['effective_start_policy']);
+        $this->assertFalse($result['coverage']['exact_opportunity_ledger']);
     }
 
     public function test_empty_and_single_observation_have_explicit_status(): void
